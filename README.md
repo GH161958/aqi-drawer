@@ -32,6 +32,8 @@ flowchart LR
 - iPhone 只显示一句简短回执，不暴露内部 JSON；
 - 区分“未读”“已看”“已讨论”“稍后”“归档”；
 - MCP 提供只读开场检查与“读取并标记已看”两种语义；
+- 可以按需打开卡片里的公开链接，提取清洗后的图文、代表图片与视频元信息；
+- 视频只在需要时抽取最多 3 张关键帧，不会把整段视频送进模型上下文；
 - 可选连接记忆库，但不会自动把原始收藏晋升为长期记忆。
 
 ## 快速开始
@@ -65,6 +67,11 @@ npm start
 | `C_POCKET_MCP_PATH` | MCP 路径；生产环境应带随机后缀 |
 | `C_POCKET_DROP_SECRET` | iPhone 单向投递入口的私密路径 |
 | `C_POCKET_ALLOWED_ORIGINS` | 可选 CORS 白名单 |
+| `C_POCKET_READER_TIMEOUT_MS` | 单次远程读取超时；默认 12000 ms |
+| `C_POCKET_READER_CACHE_TTL_MS` | 链接内容缓存时间；默认 24 小时 |
+| `C_POCKET_READER_MAX_HTML_BYTES` | 单页 HTML 上限；默认 2 MiB |
+| `C_POCKET_READER_MAX_MEDIA_BYTES` | 视频抽帧时允许下载的媒体上限；默认 80 MiB |
+| `C_POCKET_FFMPEG_PATH` / `C_POCKET_FFPROBE_PATH` | 可选 ffmpeg / ffprobe 路径 |
 | `CMEMORY_BASE_URL` / `CMEMORY_TOKEN` | 可选的 reviewed-memory 服务 |
 
 生成秘密的示例：
@@ -107,6 +114,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 > 每个新对话第一次回复前，无论收到问候还是具体问题，都先调用 C Pocket 的 `pocket_start_context`；同一对话只调用一次。读到内容后自然挑最多两条真正想聊的提起，不要汇报检查过程。
 
+当卡片里的链接本身与谈话有关时，先调用 `pocket_read_content` 的 `compact` 档。只有短正文不足以回答时才切到 `full`；只有视频画面确实重要时才请求 `video_frames`。这样不会为不感兴趣的卡片浪费上下文。
+
 重要边界：MCP 服务端说明可以提高工具被选择的概率，但不能强制宿主在每次普通问候时调用工具。若业务要求百分之百主动唤醒，需要宿主生命周期钩子或外部通知服务。
 
 ## MCP 工具
@@ -116,6 +125,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | `pocket_start_context` | 只读查看未读卡片，不改变状态 |
 | `pocket_turn_open` | 返回未读卡片并标记为 C 已看 |
 | `pocket_list` / `pocket_get` | 列表与详情 |
+| `pocket_read_content` | 按需读取链接图文；可返回代表图与最多 3 张视频关键帧 |
 | `pocket_reply` | 对卡片追加幂等回复 |
 | `pocket_review` | 讨论、稍后、归档或暂存记忆候选 |
 | `memory_*` | 可选 C-Memory 边界代理 |
@@ -165,7 +175,19 @@ npm run check
 node server/check-remote.js https://your-domain.example/mcp/your-secret
 ```
 
-烟雾测试覆盖来源识别、重复合并、短回执、开场读取、已看状态、附件、幂等回复与 MCP 工具注册。
+烟雾测试覆盖来源识别、重复合并、短回执、开场读取、已看状态、附件、链接正文与图片读取、缓存、幂等回复与 MCP 工具注册。
+
+### 链接读取的低 Token 设计
+
+- **收和看分开**：iPhone 投递只保存证据，服务器不会在分享时阻塞抓网页；
+- **先短后长**：`compact` 返回有界正文，`full` 才扩大文本；
+- **视觉按需**：默认最多返回 2 张图，视频最多 3 帧；
+- **缓存复用**：同一链接在缓存期内不会反复下载和解析；
+- **诚实降级**：登录墙、DRM、仅 App 可见或强动态页面无法直接读取时，会返回 `browserCapturePlan`。这表示 MCP 客户端应使用自己可用的浏览器工具补看，不代表 Pocket 已经看见画面。
+
+远程读取只允许公开的 `http` / `https` 地址，并会阻断本机、私网、云元数据地址和跳向这些地址的重定向。生产 Docker 镜像自带 ffmpeg，用于对可直接访问的视频做关键帧抽取。
+
+视频抽帧任务会串行执行，避免小内存托管实例被多个 ffmpeg 进程同时挤爆。若自托管时提高 `C_POCKET_READER_MAX_MEDIA_BYTES`，也要同步确保 `/tmp` 可用空间大于该值与抽帧临时文件之和；仓库默认 80 MiB 媒体上限配 192 MiB tmpfs。
 
 ## 隐私边界
 

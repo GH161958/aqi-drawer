@@ -8,10 +8,11 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import { PocketStore, httpError } from './store.js'
 import { CMemoryClient } from './cmemory-client.js'
+import { PocketContentReader } from './content-reader.js'
 import { createPocketMcpServer } from './mcp-server.js'
 import { normalizeIncomingShare } from './share-normalizer.js'
 
-const SERVICE_VERSION = '2.4.0'
+const SERVICE_VERSION = '2.5.0'
 
 export async function createBridgeApp(config = {}) {
   const root = path.dirname(fileURLToPath(import.meta.url))
@@ -29,6 +30,16 @@ export async function createBridgeApp(config = {}) {
   const store = new PocketStore(settings.dataDir)
   await store.init()
   const cmemory = new CMemoryClient({ baseUrl: settings.cmemoryBaseUrl, token: settings.cmemoryToken })
+  const contentReader = new PocketContentReader({
+    store,
+    cacheTtlMs: numberSetting(config.contentReaderOptions?.cacheTtlMs, process.env.C_POCKET_READER_CACHE_TTL_MS, 24 * 60 * 60 * 1000),
+    timeoutMs: numberSetting(config.contentReaderOptions?.timeoutMs, process.env.C_POCKET_READER_TIMEOUT_MS, 12_000),
+    maxHtmlBytes: numberSetting(config.contentReaderOptions?.maxHtmlBytes, process.env.C_POCKET_READER_MAX_HTML_BYTES, 2 * 1024 * 1024),
+    maxMediaBytes: numberSetting(config.contentReaderOptions?.maxMediaBytes, process.env.C_POCKET_READER_MAX_MEDIA_BYTES, 80 * 1024 * 1024),
+    allowPrivateHosts: config.contentReaderOptions?.allowPrivateHosts === true,
+    ffmpegPath: config.contentReaderOptions?.ffmpegPath ?? (cleanEnvironmentValue(process.env.C_POCKET_FFMPEG_PATH) || 'ffmpeg'),
+    ffprobePath: config.contentReaderOptions?.ffprobePath ?? (cleanEnvironmentValue(process.env.C_POCKET_FFPROBE_PATH) || 'ffprobe'),
+  })
   const upload = multer({
     storage: multer.diskStorage({
       destination: store.mediaDir,
@@ -57,7 +68,13 @@ export async function createBridgeApp(config = {}) {
 
   app.get('/health', async (_req, res) => {
     const items = await store.list({ limit: 1 })
-    res.json({ ok: true, service: 'c-pocket-mcp', version: SERVICE_VERSION, storeReady: Array.isArray(items) })
+    res.json({
+      ok: true,
+      service: 'c-pocket-mcp',
+      version: SERVICE_VERSION,
+      storeReady: Array.isArray(items),
+      capabilities: { linkContent: true, images: true, videoKeyframes: true },
+    })
   })
 
   app.get('/local/config', (req, res) => {
@@ -97,6 +114,26 @@ export async function createBridgeApp(config = {}) {
     try {
       const item = await store.upsert(req.body)
       res.status(200).json({ item })
+    } catch (error) { next(error) }
+  })
+
+  app.post('/api/pocket/items/:id/read-content', async (req, res, next) => {
+    try {
+      const item = await store.getForContentRead(req.params.id)
+      if (!item) return res.status(404).json({ error: 'Pocket item not found.' })
+      const read = await contentReader.read(item, {
+        detail: req.body?.detail === 'full' ? 'full' : 'compact',
+        maxImages: clampInteger(req.body?.maxImages, 0, 5, 2),
+        videoFrames: clampInteger(req.body?.videoFrames, 0, 3, 0),
+        refresh: req.body?.refresh === true,
+      })
+      if (read.snapshot) await store.setContentSnapshot(item.id, read.snapshot)
+      res.json({
+        itemId: item.id,
+        snapshot: read.snapshot,
+        media: (read.media ?? []).map(({ data, ...entry }) => ({ ...entry, bytes: data.length })),
+        cache: read.cache ?? read.snapshot?.cache ?? { hit: false },
+      })
     } catch (error) { next(error) }
   })
 
@@ -172,7 +209,7 @@ export async function createBridgeApp(config = {}) {
         transport.onclose = () => {
           if (transport.sessionId) transports.delete(transport.sessionId)
         }
-        const server = createPocketMcpServer({ store, cmemory })
+        const server = createPocketMcpServer({ store, cmemory, contentReader })
         await server.connect(transport)
       }
       await transport.handleRequest(req, res, req.body)
@@ -202,6 +239,7 @@ export async function createBridgeApp(config = {}) {
     app,
     store,
     cmemory,
+    contentReader,
     async close() {
       await Promise.allSettled([...transports.values()].map((transport) => transport.close()))
       transports.clear()
@@ -246,6 +284,17 @@ function splitOrigins(value = '') {
 
 function cleanEnvironmentValue(value) {
   return String(value ?? '').replace(/^\uFEFF/, '').trim()
+}
+
+function numberSetting(configValue, environmentValue, fallback) {
+  const value = Number(configValue ?? cleanEnvironmentValue(environmentValue))
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function clampInteger(value, minimum, maximum, fallback) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return fallback
+  return Math.max(minimum, Math.min(maximum, Math.trunc(numeric)))
 }
 
 function normalizeMcpPath(value) {

@@ -47,6 +47,12 @@ export class PocketStore {
     return item ? publicItem(item) : null
   }
 
+  async getForContentRead(id) {
+    const state = await this.#read()
+    const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
+    return item ? publicItem(item, { includeContentSnapshot: true }) : null
+  }
+
   async peekUnseen({ limit = 8 } = {}) {
     const state = await this.#read()
     return state.items
@@ -143,6 +149,34 @@ export class PocketStore {
     })
   }
 
+  async setContentSnapshot(id, snapshot) {
+    return this.#mutate((state) => {
+      const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
+      if (!item) throw httpError(404, 'Pocket item not found.')
+      const incoming = normalizeContentSnapshot(snapshot)
+      const current = item.contentSnapshot ? normalizeContentSnapshot(item.contentSnapshot) : null
+      const sameSource = current?.sourceUrl === incoming.sourceUrl
+      const currentIsAtLeastAsFresh = Date.parse(current?.fetchedAt) >= Date.parse(incoming.fetchedAt)
+      item.contentSnapshot = sameSource && current.detail === 'full' && incoming.detail !== 'full' && currentIsAtLeastAsFresh
+        ? current
+        : incoming
+      return publicItem(item)
+    })
+  }
+
+  async getAttachmentFile(attachmentId) {
+    const state = await this.#read()
+    for (const item of state.items) {
+      const attachment = item.attachments.find((entry) => entry.id === attachmentId && entry.storageName)
+      if (!attachment) continue
+      return {
+        attachment: publicAttachment(attachment),
+        filePath: path.join(this.mediaDir, path.basename(attachment.storageName)),
+      }
+    }
+    return null
+  }
+
   async readAttachment(attachmentId, maxBytes = 5 * 1024 * 1024) {
     const state = await this.#read()
     for (const item of state.items) {
@@ -211,6 +245,7 @@ function normalizeItem(input, now) {
     attachments,
     replies: Array.isArray(incoming.replies) ? incoming.replies.map(normalizeReply).filter(Boolean) : [],
     memoryCandidate: normalizeCandidate(incoming.memoryCandidate, createdAt),
+    ...(incoming.contentSnapshot ? { contentSnapshot: normalizeContentSnapshot(incoming.contentSnapshot) } : {}),
     fingerprint: clean(incoming.fingerprint) || createFingerprint(text, sourceUrl, attachments),
     receivedCount: Math.max(1, Number(incoming.receivedCount) || 1),
     lastReceivedAt: validIso(incoming.lastReceivedAt) ? incoming.lastReceivedAt : createdAt,
@@ -221,6 +256,20 @@ function normalizeItem(input, now) {
     deletedAt: validIso(incoming.deletedAt) ? incoming.deletedAt : null,
     syncState: 'synced',
   }
+}
+
+function normalizeContentSnapshot(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw httpError(400, 'Content snapshot must be an object.')
+  }
+  const snapshot = clone(value)
+  delete snapshot.rawHtml
+  delete snapshot.media
+  delete snapshot.buffers
+  delete snapshot.frameExtraction
+  delete snapshot.visuals
+  delete snapshot.browserCapturePlan
+  return snapshot
 }
 
 function findRecentDuplicate(items, candidate, now) {
@@ -319,9 +368,11 @@ function clone(value) {
   return structuredClone(value)
 }
 
-function publicItem(item) {
+function publicItem(item, { includeContentSnapshot = false } = {}) {
   const visible = clone(item)
   delete visible.fingerprint
+  const contentSnapshot = visible.contentSnapshot
+  if (!includeContentSnapshot) delete visible.contentSnapshot
   return {
     ...visible,
     receivedCount: Math.max(1, Number(item.receivedCount) || 1),
@@ -329,6 +380,19 @@ function publicItem(item) {
     seenByCAt: item.seenByCAt || null,
     discussedAt: item.discussedAt || null,
     attachments: item.attachments.map(publicAttachment),
+    ...(contentSnapshot && !includeContentSnapshot ? { contentRead: summarizeContentSnapshot(contentSnapshot) } : {}),
+  }
+}
+
+function summarizeContentSnapshot(snapshot) {
+  return {
+    cachedAt: snapshot.fetchedAt,
+    detail: snapshot.detail,
+    pageType: snapshot.pageType,
+    title: clean(snapshot.title).slice(0, 160),
+    textPreview: clean(snapshot.text).replace(/\s+/g, ' ').slice(0, 240),
+    imagesAvailable: Array.isArray(snapshot.images) ? snapshot.images.length : 0,
+    videoDetected: Boolean(snapshot.video),
   }
 }
 
