@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { canonicalizeUrl, inferSourceApp, isGenericSourceApp, normalizeIncomingShare } from './share-normalizer.js'
@@ -6,6 +6,8 @@ import { canonicalizeUrl, inferSourceApp, isGenericSourceApp, normalizeIncomingS
 const EMPTY_STORE = { schemaVersion: 1, updatedAt: null, items: [] }
 const STATUSES = new Set(['inbox', 'tonight', 'discussed', 'deferred', 'memory_candidate', 'archived'])
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000
+const MAX_XHS_IMAGES = 30
+const MAX_XHS_DOWNLOAD_BYTES = 80 * 1024 * 1024
 
 export class PocketStore {
   constructor(dataDir) {
@@ -67,7 +69,8 @@ export class PocketStore {
       const now = new Date().toISOString()
       const normalized = normalizeItem(input, now)
       const hasExplicitId = Boolean(clean(input?.id))
-      const duplicateIndex = hasExplicitId ? -1 : findRecentDuplicate(state.items, normalized, now)
+      const identityIndex = findSourceIdentityDuplicate(state.items, normalized)
+      const duplicateIndex = identityIndex >= 0 ? identityIndex : hasExplicitId ? -1 : findRecentDuplicate(state.items, normalized, now)
       if (duplicateIndex >= 0) {
         state.items[duplicateIndex] = mergeDuplicate(state.items[duplicateIndex], normalized, now)
         return publicItem(state.items[duplicateIndex])
@@ -76,6 +79,145 @@ export class PocketStore {
       if (index < 0) state.items.push(normalized)
       else if (normalized.updatedAt >= state.items[index].updatedAt) state.items[index] = normalized
       return publicItem(index < 0 ? normalized : state.items[index])
+    })
+  }
+
+  async upsertXhs(input, { loadImage } = {}) {
+    if (typeof loadImage !== 'function') throw httpError(500, 'XHS image loader is not configured.')
+    const xhs = normalizeSourceData(input?.xhs)
+    if (xhs.provider !== 'xiaohongshu' || !clean(xhs.noteId)) throw httpError(422, 'XHS noteId is required.')
+    return this.#mutate(async (state) => {
+      const now = new Date().toISOString()
+      const sourceIdentity = { provider: 'xiaohongshu', externalId: clean(xhs.noteId) }
+      const existingIndex = state.items.findIndex((item) => !item.deletedAt
+        && item.sourceIdentity?.provider === sourceIdentity.provider
+        && item.sourceIdentity?.externalId === sourceIdentity.externalId)
+      const existing = existingIndex >= 0 ? state.items[existingIndex] : null
+      const previousXhsImages = (existing?.attachments || []).filter((attachment) => attachment.sourceImage?.provider === 'xiaohongshu')
+      const nonXhsAttachments = mergeAttachments(
+        (existing?.attachments || []).filter((attachment) => attachment.sourceImage?.provider !== 'xiaohongshu'),
+        Array.isArray(input.attachments) ? input.attachments.map(normalizeAttachment) : [],
+      )
+      const imageAttachments = []
+      const imageRecords = []
+      let downloadedImages = 0
+      let downloadedBytes = 0
+      const remoteImages = Array.isArray(xhs.images) ? xhs.images.slice(0, MAX_XHS_IMAGES) : []
+
+      for (let position = 0; position < remoteImages.length; position += 1) {
+        const image = remoteImages[position]
+        const imageIndex = Math.max(1, Number(image.index) || position + 1)
+        const remoteUrl = clean(image.url)
+        const sourceKey = canonicalImageSource(remoteUrl)
+        const previous = previousXhsImages.find((attachment) => attachment.sourceImage?.index === imageIndex
+          && attachment.sourceImage?.sourceKey === sourceKey)
+        if (previous && await completeAttachment(this.mediaDir, previous)) {
+          imageAttachments.push(previous)
+          imageRecords.push(sourceImageRecord(previous, 'ready'))
+          continue
+        }
+        if (downloadedBytes >= MAX_XHS_DOWNLOAD_BYTES) {
+          imageRecords.push({
+            index: imageIndex,
+            status: 'failed',
+            width: finitePositive(image.width),
+            height: finitePositive(image.height),
+            error: 'XHS image download budget was exhausted.',
+          })
+          continue
+        }
+        try {
+          const loaded = await loadImage(remoteUrl)
+          const mimeType = clean(loaded?.mimeType)
+          const extension = extensionFromMime(mimeType)
+          const storageName = randomUUID()
+          const temporary = path.join(this.mediaDir, `${storageName}.tmp`)
+          const target = path.join(this.mediaDir, storageName)
+          const buffer = Buffer.isBuffer(loaded?.buffer) ? loaded.buffer : Buffer.from(loaded?.buffer || [])
+          if (!buffer.length) throw new Error('XHS image was empty.')
+          if (downloadedBytes + buffer.length > MAX_XHS_DOWNLOAD_BYTES) throw new Error('XHS image download budget was exceeded.')
+          await writeFile(temporary, buffer)
+          await rename(temporary, target)
+          const attachment = normalizeAttachment({
+            id: randomUUID(),
+            name: `xiaohongshu-${sourceIdentity.externalId}-${String(imageIndex).padStart(2, '0')}.${extension}`,
+            mimeType,
+            size: buffer.length,
+            sha256: createHash('sha256').update(buffer).digest('hex'),
+            storageName,
+            sourceImage: {
+              provider: 'xiaohongshu',
+              index: imageIndex,
+              remoteUrl,
+              sourceKey,
+              width: loaded.width ?? image.width ?? null,
+              height: loaded.height ?? image.height ?? null,
+            },
+          })
+          imageAttachments.push(attachment)
+          imageRecords.push(sourceImageRecord(attachment, 'ready'))
+          downloadedImages += 1
+          downloadedBytes += buffer.length
+        } catch (error) {
+          imageRecords.push({
+            index: imageIndex,
+            status: 'failed',
+            width: finitePositive(image.width),
+            height: finitePositive(image.height),
+            error: clean(error?.message).slice(0, 240) || 'XHS image download failed.',
+          })
+        }
+      }
+
+      const attachments = [...nonXhsAttachments, ...imageAttachments]
+      const failedImages = imageRecords.filter((image) => image.status === 'failed').length
+      const sourceData = normalizeSourceData({
+        ...xhs,
+        parseStatus: failedImages ? 'partial' : xhs.parseStatus === 'failed' ? 'failed' : 'complete',
+        images: imageRecords,
+        imageCount: remoteImages.length,
+        downloadedImages,
+        downloadedBytes,
+        failedImages,
+        sharedText: clean(input.sharedText || input.text),
+        refreshedAt: now,
+      })
+      const normalized = normalizeItem({
+        ...input,
+        title: clean(xhs.title) || input.title,
+        text: clean(xhs.desc) || input.text,
+        sourceUrl: clean(xhs.canonicalUrl) || input.sourceUrl,
+        sourceApp: '小红书',
+        kind: attachments.length ? 'mixed' : 'link',
+        attachments,
+        sourceIdentity,
+        sourceData,
+      }, now)
+
+      if (!existing) {
+        state.items.push(normalized)
+        return publicItem(normalized)
+      }
+      const refreshed = {
+        ...existing,
+        title: normalized.title,
+        text: normalized.text,
+        sourceUrl: normalized.sourceUrl,
+        sourceApp: '小红书',
+        note: normalized.note || existing.note,
+        kind: normalized.kind,
+        attachments,
+        sourceIdentity,
+        sourceData,
+        fingerprint: normalized.fingerprint,
+        receivedCount: Math.max(1, Number(existing.receivedCount) || 1) + 1,
+        lastReceivedAt: now,
+        seenByCAt: null,
+        updatedAt: now,
+        syncState: 'synced',
+      }
+      state.items[existingIndex] = refreshed
+      return publicItem(refreshed)
     })
   }
 
@@ -246,6 +388,8 @@ function normalizeItem(input, now) {
     replies: Array.isArray(incoming.replies) ? incoming.replies.map(normalizeReply).filter(Boolean) : [],
     memoryCandidate: normalizeCandidate(incoming.memoryCandidate, createdAt),
     ...(incoming.contentSnapshot ? { contentSnapshot: normalizeContentSnapshot(incoming.contentSnapshot) } : {}),
+    ...(incoming.sourceIdentity ? { sourceIdentity: normalizeSourceIdentity(incoming.sourceIdentity) } : {}),
+    ...(incoming.sourceData ? { sourceData: normalizeSourceData(incoming.sourceData) } : {}),
     fingerprint: clean(incoming.fingerprint) || createFingerprint(text, sourceUrl, attachments),
     receivedCount: Math.max(1, Number(incoming.receivedCount) || 1),
     lastReceivedAt: validIso(incoming.lastReceivedAt) ? incoming.lastReceivedAt : createdAt,
@@ -302,6 +446,8 @@ function mergeDuplicate(existing, incoming, now) {
     note: existing.note || incoming.note,
     kind: attachments.length ? 'mixed' : existing.sourceUrl || incoming.sourceUrl ? 'link' : 'text',
     attachments,
+    ...(incoming.sourceIdentity ? { sourceIdentity: incoming.sourceIdentity } : {}),
+    ...(incoming.sourceData ? { sourceData: incoming.sourceData } : {}),
     fingerprint: incoming.fingerprint,
     receivedCount: Math.max(1, Number(existing.receivedCount) || 1) + 1,
     lastReceivedAt: now,
@@ -309,6 +455,15 @@ function mergeDuplicate(existing, incoming, now) {
     updatedAt: now,
     syncState: 'synced',
   }
+}
+
+function findSourceIdentityDuplicate(items, candidate) {
+  const provider = clean(candidate.sourceIdentity?.provider)
+  const externalId = clean(candidate.sourceIdentity?.externalId)
+  if (!provider || !externalId) return -1
+  return items.findIndex((item) => !item.deletedAt
+    && item.sourceIdentity?.provider === provider
+    && item.sourceIdentity?.externalId === externalId)
 }
 
 function createFingerprint(text, sourceUrl, attachments = []) {
@@ -327,7 +482,93 @@ function normalizeAttachment(value) {
     ...(clean(value?.sha256) ? { sha256: clean(value.sha256) } : {}),
     ...(clean(value?.url) ? { url: clean(value.url) } : {}),
     ...(clean(value?.storageName) ? { storageName: path.basename(clean(value.storageName)) } : {}),
+    ...(value?.sourceImage ? { sourceImage: normalizeSourceImage(value.sourceImage) } : {}),
   }
+}
+
+function normalizeSourceIdentity(value) {
+  return {
+    provider: clean(value?.provider),
+    externalId: clean(value?.externalId),
+  }
+}
+
+function normalizeSourceData(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const normalized = clone(value)
+  delete normalized.rawHtml
+  delete normalized.initialState
+  delete normalized.buffers
+  return normalized
+}
+
+function normalizeSourceImage(value) {
+  return {
+    provider: clean(value?.provider),
+    index: Math.max(1, Number(value?.index) || 1),
+    remoteUrl: clean(value?.remoteUrl),
+    sourceKey: clean(value?.sourceKey),
+    width: finitePositive(value?.width),
+    height: finitePositive(value?.height),
+  }
+}
+
+function mergeAttachments(existing, incoming) {
+  const merged = [...existing]
+  for (const attachment of incoming) {
+    const duplicate = merged.some((entry) => entry.id === attachment.id || (entry.sha256 && attachment.sha256
+      ? entry.sha256 === attachment.sha256
+      : entry.name === attachment.name && entry.size === attachment.size))
+    if (!duplicate) merged.push(attachment)
+  }
+  return merged
+}
+
+async function completeAttachment(mediaDir, attachment) {
+  if (!clean(attachment?.storageName) || Number(attachment?.size) <= 0) return false
+  try {
+    const found = await stat(path.join(mediaDir, path.basename(attachment.storageName)))
+    return found.isFile() && found.size === Number(attachment.size)
+  } catch {
+    return false
+  }
+}
+
+function canonicalImageSource(value) {
+  try {
+    const url = new URL(value)
+    url.search = ''
+    url.hash = ''
+    url.hostname = url.hostname.toLowerCase()
+    return url.href
+  } catch {
+    return clean(value)
+  }
+}
+
+function sourceImageRecord(attachment, status) {
+  return {
+    index: attachment.sourceImage.index,
+    status,
+    attachmentId: attachment.id,
+    width: attachment.sourceImage.width,
+    height: attachment.sourceImage.height,
+    bytes: attachment.size,
+    mimeType: attachment.mimeType,
+  }
+}
+
+function extensionFromMime(value) {
+  if (value === 'image/png') return 'png'
+  if (value === 'image/gif') return 'gif'
+  if (value === 'image/webp') return 'webp'
+  if (value === 'image/avif') return 'avif'
+  return 'jpg'
+}
+
+function finitePositive(value) {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : null
 }
 
 function normalizeReply(value) {
@@ -398,6 +639,12 @@ function summarizeContentSnapshot(snapshot) {
 
 function publicAttachment(attachment) {
   const { storageName, ...safe } = clone(attachment)
+  if (safe.sourceImage) {
+    const { remoteUrl, sourceKey, ...visibleSourceImage } = safe.sourceImage
+    void remoteUrl
+    void sourceKey
+    safe.sourceImage = visibleSourceImage
+  }
   return {
     ...safe,
     ...(storageName && !safe.url ? { url: `/api/pocket/media/${encodeURIComponent(attachment.id)}` } : {}),

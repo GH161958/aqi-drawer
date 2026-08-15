@@ -14,7 +14,7 @@ const SOURCE_RULES = [
   { name: '淘宝', domains: ['taobao.com', 'tmall.com', 'm.tb.cn', 'tb.cn'] },
   { name: '京东', domains: ['jd.com', '3.cn'] },
   { name: '拼多多', domains: ['pinduoduo.com', 'yangkeduo.com'] },
-  { name: '小红书', domains: ['xiaohongshu.com', 'xhslink.com'] },
+  { name: '小红书', domains: ['xiaohongshu.com', 'xhslink.com', 'xhslink.cn'] },
   { name: '哔哩哔哩', domains: ['bilibili.com', 'b23.tv'] },
   { name: '抖音', domains: ['douyin.com', 'iesdouyin.com'] },
   { name: '微信', domains: ['weixin.qq.com', 'mp.weixin.qq.com'] },

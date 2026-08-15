@@ -11,6 +11,7 @@ import { CMemoryClient } from './cmemory-client.js'
 import { PocketContentReader } from './content-reader.js'
 import { createPocketMcpServer } from './mcp-server.js'
 import { normalizeIncomingShare } from './share-normalizer.js'
+import { extractXhsNoteId, XhsAdapter } from './adapters/xhs.js'
 
 const SERVICE_VERSION = '2.5.0'
 
@@ -40,6 +41,7 @@ export async function createBridgeApp(config = {}) {
     ffmpegPath: config.contentReaderOptions?.ffmpegPath ?? (cleanEnvironmentValue(process.env.C_POCKET_FFMPEG_PATH) || 'ffmpeg'),
     ffprobePath: config.contentReaderOptions?.ffprobePath ?? (cleanEnvironmentValue(process.env.C_POCKET_FFPROBE_PATH) || 'ffprobe'),
   })
+  const xhsAdapter = config.xhsAdapter ?? new XhsAdapter(config.xhsAdapterOptions)
   const upload = multer({
     storage: multer.diskStorage({
       destination: store.mediaDir,
@@ -154,7 +156,38 @@ export async function createBridgeApp(config = {}) {
         size: file.size,
         storageName: file.filename,
       }))
-      const item = await store.upsert({ ...payload, attachments: [...(payload.attachments ?? []), ...attachments] })
+      const allAttachments = [...(payload.attachments ?? []), ...attachments]
+      const xhsInput = [payload.sourceUrl, payload.text].filter(Boolean).join('\n')
+      let item
+      if (xhsAdapter.canHandle(xhsInput)) {
+        try {
+          const xhs = await xhsAdapter.parse(xhsInput)
+          item = await store.upsertXhs({ ...payload, attachments: allAttachments, sharedText: payload.text, xhs }, {
+            loadImage: (url) => xhsAdapter.loadImage(url),
+          })
+        } catch (error) {
+          const resolvedUrl = cleanWebUrl(error?.finalUrl) || payload.sourceUrl
+          const noteId = extractXhsNoteId(resolvedUrl)
+          item = await store.upsert({
+            ...payload,
+            attachments: allAttachments,
+            sourceUrl: resolvedUrl,
+            ...(noteId ? { sourceIdentity: { provider: 'xiaohongshu', externalId: noteId } } : {}),
+            sourceData: {
+              provider: 'xiaohongshu',
+              ...(noteId ? { noteId } : {}),
+              parseStatus: 'failed',
+              originalUrl: payload.sourceUrl,
+              canonicalUrl: resolvedUrl,
+              error: String(error?.message || 'XHS parsing failed.').slice(0, 240),
+              fetchedAt: new Date().toISOString(),
+            },
+          })
+          console.warn(`XHS adapter fell back to a link item: ${String(error?.message || 'unknown error').slice(0, 160)}`)
+        }
+      } else {
+        item = await store.upsert({ ...payload, attachments: allAttachments })
+      }
       const receipt = createDropReceipt(item)
       const responseMode = String(req.query.response ?? '').toLowerCase()
       if (responseMode === 'text' || (defaultText && responseMode !== 'json')) {
@@ -240,6 +273,7 @@ export async function createBridgeApp(config = {}) {
     store,
     cmemory,
     contentReader,
+    xhsAdapter,
     async close() {
       await Promise.allSettled([...transports.values()].map((transport) => transport.close()))
       transports.clear()
@@ -284,6 +318,15 @@ function splitOrigins(value = '') {
 
 function cleanEnvironmentValue(value) {
   return String(value ?? '').replace(/^\uFEFF/, '').trim()
+}
+
+function cleanWebUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim())
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : ''
+  } catch {
+    return ''
+  }
 }
 
 function numberSetting(configValue, environmentValue, fallback) {

@@ -54,6 +54,9 @@ export class PocketContentReader {
     const normalizedDetail = detail === 'full' ? 'full' : 'compact'
     const imageLimit = clampNumber(maxImages, 0, 6, 3)
     const frameLimit = clampNumber(videoFrames, 0, 3, 3)
+    if (item.sourceData?.provider === 'xiaohongshu' && item.sourceData?.parseStatus !== 'failed') {
+      return this.#readStoredXhs(item, normalizedDetail, imageLimit)
+    }
     const warnings = []
     const cached = !refresh && cacheIsFresh(item.contentSnapshot, this.cacheTtlMs, normalizedDetail, item.sourceUrl)
     const cache = { hit: cached }
@@ -106,6 +109,65 @@ export class PocketContentReader {
     if (!snapshot.warnings.length) delete snapshot.warnings
 
     return { snapshot, media, cache }
+  }
+
+  async #readStoredXhs(item, detail, imageLimit) {
+    const source = item.sourceData || {}
+    const comments = Array.isArray(source.comments) ? source.comments : []
+    const selectedComments = detail === 'full' ? comments : comments.slice(0, 3)
+    const images = Array.isArray(source.images) ? source.images : []
+    const text = clean(item.text || source.desc)
+    const snapshot = {
+      version: 1,
+      detail,
+      fetchedAt: source.refreshedAt || source.fetchedAt || item.updatedAt || new Date().toISOString(),
+      sourceUrl: clean(item.sourceUrl),
+      finalUrl: clean(source.canonicalUrl || item.sourceUrl),
+      canonicalUrl: clean(source.canonicalUrl || item.sourceUrl),
+      pageType: 'article',
+      siteName: '小红书',
+      title: clean(item.title || source.title),
+      author: clean(source.author?.name),
+      description: Array.isArray(source.tags) && source.tags.length ? source.tags.map((tag) => `#${tag}`).join(' ') : '',
+      text: limitText(text, detail),
+      textTruncated: text.length > textLimit(detail),
+      images: images.map((image) => ({
+        index: image.index,
+        attachmentId: image.attachmentId,
+        status: image.status,
+        width: image.width,
+        height: image.height,
+        source: 'stored_attachment',
+      })),
+      attachments: summarizeAttachments(item.attachments),
+      sourceData: {
+        provider: 'xiaohongshu',
+        noteId: source.noteId,
+        author: source.author,
+        tags: source.tags || [],
+        interactions: source.interactions || {},
+        comments: selectedComments,
+        commentsFetched: Number(source.commentsFetched) || comments.length,
+        commentsReturned: selectedComments.length,
+        commentsComplete: source.commentsComplete === true,
+        parseStatus: source.parseStatus,
+      },
+      extraction: { source: 'stored_xhs_adapter' },
+    }
+    const media = []
+    const warnings = []
+    await this.#appendAttachmentImages(item, media, imageLimit, warnings)
+    const failedImages = images.filter((image) => image.status === 'failed').length
+    if (failedImages) warnings.push(`${failedImages} Xiaohongshu image(s) are pending a later retry.`)
+    snapshot.visuals = {
+      imagesAvailable: images.filter((image) => image.status === 'ready').length,
+      imageBuffersReturned: media.length,
+      videoFramesReturned: 0,
+    }
+    snapshot.frameExtraction = { status: 'not_requested', requested: 0, extracted: 0 }
+    snapshot.warnings = uniqueStrings(warnings)
+    if (!snapshot.warnings.length) delete snapshot.warnings
+    return { snapshot, media, cache: { hit: true, source: 'stored_xhs_adapter' } }
   }
 
   async #buildSnapshot(item, detail) {

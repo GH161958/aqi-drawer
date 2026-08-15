@@ -267,6 +267,7 @@ function renderItem(item) {
     item.text,
     item.sourceUrl,
     item.attachments.length && `附件：${item.attachments.length} 个`,
+    item.sourceData?.provider === 'xiaohongshu' && renderXhsSummary(item.sourceData),
     item.note && `伊伊: ${item.note}`,
     ...item.replies.map((reply) => `${reply.author}: ${reply.text}`),
   ].filter(Boolean).join('\n')
@@ -282,6 +283,7 @@ function renderContentSnapshot(snapshot = {}, cache = {}) {
     snapshot.publishedAt && `发布时间：${snapshot.publishedAt}`,
     snapshot.description,
     snapshot.text,
+    snapshot.sourceData?.provider === 'xiaohongshu' && renderXhsContent(snapshot.sourceData),
     visual && `候选图片：${visual} 张（本次只附上请求数量内的图片）`,
     (video.detected || snapshot.pageType === 'video') && `视频：已识别${video.durationSeconds ? `，约 ${Math.round(video.durationSeconds)} 秒` : ''}`,
     snapshot.frameExtraction?.message || snapshot.frameExtraction?.reason,
@@ -289,4 +291,28 @@ function renderContentSnapshot(snapshot = {}, cache = {}) {
     cache.hit && '内容来自口袋缓存。',
     snapshot.canonicalUrl || snapshot.finalUrl,
   ].filter(Boolean).join('\n\n')
+}
+
+function renderXhsSummary(source) {
+  const interactions = source.interactions || {}
+  return [
+    source.author?.name && `作者：${source.author.name}`,
+    `互动：赞 ${interactions.likedCount ?? '—'} · 收藏 ${interactions.collectedCount ?? '—'} · 评论 ${interactions.commentCount ?? '—'} · 分享 ${interactions.shareCount ?? '—'}`,
+    Number(source.commentsFetched) > 0 && `公开首屏评论：${source.commentsFetched} 条（非全部评论）`,
+  ].filter(Boolean).join('\n')
+}
+
+function renderXhsContent(source) {
+  const comments = Array.isArray(source.comments) ? source.comments : []
+  return [
+    renderXhsSummary(source),
+    comments.length && ['公开首屏评论：', ...comments.map((comment) => renderXhsComment(comment, 0))].join('\n'),
+  ].filter(Boolean).join('\n\n')
+}
+
+function renderXhsComment(comment, depth) {
+  const prefix = depth ? '  '.repeat(Math.min(depth, 4)) + '↳ ' : '- '
+  const line = `${prefix}${comment.user?.name || '未知用户'}：${comment.content || ''}`
+  const replies = Array.isArray(comment.replies) ? comment.replies : []
+  return [line, ...replies.map((reply) => renderXhsComment(reply, depth + 1))].join('\n')
 }
