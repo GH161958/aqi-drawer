@@ -1,6 +1,6 @@
 const GENERIC_SOURCE_APPS = new Set([
   '',
-  'enervate house',
+  'aqi drawer',
   'iphone分享菜单',
   'iphone 分享菜单',
   'iphone share sheet',

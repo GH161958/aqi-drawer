@@ -29,9 +29,9 @@ export class CMemoryClient {
     const text = renderSourceTruth(item)
     try {
       const request = {
-        sourceApp: 'enervate-pocket',
+        sourceApp: 'aqi-drawer',
         sourceItemId: item.id,
-        actorId: 'bella',
+        actorId: 'ee',
         text,
         occurredAt: item.createdAt,
         suggestedVault: 'relationship-private',
@@ -79,7 +79,7 @@ function renderSourceTruth(item) {
     item.text && `原文：${item.text}`,
     item.sourceUrl && `来源链接：${item.sourceUrl}`,
     item.sourceApp && `来源 App：${item.sourceApp}`,
-    item.note && `Bella 的备注：${item.note}`,
+    item.note && `伊伊的备注：${item.note}`,
     `收藏时间：${item.createdAt}`,
   ].filter(Boolean).join('\n')
 }

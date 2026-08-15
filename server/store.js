@@ -105,10 +105,10 @@ export class PocketStore {
       if (!text) throw httpError(400, 'Reply text is required.')
       const reply = {
         id: replyId,
-        author: input.author === 'Bella' ? 'Bella' : 'C',
+        author: input.author === 'EE' ? 'EE' : 'Aqi',
         text,
         createdAt: input.createdAt || new Date().toISOString(),
-        source: ['enervate', 'chatgpt', 'shortcut'].includes(input.source) ? input.source : 'chatgpt',
+        source: ['aqi-drawer', 'chatgpt', 'shortcut'].includes(input.source) ? input.source : 'chatgpt',
       }
       item.replies.push(reply)
       item.updatedAt = reply.createdAt
@@ -230,7 +230,7 @@ function normalizeItem(input, now) {
   const requestedSource = clean(incoming.sourceApp)
   const sourceApp = inferredSource && isGenericSourceApp(requestedSource)
     ? inferredSource
-    : requestedSource || inferredSource || 'C Pocket'
+    : requestedSource || inferredSource || 'Aqi Drawer'
   return {
     id,
     title: clean(incoming.title) || deriveTitle(text, sourceUrl),
@@ -334,10 +334,10 @@ function normalizeReply(value) {
   if (!value || !clean(value.text)) return null
   return {
     id: clean(value.id) || randomUUID(),
-    author: value.author === 'Bella' ? 'Bella' : 'C',
+    author: value.author === 'EE' ? 'EE' : 'Aqi',
     text: clean(value.text),
     createdAt: validIso(value.createdAt) ? value.createdAt : new Date().toISOString(),
-    source: ['enervate', 'chatgpt', 'shortcut'].includes(value.source) ? value.source : 'enervate',
+    source: ['aqi-drawer', 'chatgpt', 'shortcut'].includes(value.source) ? value.source : 'aqi-drawer',
   }
 }
 

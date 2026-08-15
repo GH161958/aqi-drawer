@@ -302,7 +302,7 @@ export class PocketContentReader {
       return frameFailure(error, 'The direct video could not be downloaded safely.')
     }
 
-    const directory = await mkdtemp(path.join(tmpdir(), 'c-pocket-video-'))
+    const directory = await mkdtemp(path.join(tmpdir(), 'aqi-drawer-video-'))
     const extension = videoExtension(response.contentType, response.url)
     const inputPath = path.join(directory, `source${extension}`)
     try {
@@ -322,7 +322,7 @@ export class PocketContentReader {
   }
 
   async #extractFrames(inputPath, count, ownsDirectory, existingDirectory) {
-    const directory = existingDirectory || await mkdtemp(path.join(tmpdir(), 'c-pocket-frames-'))
+    const directory = existingDirectory || await mkdtemp(path.join(tmpdir(), 'aqi-drawer-frames-'))
     try {
       let duration = 0
       try {
@@ -843,7 +843,7 @@ function makeBrowserCapturePlan(url, reason) {
       'Read the visible title, caption, and page text once.',
       'For video, capture at most three representative states near 10%, 50%, and 90%; do not transcribe the whole video unless asked.',
     ],
-    note: 'C Pocket returns this plan but does not claim to control a browser by itself.',
+    note: 'Aqi Drawer returns this plan but does not claim to control a browser by itself.',
   }
 }
 

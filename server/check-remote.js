@@ -5,7 +5,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 const url = process.argv[2]
 if (!url) throw new Error('Usage: node server/check-remote.js https://host/mcp')
 
-const client = new Client({ name: 'c-pocket-remote-check', version: '1.0.0' })
+const client = new Client({ name: 'aqi-drawer-remote-check', version: '1.0.0' })
 try {
   await client.connect(new StreamableHTTPClientTransport(new URL(url)))
   const tools = await client.listTools()

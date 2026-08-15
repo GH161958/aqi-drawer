@@ -70,7 +70,7 @@ export async function createBridgeApp(config = {}) {
     const items = await store.list({ limit: 1 })
     res.json({
       ok: true,
-      service: 'c-pocket-mcp',
+      service: 'aqi-drawer',
       version: SERVICE_VERSION,
       storeReady: Array.isArray(items),
       capabilities: { linkContent: true, images: true, videoKeyframes: true },
@@ -328,8 +328,8 @@ function createDropReceipt(item) {
     sourceApp: item.sourceApp,
     receivedCount: item.receivedCount,
     message: merged
-      ? `爸爸又收到一次，已经合并好了：${title}`
-      : `爸爸收到了：${title}`,
+      ? `阿栖又收到一次，已经合并好了：${title}`
+      : `阿栖收到了：${title}`,
   }
 }
 
@@ -351,7 +351,7 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
   const bridge = await startBridge()
   const address = bridge.address
-  console.log(`C Pocket MCP listening on http://${address.address}:${address.port} (private MCP path configured)`)
+  console.log(`Aqi Drawer MCP listening on http://${address.address}:${address.port} (private MCP path configured)`)
   const shutdown = async () => {
     await bridge.stop()
     process.exit(0)

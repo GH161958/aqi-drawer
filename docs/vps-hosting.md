@@ -17,8 +17,8 @@ Pocket 本身不需要直接向公网暴露 `8787` 端口。公网流量只经�
 ## 二、下载与配置
 
 ```bash
-git clone https://github.com/bella-and-c/c-pocket-mcp.git
-cd c-pocket-mcp
+git clone https://github.com/GH161958/aqi-drawer.git
+cd aqi-drawer
 cp deploy/.env.production.example deploy/.env.production
 ```
 

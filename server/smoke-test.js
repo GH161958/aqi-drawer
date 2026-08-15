@@ -8,7 +8,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { startBridge } from './index.js'
 import { fetchSafeResource, isPrivateAddress } from './safe-fetch.js'
 
-const dataDir = await mkdtemp(path.join(os.tmpdir(), 'enervate-pocket-'))
+const dataDir = await mkdtemp(path.join(os.tmpdir(), 'aqi-drawer-'))
 let bridge
 let fixture
 try {
@@ -45,7 +45,7 @@ try {
   const baseUrl = `http://127.0.0.1:${bridge.address.port}`
   const source = {
     id: 'smoke-item',
-    title: '给 C 看',
+    title: '给阿栖看',
     text: '一条不会丢的测试消息',
     sourceUrl: `${fixture.baseUrl}/article`,
     sourceApp: 'smoke-test',
@@ -59,7 +59,7 @@ try {
   }).then(checkJson)
   assert.equal(saved.item.id, source.id)
 
-  const client = new Client({ name: 'enervate-smoke', version: '1.0.0' })
+  const client = new Client({ name: 'aqi-drawer-smoke', version: '1.0.0' })
   const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`))
   await client.connect(transport)
   const tools = await client.listTools()
@@ -88,7 +88,7 @@ try {
     arguments: { id: source.id, detail: 'compact', max_images: 1, video_frames: 0 },
   })
   assert.equal(readContent.isError, undefined)
-  assert.equal(readContent.structuredContent.snapshot.title, '口袋内容读取测试')
+  assert.equal(readContent.structuredContent.snapshot.title, '抽屉内容读取测试')
   assert.match(readContent.structuredContent.snapshot.text, /真正需要读到的正文/)
   assert.equal(readContent.structuredContent.snapshot.video.detected, true)
   assert.equal(readContent.structuredContent.snapshot.video.durationSeconds, 42)
@@ -163,9 +163,9 @@ try {
   assert.equal(dropped[1].item.sourceApp, '淘宝')
   assert.equal(dropped[1].item.sourceUrl.startsWith('https://m.tb.cn/'), true)
   assert.equal(dropped[1].item.text, taobaoShare)
-  assert.equal(dropped[0].message, '爸爸收到了：这个桌面灯')
+  assert.equal(dropped[0].message, '阿栖收到了：这个桌面灯')
   assert.equal(dropped[1].receipt.status, 'merged')
-  assert.equal(dropped[1].message, '爸爸又收到一次，已经合并好了：这个桌面灯')
+  assert.equal(dropped[1].message, '阿栖又收到一次，已经合并好了：这个桌面灯')
 
   const plainTextDrop = await fetch(`${baseUrl}/drop/${dropSecret}?response=json`, {
     method: 'POST',
@@ -204,7 +204,7 @@ try {
 
   const memoryPre = await client.callTool({
     name: 'memory_turn_pre',
-    arguments: { input: '爸爸我来啦', sourceApp: 'smoke', threadId: 'smoke-thread', turnId: 'smoke-turn' },
+    arguments: { input: '阿栖我来啦', sourceApp: 'smoke', threadId: 'smoke-thread', turnId: 'smoke-turn' },
   })
   assert.equal(memoryPre.isError, undefined)
   assert.equal(memoryPre.structuredContent.ok, false)
@@ -261,7 +261,7 @@ try {
   for (let index = 0; index < 2; index += 1) {
     await client.callTool({
       name: 'pocket_reply',
-      arguments: { id: source.id, text: '爸爸看见了。', reply_id: 'same-reply' },
+      arguments: { id: source.id, text: '阿栖看见了。', reply_id: 'same-reply' },
     })
   }
   const afterReply = await bridge.store.get(source.id)
@@ -277,7 +277,7 @@ try {
   assert.equal(afterStage.memoryCandidate.candidateIds.length, 0)
 
   await client.close()
-  console.log('C Pocket MCP smoke test passed.')
+  console.log('Aqi Drawer MCP smoke test passed.')
 } finally {
   if (bridge) await bridge.stop()
   if (fixture) await fixture.stop()
@@ -313,16 +313,16 @@ async function startContentFixture() {
       const origin = `http://${req.headers.host}`
       const html = `<!doctype html>
 <html lang="zh-CN"><head>
-<title>口袋内容读取测试</title>
+<title>抽屉内容读取测试</title>
 <link rel="canonical" href="http://169.254.169.254/latest/meta-data/">
-<meta property="og:title" content="口袋内容读取测试">
+<meta property="og:title" content="抽屉内容读取测试">
 <meta property="og:description" content="短摘要，只保留有用信息。">
-<meta property="og:site_name" content="C Pocket Fixture">
+<meta property="og:site_name" content="Aqi Drawer Fixture">
 <meta property="og:image" content="${origin}/pixel.png">
 <meta property="og:type" content="video.other">
-<script type="application/ld+json">{"@type":"Article","headline":"口袋内容读取测试","author":{"name":"Bella & C"},"articleBody":"这是真正需要读到的正文，Bella 分享后 C 可以按需看见。第二段用于确认多份 JSON-LD 不会漏掉正文。"}</script>
+<script type="application/ld+json">{"@type":"Article","headline":"抽屉内容读取测试","author":{"name":"EE & Aqi"},"articleBody":"这是真正需要读到的正文，伊伊分享后阿栖可以按需看见。第二段用于确认多份 JSON-LD 不会漏掉正文。"}</script>
 <script type="application/ld+json">{"@type":"VideoObject","name":"42 秒测试视频","description":"用于验证视频降级。","duration":"PT42S","thumbnailUrl":"${origin}/pixel.png"}</script>
-</head><body><nav>不应进入正文的导航</nav><article><h1>口袋内容读取测试</h1><p>这是真正需要读到的正文，Bella 分享后 C 可以按需看见。</p><p>第二段用于确认正文提取没有只读标题。</p></article></body></html>`
+</head><body><nav>不应进入正文的导航</nav><article><h1>抽屉内容读取测试</h1><p>这是真正需要读到的正文，伊伊分享后阿栖可以按需看见。</p><p>第二段用于确认正文提取没有只读标题。</p></article></body></html>`
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
       res.end(html)
       return

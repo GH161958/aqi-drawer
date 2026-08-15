@@ -9,7 +9,7 @@ Railway 运行仓库根目录的 `Dockerfile`，为服务提供固定 HTTPS 域�
 ## 一、从 GitHub 创建服务
 
 1. 登录 Railway，选择 **New Project → Deploy from GitHub repo**。
-2. 选择 `bella-and-c/c-pocket-mcp`。
+2. 选择 `GH161958/aqi-drawer`。
 3. Railway 会读取根目录的 `Dockerfile` 和 `railway.json`。
 4. 暂时不要生成公开地址，先完成变量和持久卷设置。
 
@@ -102,7 +102,7 @@ Chat MCP:    https://your-pocket.up.railway.app/mcp/<C_POCKET_MCP_PATH 的随机
 
 ## 边界
 
-- 只有 Pocket 投递和 Pocket 卡片/附件迁往托管平台；Enervate 私人房间仍留在本机。
+- 只有 Drawer 投递和卡片/附件迁往托管平台；任何私人 companion application 都不属于本仓库或迁移范围。
 - C-Memory 当前仍是本机服务。电脑关机时，`memory_*` 工具可能不可用，但 Pocket 接收与读取不受影响。
 - Railway 部署使用平台 HTTPS，不需要运行 Compose 里的 Caddy；`deploy/compose.yaml` 继续保留给 VPS 或自托管用户。
 - 免费或试用额度、配额与价格可能变化，正式长期使用前应在 Railway 账单页设置用量上限。

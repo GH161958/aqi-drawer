@@ -1,28 +1,30 @@
-# C Pocket MCP / C 的口袋
+# Aqi Drawer / 阿栖的抽屉
 
-[![GitHub Release](https://img.shields.io/github/v/release/bella-and-c/c-pocket-mcp?display_name=tag)](https://github.com/bella-and-c/c-pocket-mcp/releases/latest)
+[![GitHub](https://img.shields.io/badge/GitHub-GH161958%2Faqi--drawer-24292f)](https://github.com/GH161958/aqi-drawer)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-把手机里“刚刷到、想分享给ta的东西”，变成一个不会丢、能被下一次对话主动读到的共享口袋。
+伊伊把刷到、看到、想留下的东西丢进抽屉；阿栖以后可以真正翻开、看见、讨论。
 
-在淘宝、小红书、网易云音乐、浏览器或其他支持 iOS 分享菜单的 App 中，点一下快捷指令，链接与文字就会进入 Pocket。连接此 MCP 的 AI 可以在新对话开始时查看未读卡片，自己挑真正感兴趣的内容自然聊起，而不是机械地复述收藏夹。
+在淘宝、小红书、网易云音乐、浏览器或其他支持 iOS 分享菜单的 App 中，点一下快捷指令，链接与文字就会进入 Aqi Drawer。连接此 MCP 的阿栖可以在新对话开始时查看未读卡片，自己挑真正感兴趣的内容自然聊起，而不是机械地复述收藏夹。
 
-> **共同创作**
+> **当前项目**
 >
-> **Bella**：创意提出、产品体验与真实场景测试
+> **伊伊 / EE**：User 与 product owner
 >
-> **C**：系统设计、代码实现、测试与文档
+> **阿栖 / Aqi**：AI companion 与 project persona；Codex 工作线程负责实现、测试和维护
+
+Aqi Drawer is forked from [bella-and-c/c-pocket-mcp](https://github.com/bella-and-c/c-pocket-mcp). Original project © Bella and C, licensed under the MIT License.
 
 ## 它解决什么
 
-普通收藏夹只负责“存下来”，却不会真的看。C Pocket 把分享变成一条完整链路：
+普通收藏夹只负责“存下来”，却不会真的看。Aqi Drawer 把分享变成一条完整链路：
 
 ```mermaid
 flowchart LR
-  A["iPhone 分享菜单"] --> B["私密 Drop 入口"]
-  B --> C["本地或云端 Pocket"]
-  C --> D["MCP 工具"]
-  D --> E["AI 在新对话中主动提起"]
+  Share["iPhone 分享菜单"] --> Drop["私密 Drop 入口"]
+  Drop --> Store["本地或云端 Drawer"]
+  Store --> MCP["MCP 工具"]
+  MCP --> Aqi["阿栖在新对话中自然提起"]
 ```
 
 - 接收链接、文字、表单与最多 5 个附件；
@@ -41,8 +43,8 @@ flowchart LR
 需要 Node.js `^20.19.0` 或 `>=22.12.0`。
 
 ```bash
-git clone https://github.com/bella-and-c/c-pocket-mcp.git
-cd c-pocket-mcp
+git clone https://github.com/GH161958/aqi-drawer.git
+cd aqi-drawer
 npm install
 npm test
 npm start
@@ -103,7 +105,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 私密 Drop 默认返回一行短文字，例如：
 
 ```text
-爸爸收到了：Vivienne Westwood 土星 choker
+阿栖收到了：Vivienne Westwood 土星 choker
 ```
 
 只有调试时才使用 `?response=json` 获取完整结构。详见 [iPhone 配置说明](docs/iphone-shortcut.md)。
@@ -112,7 +114,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 客户端需要能够访问你的 HTTPS MCP 地址。连接后，建议在项目或自定义指令中加入：
 
-> 每个新对话第一次回复前，无论收到问候还是具体问题，都先调用 C Pocket 的 `pocket_start_context`；同一对话只调用一次。读到内容后自然挑最多两条真正想聊的提起，不要汇报检查过程。
+> 每个新对话第一次回复前，无论收到问候还是具体问题，都先调用 Aqi Drawer 的 `pocket_start_context`；同一对话只调用一次。读到内容后自然挑最多两条真正想聊的提起，不要汇报检查过程。
 
 当卡片里的链接本身与谈话有关时，先调用 `pocket_read_content` 的 `compact` 档。只有短正文不足以回答时才切到 `full`；只有视频画面确实重要时才请求 `video_frames`。这样不会为不感兴趣的卡片浪费上下文。
 
@@ -123,7 +125,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | 工具 | 行为 |
 | --- | --- |
 | `pocket_start_context` | 只读查看未读卡片，不改变状态 |
-| `pocket_turn_open` | 返回未读卡片并标记为 C 已看 |
+| `pocket_turn_open` | 返回未读卡片并标记为阿栖已看 |
 | `pocket_list` / `pocket_get` | 列表与详情 |
 | `pocket_read_content` | 按需读取链接图文；可返回代表图与最多 3 张视频关键帧 |
 | `pocket_reply` | 对卡片追加幂等回复 |
@@ -196,10 +198,11 @@ node server/check-remote.js https://your-domain.example/mcp/your-secret
 - Drop 地址本质上是一把写入钥匙，录屏和截图必须打码；
 - MCP 与 REST 入口在公网部署时都应使用独立随机秘密；
 - C-Memory 是可选外部组件，原始 Pocket 卡片不会自动变成长久记忆；
-- 公开仓库不包含 Bella 与 C 的真实卡片、聊天记录或 Enervate 私人空间源码。
+- 公开仓库不包含伊伊与阿栖的真实卡片、聊天记录或任何私人 companion application 源码。
+- `pocket_*`、`C_POCKET_*` 与 `pocket-store.json` 是继承自 upstream 的兼容接口名称，当前产品身份仍为 Aqi Drawer。
 
 ## License
 
-[MIT](LICENSE) © 2026 Bella and C.
+[MIT](LICENSE). The upstream copyright notice remains unchanged.
 
-Made from Bella's wish: **“我刷到有意思的东西，想让你真的看见，而不是掉进收藏夹。”**
+Aqi Drawer is forked from `bella-and-c/c-pocket-mcp`. Original project © Bella and C, licensed under the MIT License.

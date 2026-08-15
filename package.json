@@ -1,13 +1,14 @@
 {
-  "name": "c-pocket-mcp",
+  "name": "aqi-drawer",
   "version": "2.5.0",
-  "description": "An iPhone Share Sheet to MCP inbox that lets an AI companion notice and discuss what you share.",
+  "description": "EE and Aqi's shared drawer for keeping, opening, and discussing things EE shares.",
   "private": false,
   "type": "module",
   "license": "MIT",
   "contributors": [
-    "Bella — product concept and experience design",
-    "C — architecture, implementation, testing, and documentation"
+    "EE — product owner",
+    "Aqi — AI companion and project persona",
+    "Bella and C — original c-pocket-mcp authors"
   ],
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
