@@ -1,15 +1,17 @@
 /* Critical layout correction: stable bundles and attached papers in normal flow. */
 
+:root { --drawer-visible-height: 100svh; }
+
 .item-list {
   overflow-x: clip;
   overflow-y: visible;
 }
 
 html { overflow-x: hidden; }
-body { min-height: 100dvh; overflow-x: hidden; }
+body { min-height: var(--drawer-visible-height, 100svh); overflow-x: hidden; }
 body.has-paper-open { position: fixed; right: 0; left: 0; width: 100%; overflow: hidden; }
 
-.detail-sheet { max-height: calc(100dvh - max(32px, env(safe-area-inset-top) + env(safe-area-inset-bottom))); overscroll-behavior: contain; }
+.detail-sheet { max-height: calc(var(--drawer-visible-height, 100svh) - max(32px, env(safe-area-inset-top) + env(safe-area-inset-bottom))); overscroll-behavior: contain; }
 .detail-sheet > .close-button {
   position: sticky;
   z-index: 20;
@@ -190,7 +192,7 @@ body.has-paper-open { position: fixed; right: 0; left: 0; width: 100%; overflow:
 }
 
 .detail-aux-panel:not([hidden]) {
-  max-height: calc(100dvh - 116px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height: calc(var(--drawer-visible-height, 100svh) - 116px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -209,6 +211,7 @@ body.has-paper-open { position: fixed; right: 0; left: 0; width: 100%; overflow:
   cursor: pointer;
 }
 .detail-note-trigger { display: block; margin: 18px 4px 2px auto; }
+.inspect-original > .detail-note-trigger:first-child { margin: 0 4px 14px auto; }
 .ee-note-form { display: grid; gap: 10px; }
 .ee-note-form textarea {
   width: 100%;
@@ -226,6 +229,7 @@ body.has-paper-open { position: fixed; right: 0; left: 0; width: 100%; overflow:
 .note-remove { color: var(--muted); border-bottom-color: rgba(116,93,71,.2); }
 .note-feedback { min-height: 1.2em; margin: 0; color: var(--muted); font: .55rem/1.4 var(--font-meta); }
 .reply-remove { display: block; margin: 9px 0 0 auto; }
+.collection-remove { width: max-content; margin: -4px 0 8px auto; min-height: 30px; }
 
 .filing-slip {
   position: relative;
@@ -255,8 +259,8 @@ body.has-paper-open { position: fixed; right: 0; left: 0; width: 100%; overflow:
 }
 
 @media (max-width: 430px) {
-  body.is-cabinet-home { height: 100dvh; min-height: 100dvh; overflow-y: hidden; }
-  .detail-dialog { height: 100dvh; max-height: 100dvh; }
+  body.is-cabinet-home { height: var(--drawer-visible-height, 100svh); min-height: var(--drawer-visible-height, 100svh); overflow-y: hidden; }
+  .detail-dialog { height: var(--drawer-visible-height, 100svh); max-height: var(--drawer-visible-height, 100svh); }
   .detail-sheet { width: min(92vw, 358px); }
   .item-row.item-xiaohongshu { --bundle-width: 87%; --bundle-left: 6%; }
   .item-record.detail-aux-panel { width: 68%; margin-left: 7%; }

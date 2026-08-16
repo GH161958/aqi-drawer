@@ -103,6 +103,9 @@ let lockedScrollY = 0
 
 applyTypePreset(committedTypePreset)
 document.body.classList.add('is-cabinet-home')
+updateVisibleViewport()
+window.visualViewport?.addEventListener('resize', updateVisibleViewport)
+window.addEventListener('resize', updateVisibleViewport)
 
 async function loadCabinetCounts() {
   try {
@@ -400,7 +403,7 @@ function renderDetail(item, panel = 'original') {
   } else {
     renderPaperDetail(item, originalContent)
   }
-  original.append(originalContent, createEeNoteTrigger(item))
+  original.append(createEeNoteTrigger(item), originalContent)
   fragment.append(createItemRecord(item), original)
 
   appendSecondaryPapers(item, fragment)
@@ -605,6 +608,12 @@ function createRecordIndex(item) {
   tagsInput.placeholder = '用逗号或 · 分开'
   tagsLabel.append(tagsInput)
   form.append(collectionLabel)
+  if (item.collection) {
+    const removeCollection = element('button', 'record-action record-clear collection-remove', '移出分类')
+    removeCollection.type = 'button'
+    removeCollection.addEventListener('click', () => saveMetadata(item, form, true))
+    form.append(removeCollection)
+  }
   if (existingCollections.length) form.append(collectionSuggestions)
   form.append(tagsLabel)
 
@@ -613,16 +622,13 @@ function createRecordIndex(item) {
   const actions = element('div', 'metadata-actions')
   const save = element('button', 'record-action', '记下整理')
   save.type = 'submit'
-  const clear = element('button', 'record-action record-clear', '移出分类')
-  clear.type = 'button'
   const feedback = element('p', 'metadata-feedback')
-  actions.append(save, clear)
+  actions.append(save)
   form.append(actions, feedback)
   form.addEventListener('submit', (event) => {
     event.preventDefault()
     saveMetadata(item, form, false)
   })
-  clear.addEventListener('click', () => saveMetadata(item, form, true))
   section.append(form)
   return section
 }
@@ -1194,6 +1200,11 @@ function lockPageScroll() {
   lockedScrollY = window.scrollY
   document.body.style.top = `-${lockedScrollY}px`
   document.body.classList.add('has-paper-open')
+}
+
+function updateVisibleViewport() {
+  const height = Math.round(window.visualViewport?.height || window.innerHeight)
+  document.documentElement.style.setProperty('--drawer-visible-height', `${height}px`)
 }
 
 function unlockPageScroll() {
