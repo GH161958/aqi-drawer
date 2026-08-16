@@ -152,6 +152,12 @@ export async function createBridgeApp(config = {}) {
     } catch (error) { next(error) }
   })
 
+  app.patch('/api/pocket/items/:id/note', async (req, res, next) => {
+    try {
+      res.json(await store.editNote(req.params.id, req.body?.note))
+    } catch (error) { next(error) }
+  })
+
   app.post('/api/pocket/items', async (req, res, next) => {
     try {
       const item = await store.upsert(req.body)
@@ -258,6 +264,13 @@ export async function createBridgeApp(config = {}) {
   app.post('/api/pocket/items/:id/replies', async (req, res, next) => {
     try {
       res.json(await store.reply(req.params.id, req.body))
+    } catch (error) { next(error) }
+  })
+
+  app.patch('/api/pocket/items/:id/replies/:replyId', async (req, res, next) => {
+    try {
+      if (req.body?.hidden !== true) return res.status(400).json({ error: 'Reply hidden must be true.' })
+      res.json(await store.hideReply(req.params.id, req.params.replyId))
     } catch (error) { next(error) }
   })
 

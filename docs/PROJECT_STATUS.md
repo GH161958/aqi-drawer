@@ -4,9 +4,9 @@ Last reviewed: 2026-08-17
 
 ## CURRENT FOCUS
 
-### Core Item Loop — production rollout
+### Mobile usability and note loop
 
-P0 代码闭环已经完成：same-origin Drawer API、独立浏览器 session、现有 Collection / Tags 保存链。下一步先由 EE 配置 production Drawer secret、重新部署并完成 Railway 实机验收；通过后再继续 SELF DROP 与 EE Note。
+Production 已验证 browser login、iPhone Shortcut、Tags 与 Collection 刷新持久化。本轮完成移动端 paper scroll、EE Note 手动 CRUD、Aqi reply 持久化收起，以及 item-level「移出分类」文案。
 
 ## VERIFIED DONE
 
@@ -47,13 +47,26 @@ P0 代码闭环已经完成：same-origin Drawer API、独立浏览器 session�
 - 既有 Bridge Bearer 与 MCP 保护保持独立
 - Collection / Tags 已通过 REST 保存、重新 GET 持久化与 MCP 一致性测试；`Ombre` 与测试 Collection 均通过
 
+### Verified production
+
+- Railway `/drawer` browser login 可用
+- iPhone Share Sheet Shortcut `/drop/<secret>` 可用
+- Tags 保存后刷新仍存在
+- Collection 保存后刷新仍存在
+
+### Completed in final pass
+
+- Closed Cabinet 在 mobile viewport 内固定，不产生无意义页面拖动；Inspect 锁住背景
+- 长 Record / EE Note / Aqi Note 使用前景纸内部滚动，sticky「放回」始终可达
+- EE Note 可在 Drawer 内新增、编辑、明确移除并持久化
+- Aqi reply 可持久化收起；正常 Side Note stack 不再渲染，既有 Activity 保留
+- Collection item-level 清除动作改称「移出分类」，nullable Collection 语义不变
+
 ## IMPLEMENTED / NEEDS VERIFICATION
 
 ### Production / Railway rollout
 
-- 需要在 Railway 新增独立 `C_POCKET_DRAWER_SECRET` 并重新部署
-- 需要在真实 production `/drawer` 完成登录、Collection / `Ombre` 保存与刷新验收
-- 需要人工确认 Volume 仍挂载 `/app/data`，并执行重启后的 item/media 持久化验收
+- Railway Volume 已挂载；仍需在今后部署后持续观察 item/media 持久化
 
 ### Activity Ledger
 
@@ -71,10 +84,10 @@ Living Record UI 已出现，仍需确认真实事件：
 
 已有独立 renderer 与基础照片包结构；storage / Inspect 视觉仍需真实数据验收与继续细化。
 
-### Core-loop features not included in this P0 run
+### Core-loop features not included in this pass
 
 - Drawer SELF DROP 尚未实现
-- EE Note 的 Drawer create/edit/clear、REST 与 MCP 编辑尚未实现
+- EE Note MCP 编辑未加入；本轮只完成 Drawer browser 手动 CRUD
 
 ## CURRENT PROBLEMS
 
@@ -101,16 +114,12 @@ Living Record UI 已出现，仍需确认真实事件：
 
 ## NEXT
 
-1. **Production rollout**：配置 `C_POCKET_DRAWER_SECRET`，部署新版静态资源，验收线上登录与 Collection / Tags 保存刷新
-2. **Railway persistence**：确认 `/app/data` Volume；创建 text/image，重启或 redeploy 后再次确认 item 与 media
-3. **SELF DROP**：网页内 photo/file/URL/text/optional note；复用现有 multipart attachment model
-4. **EE Note loop**：Drawer create/edit/clear、REST、MCP 与刷新持久化
-
-以上通过后再回到视觉施工：
-
-5. **Expanded Paper States**：EE / Aqi / Record / Filing
-6. **Open Drawer Orderly Mess** 与 source-specific objects
-7. **Typography**：paper geometry 稳定后再测，不 production integrate
+1. **Aqi Triage / 整理一下**：对 Inbox / recent items 显式整理；高置信规则可应用，模糊项留在 Inbox；修改必须可见、可解释、可逆
+2. **Workflow status automation**：六个 status 成为真实操作位置；仅 meaningful triage/workflow event 可移动，查看绝不移动
+3. **Stale auto-archive**：长期无活动 item 只自动归档、不硬删；排除 `memory_candidate` 与显式保留项
+4. **Safe dev fixtures**：建立不进入 production 的可清理 fixture，用于 EE Note、Aqi Note、Record、Filing 与 source states
+5. **SELF DROP**：网页内 photo/file/URL/text/optional note；复用现有 multipart attachment model
+6. **Deferred visual work**：Expanded Paper States、Open Drawer orderly mess、XHS Photo Packet、font integration
 
 ## DEFERRED
 
@@ -123,6 +132,8 @@ Living Record UI 已出现，仍需确认真实事件：
 - New frontend composer
 - Full production font integration
 - iPhone direct image sharing（由另一条工作线处理）
+- 大型 Activity Ledger 扩展
+- infinite/freeform canvas
 
 ## DECISION LOG
 
@@ -142,6 +153,10 @@ Living Record UI 已出现，仍需确认真实事件：
 - Pocket 前端请求只使用 same-origin `/api/pocket/...`。
 - Collection / Tags 现有位置与结构冻结；本轮只恢复真实保存链。
 - Railway production 与 Volume 仍须 EE 实机验收，不能由本地自动化代替。
+- Production 已由 EE 验证 browser login、mobile Shortcut、Tags 与 Collection persistence。
+- 六个 status 的未来操作语义固定：Inbox=未整理；Tonight=近期注意；Discussed=已有实质讨论；Deferred=明确推迟；Memory candidate=显式记忆候选；Archived=不再活跃。
+- 自动过期只允许 archive，不允许 hard-delete；查看 item 不构成 workflow movement。
+- 后续测试采用安全、可清理且不进入 production 的 fixture，不再依赖永久假内容。
 
 ## Maintenance
 

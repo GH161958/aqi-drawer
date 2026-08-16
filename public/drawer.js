@@ -99,8 +99,10 @@ let activeCollection = ''
 let activeSource = ''
 let committedTypePreset = readTypePreset()
 let draftTypePreset = committedTypePreset
+let lockedScrollY = 0
 
 applyTypePreset(committedTypePreset)
+document.body.classList.add('is-cabinet-home')
 
 async function loadCabinetCounts() {
   try {
@@ -367,6 +369,7 @@ async function showDetail(id, row, panel = 'original') {
   row.classList.add('is-lifting')
   await transitionPause()
   detailContent.replaceChildren(element('p', 'state-message', '正在取出这张纸……'))
+  lockPageScroll()
   dialog.showModal()
   dialog.classList.add('is-entering')
   window.setTimeout(() => dialog.classList.remove('is-entering'), 220)
@@ -397,7 +400,7 @@ function renderDetail(item, panel = 'original') {
   } else {
     renderPaperDetail(item, originalContent)
   }
-  original.append(originalContent)
+  original.append(originalContent, createEeNoteTrigger(item))
   fragment.append(createItemRecord(item), original)
 
   appendSecondaryPapers(item, fragment)
@@ -544,12 +547,7 @@ function appendRecord(record, label, value) {
 }
 
 function appendSecondaryPapers(item, fragment) {
-  if (item.note) {
-    const note = createEeNoteSlip(item.note)
-    note.classList.add('detail-aux-panel')
-    note.dataset.panel = 'ee-note'
-    fragment.append(note)
-  }
+  fragment.append(createEeNoteEditor(item))
   const replies = Array.isArray(item.replies)
     ? [...item.replies].sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
     : []
@@ -558,7 +556,7 @@ function appendSecondaryPapers(item, fragment) {
     group.setAttribute('aria-label', '夹入的回条')
     group.classList.add('detail-aux-panel')
     group.dataset.panel = 'aqi-note'
-    replies.forEach((reply) => group.append(createReplySlip(reply)))
+    replies.forEach((reply) => group.append(createReplySlip(item, reply)))
     fragment.append(group)
   }
 }
@@ -615,7 +613,7 @@ function createRecordIndex(item) {
   const actions = element('div', 'metadata-actions')
   const save = element('button', 'record-action', '记下整理')
   save.type = 'submit'
-  const clear = element('button', 'record-action record-clear', '清空分类')
+  const clear = element('button', 'record-action record-clear', '移出分类')
   clear.type = 'button'
   const feedback = element('p', 'metadata-feedback')
   actions.append(save, clear)
@@ -703,16 +701,64 @@ async function saveMetadata(item, form, clearCollection) {
   }
 }
 
-function createEeNoteSlip(noteText) {
-  const note = element('aside', 'secondary-slip ee-note-slip')
-  note.append(
-    element('p', 'slip-kicker', '伊伊留了一句'),
-    element('p', 'slip-text', noteText),
-  )
+function createEeNoteTrigger(item) {
+  const trigger = element('button', 'detail-note-trigger', item.note ? 'EE · 看附言' : 'EE · 留一句')
+  trigger.type = 'button'
+  trigger.addEventListener('click', () => setDetailPanel('ee-note'))
+  return trigger
+}
+
+function createEeNoteEditor(item) {
+  const note = element('aside', 'secondary-slip ee-note-slip detail-aux-panel')
+  note.dataset.panel = 'ee-note'
+  note.append(element('p', 'slip-kicker', item.note ? '伊伊留的一句' : '留一句给阿栖'))
+  const form = element('form', 'ee-note-form')
+  const input = document.createElement('textarea')
+  input.name = 'note'
+  input.maxLength = 2000
+  input.rows = 5
+  input.value = item.note || ''
+  input.placeholder = '写在这张小纸上……'
+  const actions = element('div', 'note-actions')
+  const save = element('button', 'note-action', item.note ? '改好这句' : '夹进抽屉')
+  save.type = 'submit'
+  actions.append(save)
+  if (item.note) {
+    const clear = element('button', 'note-action note-remove', '移除这句')
+    clear.type = 'button'
+    clear.addEventListener('click', () => {
+      if (window.confirm('把这句 EE Note 从当前物件移除？')) saveEeNote(item, '', note)
+    })
+    actions.append(clear)
+  }
+  form.append(input, actions, element('p', 'note-feedback'))
+  form.addEventListener('submit', (event) => {
+    event.preventDefault()
+    saveEeNote(item, input.value, note)
+  })
+  note.append(form)
   return note
 }
 
-function createReplySlip(reply) {
+async function saveEeNote(item, value, panel) {
+  const feedback = panel.querySelector('.note-feedback')
+  feedback.textContent = '正在夹好……'
+  try {
+    const response = await apiFetch(pocketApi(`/items/${encodeURIComponent(item.id)}/note`), {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ note: value }),
+    })
+    const payload = await response.json()
+    if (!response.ok) throw new Error(payload.error || `附言保存失败（${response.status}）`)
+    renderDetail(payload.item, payload.item.note ? 'ee-note' : 'original')
+    await loadItems()
+  } catch (error) {
+    feedback.textContent = error.message || '这句暂时没有夹好。'
+  }
+}
+
+function createReplySlip(item, reply) {
   const slip = element('article', `secondary-slip reply-slip reply-${reply.author === 'EE' ? 'ee' : 'aqi'}`)
   const author = reply.author === 'EE' ? 'EE 留了一张回条' : 'AQI LEFT A NOTE'
   slip.append(
@@ -723,7 +769,34 @@ function createReplySlip(reply) {
   if (reply.createdAt) annotations.push(formatLongDate(reply.createdAt))
   if (reply.source) annotations.push(reply.source)
   if (annotations.length) slip.append(element('p', 'slip-annotation', annotations.join(' · ')))
+  if (reply.author === 'Aqi') {
+    const remove = element('button', 'note-action note-remove reply-remove', '收起这张')
+    remove.type = 'button'
+    remove.addEventListener('click', () => {
+      if (window.confirm('把这张 Aqi 回条从当前物件收起？记录仍会保留。')) hideReply(item, reply, slip)
+    })
+    slip.append(remove)
+  }
   return slip
+}
+
+async function hideReply(item, reply, slip) {
+  const control = slip.querySelector('.reply-remove')
+  control.disabled = true
+  try {
+    const response = await apiFetch(pocketApi(`/items/${encodeURIComponent(item.id)}/replies/${encodeURIComponent(reply.id)}`), {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ hidden: true }),
+    })
+    const payload = await response.json()
+    if (!response.ok) throw new Error(payload.error || `回条收起失败（${response.status}）`)
+    renderDetail(payload.item, payload.item.replies.length ? 'aqi-note' : 'original')
+    await loadItems()
+  } catch (error) {
+    control.disabled = false
+    control.textContent = error.message || '暂时收不起来'
+  }
 }
 
 function createFilingSlip(item) {
@@ -1081,6 +1154,7 @@ async function openCollection(trigger) {
   trigger.classList.add('is-opening')
   await transitionPause()
   cabinetHome.hidden = true
+  document.body.classList.remove('is-cabinet-home')
   collectionView.hidden = false
   collectionView.classList.add('is-entering')
   trigger.classList.remove('is-opening')
@@ -1095,6 +1169,7 @@ async function closeCollection() {
   collectionView.hidden = true
   collectionView.classList.remove('is-closing')
   cabinetHome.hidden = false
+  document.body.classList.add('is-cabinet-home')
   lastCabinetTrigger?.focus({ preventScroll: true })
 }
 
@@ -1107,10 +1182,25 @@ async function putBackDetail() {
   dialog.classList.add('is-returning')
   await transitionPause()
   dialog.close()
+  unlockPageScroll()
   dialog.classList.remove('is-returning')
   inspectedItemRow?.classList.remove('is-lifting')
   inspectedItemRow = null
   activeDetailItem = null
+}
+
+function lockPageScroll() {
+  if (document.body.classList.contains('has-paper-open')) return
+  lockedScrollY = window.scrollY
+  document.body.style.top = `-${lockedScrollY}px`
+  document.body.classList.add('has-paper-open')
+}
+
+function unlockPageScroll() {
+  if (!document.body.classList.contains('has-paper-open')) return
+  document.body.classList.remove('has-paper-open')
+  document.body.style.top = ''
+  window.scrollTo(0, lockedScrollY)
 }
 
 openTriggers.forEach((trigger) => trigger.addEventListener('click', () => openCollection(trigger)))

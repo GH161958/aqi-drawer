@@ -268,6 +268,33 @@ export class PocketStore {
     })
   }
 
+  async editNote(id, note) {
+    return this.#mutate((state) => {
+      const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
+      if (!item) throw httpError(404, 'Pocket item not found.')
+      const nextNote = clean(note)
+      if (item.note === nextNote) return { item: publicItem(item), changed: false }
+      item.note = nextNote
+      item.updatedAt = new Date().toISOString()
+      item.syncState = 'synced'
+      return { item: publicItem(item), changed: true }
+    })
+  }
+
+  async hideReply(id, replyId) {
+    return this.#mutate((state) => {
+      const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
+      if (!item) throw httpError(404, 'Pocket item not found.')
+      const reply = item.replies.find((entry) => entry.id === replyId)
+      if (!reply) throw httpError(404, 'Pocket reply not found.')
+      if (reply.hiddenAt) return { item: publicItem(item), changed: false }
+      reply.hiddenAt = new Date().toISOString()
+      item.updatedAt = reply.hiddenAt
+      item.syncState = 'synced'
+      return { item: publicItem(item), changed: true }
+    })
+  }
+
   async review(id, action, candidateResult, { actor = 'system' } = {}) {
     return this.#mutate((state) => {
       const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
@@ -638,6 +665,7 @@ function normalizeReply(value) {
     text: clean(value.text),
     createdAt: validIso(value.createdAt) ? value.createdAt : new Date().toISOString(),
     source: ['aqi-drawer', 'chatgpt', 'shortcut'].includes(value.source) ? value.source : 'aqi-drawer',
+    ...(validIso(value.hiddenAt) ? { hiddenAt: value.hiddenAt } : {}),
   }
 }
 
@@ -682,6 +710,7 @@ function publicItem(item, { includeContentSnapshot = false } = {}) {
     collection: item.collection || null,
     tags: normalizeTags(item.tags),
     activity: normalizeActivity(item.activity),
+    replies: (Array.isArray(item.replies) ? item.replies : []).filter((reply) => !reply.hiddenAt).map(normalizeReply).filter(Boolean),
     attachments: item.attachments.map(publicAttachment),
     ...(contentSnapshot && !includeContentSnapshot ? { contentRead: summarizeContentSnapshot(contentSnapshot) } : {}),
   }
@@ -694,7 +723,7 @@ function hydrateStoredItem(item) {
     tags: normalizeTags(item?.tags),
     activity: normalizeActivity(item?.activity),
     attachments: Array.isArray(item?.attachments) ? item.attachments : [],
-    replies: Array.isArray(item?.replies) ? item.replies : [],
+    replies: Array.isArray(item?.replies) ? item.replies.map(normalizeReply).filter(Boolean) : [],
   }
 }
 

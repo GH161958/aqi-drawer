@@ -130,6 +130,28 @@ try {
   assert.equal(metadataNoop.changed, false)
   assert.equal(metadataNoop.item.activity.length, metadataActivityCount)
 
+  const createdNote = await fetch(`${baseUrl}/api/pocket/items/${source.id}/note`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ note: '第一句 EE Note' }),
+  }).then(checkJson)
+  assert.equal(createdNote.changed, true)
+  assert.equal(createdNote.item.note, '第一句 EE Note')
+  const editedNote = await fetch(`${baseUrl}/api/pocket/items/${source.id}/note`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ note: '改好后的 EE Note' }),
+  }).then(checkJson)
+  assert.equal(editedNote.item.note, '改好后的 EE Note')
+  assert.equal((await bridge.store.get(source.id)).note, '改好后的 EE Note')
+  const clearedNote = await fetch(`${baseUrl}/api/pocket/items/${source.id}/note`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ note: '' }),
+  }).then(checkJson)
+  assert.equal(clearedNote.item.note, '')
+  assert.equal((await bridge.store.get(source.id)).note, '')
+
   const metadataMcp = await client.callTool({
     name: 'pocket_edit_metadata',
     arguments: { id: source.id, tags_add: ['continuity'], tags_remove: ['evidence'] },
@@ -326,6 +348,17 @@ try {
   const afterReply = await bridge.store.get(source.id)
   assert.equal(afterReply.replies.length, 1)
   assert.equal(afterReply.activity.filter((entry) => entry.type === 'reply_added').length, 1)
+  const activityCountBeforeReplyHide = afterReply.activity.length
+  const hiddenReply = await fetch(`${baseUrl}/api/pocket/items/${source.id}/replies/same-reply`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ hidden: true }),
+  }).then(checkJson)
+  assert.equal(hiddenReply.changed, true)
+  assert.deepEqual(hiddenReply.item.replies, [])
+  const afterReplyHide = await bridge.store.get(source.id)
+  assert.deepEqual(afterReplyHide.replies, [])
+  assert.equal(afterReplyHide.activity.length, activityCountBeforeReplyHide)
 
   const staged = await client.callTool({
     name: 'pocket_review',
