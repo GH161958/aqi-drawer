@@ -13,6 +13,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY server ./server
+COPY public ./public
 COPY deploy/docker-entrypoint.sh /usr/local/bin/aqi-drawer-entrypoint
 
 RUN chmod 0755 /usr/local/bin/aqi-drawer-entrypoint \

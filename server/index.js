@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import express from 'express'
 import multer from 'multer'
-import { randomUUID } from 'node:crypto'
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
@@ -14,12 +14,16 @@ import { normalizeIncomingShare } from './share-normalizer.js'
 import { extractXhsNoteId, XhsAdapter } from './adapters/xhs.js'
 
 const SERVICE_VERSION = '2.5.0'
+const DRAWER_SESSION_COOKIE = 'aqi_drawer_session'
+const DRAWER_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 export async function createBridgeApp(config = {}) {
   const root = path.dirname(fileURLToPath(import.meta.url))
+  const drawerRoot = path.join(root, '..', 'public')
   const settings = {
     dataDir: config.dataDir ?? process.env.C_POCKET_DATA_DIR ?? path.join(root, '..', 'data'),
     bridgeToken: config.bridgeToken ?? cleanEnvironmentValue(process.env.C_POCKET_BRIDGE_TOKEN),
+    drawerSecret: config.drawerSecret ?? cleanEnvironmentValue(process.env.C_POCKET_DRAWER_SECRET),
     allowedOrigins: config.allowedOrigins ?? splitOrigins(process.env.C_POCKET_ALLOWED_ORIGINS),
     cmemoryBaseUrl: config.cmemoryBaseUrl ?? process.env.CMEMORY_BASE_URL ?? 'http://127.0.0.1:4282',
     cmemoryToken: config.cmemoryToken ?? process.env.CMEMORY_TOKEN ?? '',
@@ -56,16 +60,39 @@ export async function createBridgeApp(config = {}) {
   app.use(express.json({ limit: '2mb' }))
   app.use(express.urlencoded({ extended: false, limit: '2mb' }))
   app.use(express.text({ type: ['text/plain', 'text/*'], limit: '2mb' }))
+  app.get('/drawer', (_req, res) => res.sendFile(path.join(drawerRoot, 'index.html')))
+  app.use('/drawer', express.static(drawerRoot, { index: false }))
   app.use((req, res, next) => {
     const origin = req.get('origin')
     if (origin && settings.allowedOrigins.includes(origin)) {
       res.setHeader('access-control-allow-origin', origin)
       res.setHeader('vary', 'Origin')
       res.setHeader('access-control-allow-headers', 'authorization, content-type, mcp-session-id')
-      res.setHeader('access-control-allow-methods', 'GET, POST, DELETE, OPTIONS')
+      res.setHeader('access-control-allow-methods', 'GET, POST, PATCH, DELETE, OPTIONS')
     }
     if (req.method === 'OPTIONS') return res.sendStatus(204)
     next()
+  })
+
+  app.get('/drawer/session', (req, res) => {
+    res.setHeader('cache-control', 'no-store')
+    res.json({ authenticated: isDrawerBrowserAuthorized(req, settings.drawerSecret) || (!settings.drawerSecret && isLoopbackRequest(req)) })
+  })
+
+  app.post('/drawer/session', (req, res) => {
+    res.setHeader('cache-control', 'no-store')
+    if (!isSameOriginRequest(req)) return res.status(403).json({ error: 'Drawer sign-in must come from this Drawer.' })
+    if (!settings.drawerSecret || !safeSecretEqual(req.body?.secret, settings.drawerSecret)) {
+      return res.status(401).json({ error: 'Drawer secret was not accepted.' })
+    }
+    res.cookie(DRAWER_SESSION_COOKIE, createDrawerSession(settings.drawerSecret), {
+      httpOnly: true,
+      secure: isSecureRequest(req),
+      sameSite: 'strict',
+      path: '/',
+      maxAge: DRAWER_SESSION_MAX_AGE_MS,
+    })
+    res.json({ authenticated: true })
   })
 
   app.get('/health', async (_req, res) => {
@@ -85,9 +112,9 @@ export async function createBridgeApp(config = {}) {
   })
 
   app.use('/api', (req, res, next) => {
-    if (isAuthorized(req, settings.bridgeToken)) return next()
-    res.status(settings.bridgeToken ? 401 : 503).json({
-      error: settings.bridgeToken ? 'Unauthorized.' : 'C_POCKET_BRIDGE_TOKEN is required for non-loopback access.',
+    if (isApiAuthorized(req, settings)) return next()
+    res.status(settings.bridgeToken || settings.drawerSecret ? 401 : 503).json({
+      error: settings.bridgeToken || settings.drawerSecret ? 'Unauthorized.' : 'Drawer access is not configured for non-loopback requests.',
     })
   })
   app.use(settings.mcpPath, (req, res, next) => {
@@ -112,6 +139,19 @@ export async function createBridgeApp(config = {}) {
     } catch (error) { next(error) }
   })
 
+  app.patch('/api/pocket/items/:id/metadata', async (req, res, next) => {
+    try {
+      const metadata = {
+        clearCollection: req.body?.clearCollection === true || req.body?.clear_collection === true,
+        tagsAdd: req.body?.tagsAdd ?? req.body?.tags_add,
+        tagsRemove: req.body?.tagsRemove ?? req.body?.tags_remove,
+      }
+      if (Object.hasOwn(req.body || {}, 'collection')) metadata.collection = req.body.collection
+      const saved = await store.editMetadata(req.params.id, metadata, { actor: 'EE' })
+      res.json(saved)
+    } catch (error) { next(error) }
+  })
+
   app.post('/api/pocket/items', async (req, res, next) => {
     try {
       const item = await store.upsert(req.body)
@@ -130,6 +170,11 @@ export async function createBridgeApp(config = {}) {
         refresh: req.body?.refresh === true,
       })
       if (read.snapshot) await store.setContentSnapshot(item.id, read.snapshot)
+      await store.recordContentRead(item.id, {
+        actor: 'EE',
+        mode: req.body?.refresh === true ? 'refresh' : Number(req.body?.videoFrames) > 0 ? 'video_frames' : req.body?.detail === 'full' ? 'full' : 'compact',
+        sourceRefreshed: req.body?.refresh === true && read.cache?.hit !== true,
+      })
       res.json({
         itemId: item.id,
         snapshot: read.snapshot,
@@ -220,10 +265,10 @@ export async function createBridgeApp(config = {}) {
     try {
       const item = await store.get(req.params.id)
       if (!item) return res.status(404).json({ error: 'Pocket item not found.' })
-      const candidate = req.body.action === 'memory_candidate'
+      const candidate = req.body.action === 'memory_candidate' && item.status !== req.body.action
         ? await cmemory.stagePocketCandidate(item)
         : undefined
-      res.json({ item: await store.review(req.params.id, req.body.action, candidate) })
+      res.json({ item: await store.review(req.params.id, req.body.action, candidate, { actor: 'EE' }) })
     } catch (error) { next(error) }
   })
 
@@ -285,14 +330,34 @@ export async function startBridge(config = {}) {
   const bridge = await createBridgeApp(config)
   const port = Number(config.port ?? process.env.PORT ?? 8787)
   const host = config.host ?? process.env.HOST ?? '127.0.0.1'
-  const httpServer = await new Promise((resolve, reject) => {
-    const server = bridge.app.listen(port, host, () => resolve(server))
-    server.once('error', reject)
-  })
+  let httpServer
+  try {
+    httpServer = bridge.app.listen(port, host)
+    await new Promise((resolve, reject) => {
+      const onListening = () => {
+        httpServer.off('error', onError)
+        resolve()
+      }
+      const onError = (error) => {
+        httpServer.off('listening', onListening)
+        reject(error)
+      }
+      httpServer.once('listening', onListening)
+      httpServer.once('error', onError)
+    })
+  } catch (error) {
+    await bridge.close()
+    throw error
+  }
+  const address = httpServer.address()
+  if (!address) {
+    await bridge.close()
+    throw new Error('HTTP server emitted listening without an address.')
+  }
   return {
     ...bridge,
     httpServer,
-    address: httpServer.address(),
+    address,
     mcpPath: config.mcpPath ?? (cleanEnvironmentValue(process.env.C_POCKET_MCP_PATH) || '/mcp'),
     async stop() {
       await bridge.close()
@@ -304,6 +369,58 @@ export async function startBridge(config = {}) {
 function isAuthorized(req, token) {
   if (!token) return isLoopbackRequest(req)
   return req.get('authorization') === `Bearer ${token}`
+}
+
+function isApiAuthorized(req, settings) {
+  if (settings.bridgeToken && req.get('authorization') === `Bearer ${settings.bridgeToken}`) return true
+  if (isLoopbackRequest(req)) return true
+  if (!isDrawerBrowserAuthorized(req, settings.drawerSecret)) return false
+  return ['GET', 'HEAD', 'OPTIONS'].includes(req.method) || isSameOriginRequest(req)
+}
+
+function createDrawerSession(secret) {
+  const expiresAt = Date.now() + DRAWER_SESSION_MAX_AGE_MS
+  const nonce = randomUUID().replaceAll('-', '')
+  const payload = `${expiresAt}.${nonce}`
+  const signature = createHmac('sha256', secret).update(payload).digest('base64url')
+  return `${payload}.${signature}`
+}
+
+function isDrawerBrowserAuthorized(req, secret) {
+  if (!secret) return false
+  const token = readCookie(req, DRAWER_SESSION_COOKIE)
+  const [expiresAt, nonce, signature, ...extra] = String(token || '').split('.')
+  if (extra.length || !/^\d+$/.test(expiresAt) || !/^[a-f0-9]{32}$/i.test(nonce) || !signature) return false
+  if (Number(expiresAt) <= Date.now()) return false
+  const payload = `${expiresAt}.${nonce}`
+  const expected = createHmac('sha256', secret).update(payload).digest('base64url')
+  return safeSecretEqual(signature, expected)
+}
+
+function readCookie(req, name) {
+  for (const part of String(req.get('cookie') || '').split(';')) {
+    const separator = part.indexOf('=')
+    if (separator < 0 || part.slice(0, separator).trim() !== name) continue
+    try { return decodeURIComponent(part.slice(separator + 1).trim()) } catch { return '' }
+  }
+  return ''
+}
+
+function safeSecretEqual(value, expected) {
+  const left = Buffer.from(String(value || ''))
+  const right = Buffer.from(String(expected || ''))
+  return left.length === right.length && timingSafeEqual(left, right)
+}
+
+function isSameOriginRequest(req) {
+  const origin = cleanEnvironmentValue(req.get('origin'))
+  if (!origin) return false
+  const protocol = cleanEnvironmentValue(req.get('x-forwarded-proto')).split(',')[0] || req.protocol
+  return origin === `${protocol}://${req.get('host')}`
+}
+
+function isSecureRequest(req) {
+  return cleanEnvironmentValue(req.get('x-forwarded-proto')).split(',')[0] === 'https' || req.secure
 }
 
 function isLoopbackRequest(req) {

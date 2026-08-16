@@ -33,6 +33,7 @@ Pocket 使用单个 JSON 状态文件串行写入，因此生产环境应保持 
 HOST=0.0.0.0
 C_POCKET_DATA_DIR=/app/data
 C_POCKET_BRIDGE_TOKEN=<至少 32 位的独立随机值>
+C_POCKET_DRAWER_SECRET=<另一段至少 32 位的独立随机值>
 C_POCKET_MCP_PATH=/mcp/<至少 32 位的独立随机值>
 C_POCKET_DROP_SECRET=<至少 48 位的独立随机值>
 C_POCKET_ALLOWED_ORIGINS=

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f3eddf">
+    <title>Aqi Drawer</title>
+    <link rel="stylesheet" href="/drawer/drawer.css?v=20260816-visual-consolidation-v1">
+    <link rel="stylesheet" href="/drawer/drawer-room.css?v=20260816-index-record-v3">
+    <link rel="stylesheet" href="/drawer/layout-correction.css?v=20260816-critical-layout-v1">
+    <script src="/drawer/drawer.js?v=20260817-same-origin-auth-v1" defer></script>
+  </head>
+  <body>
+    <header class="cabinet-top">
+      <div class="title-block">
+        <p class="eyebrow">things EE left for Aqi</p>
+        <h1>Aqi Drawer</h1>
+      </div>
+      <button id="type-cabinet-toggle" class="brass-mark" type="button" aria-label="打开字体试衣间"></button>
+    </header>
+
+    <main>
+      <section id="cabinet-home" class="cabinet-home" aria-labelledby="cabinet-title">
+        <h2 id="cabinet-title" class="visually-hidden">选择一格抽屉</h2>
+        <div class="closed-cabinet">
+          <button class="cabinet-plaque" type="button" data-open-status="">
+            <span>都在这里</span>
+            <span id="count-all" class="plaque-count" aria-label="全部数量">—</span>
+          </button>
+          <div class="cabinet-drawers">
+            <button class="cabinet-drawer" type="button" data-open-status="inbox">
+              <span class="drawer-peek" aria-hidden="true"></span>
+              <span class="cabinet-label"><span>刚放进来</span><span class="cabinet-count" data-count-status="inbox"></span></span>
+              <span class="cabinet-pull" aria-hidden="true"></span>
+            </button>
+            <button class="cabinet-drawer" type="button" data-open-status="tonight">
+              <span class="drawer-peek" aria-hidden="true"></span>
+              <span class="cabinet-label"><span>今晚看看</span><span class="cabinet-count" data-count-status="tonight"></span></span>
+              <span class="cabinet-pull" aria-hidden="true"></span>
+            </button>
+            <button class="cabinet-drawer" type="button" data-open-status="discussed">
+              <span class="drawer-peek" aria-hidden="true"></span>
+              <span class="cabinet-label"><span>聊过了</span><span class="cabinet-count" data-count-status="discussed"></span></span>
+              <span class="cabinet-pull" aria-hidden="true"></span>
+            </button>
+            <button class="cabinet-drawer" type="button" data-open-status="deferred">
+              <span class="drawer-peek" aria-hidden="true"></span>
+              <span class="cabinet-label"><span>晚点再看</span><span class="cabinet-count" data-count-status="deferred"></span></span>
+              <span class="cabinet-pull" aria-hidden="true"></span>
+            </button>
+            <button class="cabinet-drawer" type="button" data-open-status="memory_candidate">
+              <span class="drawer-peek" aria-hidden="true"></span>
+              <span class="cabinet-label"><span>想留住</span><span class="cabinet-count" data-count-status="memory_candidate"></span></span>
+              <span class="cabinet-pull" aria-hidden="true"></span>
+            </button>
+            <button class="cabinet-drawer" type="button" data-open-status="archived">
+              <span class="drawer-peek" aria-hidden="true"></span>
+              <span class="cabinet-label"><span>收好了</span><span class="cabinet-count" data-count-status="archived"></span></span>
+              <span class="cabinet-pull" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="cabinet-base" aria-hidden="true"></div>
+        </div>
+        <p id="cabinet-status" class="cabinet-status" aria-live="polite">正在核对每一格里的东西……</p>
+      </section>
+
+      <section id="collection-view" class="collection-view" hidden aria-labelledby="collection-title">
+        <div class="collection-toolbar">
+          <p id="collection-title" class="current-drawer-label">全部</p>
+        </div>
+
+        <section class="drawer-shell" aria-live="polite" aria-busy="true">
+          <button id="close-drawer" class="drawer-handle drawer-close-handle" type="button" aria-label="合上抽屉">
+            <span aria-hidden="true"></span>
+            <span class="visually-hidden">合上抽屉</span>
+          </button>
+          <section id="archive-index" class="archive-index" hidden aria-label="抽屉目录">
+            <div id="collection-index" class="index-line" aria-label="按分类查看"></div>
+            <div id="source-index" class="index-line index-source-line" aria-label="按来源查看"></div>
+          </section>
+          <div id="loading" class="state-message">
+            <span class="loading-line"></span>
+            <p>正在轻轻拉开抽屉……</p>
+          </div>
+          <div id="empty" class="state-message" hidden>
+            <p class="state-title">这一格还是空的</p>
+            <p>EE 放进来的东西，会安静地待在这里。</p>
+          </div>
+          <div id="error" class="state-message" hidden>
+            <p class="state-title">抽屉暂时没有打开</p>
+            <p id="error-message">请稍后再试。</p>
+            <button id="retry" class="text-button" type="button">再拉一次</button>
+          </div>
+          <ol id="item-list" class="item-list" aria-label="Drawer items"></ol>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="item-detail" class="detail-dialog">
+      <article class="detail-sheet">
+        <button id="close-detail" class="close-button" type="button" aria-label="放回抽屉">放回</button>
+        <div id="detail-content"></div>
+      </article>
+    </dialog>
+
+    <dialog id="drawer-auth" class="drawer-auth-dialog" aria-labelledby="drawer-auth-title">
+      <form id="drawer-auth-form" class="drawer-auth-sheet">
+        <p class="type-kicker">PRIVATE DRAWER</p>
+        <h2 id="drawer-auth-title">打开私人抽屉</h2>
+        <label>
+          <span>Drawer secret</span>
+          <input id="drawer-auth-secret" name="secret" type="password" autocomplete="current-password" required>
+        </label>
+        <div class="drawer-auth-actions">
+          <button type="submit">打开</button>
+          <button id="drawer-auth-cancel" type="button">稍后</button>
+        </div>
+        <p id="drawer-auth-status" class="metadata-feedback" aria-live="polite"></p>
+      </form>
+    </dialog>
+
+    <dialog id="type-cabinet" class="type-dialog" aria-labelledby="type-cabinet-title">
+      <section class="type-sheet">
+        <button id="close-type-cabinet" class="close-button" type="button" aria-label="放回字体样张">放回</button>
+        <p class="type-kicker">Type Cabinet</p>
+        <h2 id="type-cabinet-title">字体试衣间</h2>
+        <div class="type-specimen" aria-live="polite">
+          <p class="specimen-display">Aqi Drawer</p>
+          <p class="specimen-heading">第一次投喂测试</p>
+          <p class="specimen-body">如果阿栖能看到这句话，就说明我们的抽屉真的接通啦 ovo</p>
+          <p class="specimen-meta">伊伊手动投喂 · 2026.08.15 · No.001</p>
+        </div>
+        <fieldset class="type-presets">
+          <legend>选择一套字</legend>
+          <button class="type-preset" type="button" data-type-preset="archive">
+            <span class="preset-index">01</span><strong>Archive</strong><small>Gloock / Noto Serif SC</small>
+          </button>
+          <button class="type-preset" type="button" data-type-preset="bookish">
+            <span class="preset-index">02</span><strong>Bookish</strong><small>Newsreader / LXGW WenKai</small>
+          </button>
+          <button class="type-preset" type="button" data-type-preset="paper">
+            <span class="preset-index">03</span><strong>Paper</strong><small>Instrument Serif / ZCOOL XiaoWei</small>
+          </button>
+          <button class="type-preset" type="button" data-type-preset="print">
+            <span class="preset-index">04</span><strong>Print</strong><small>Fraunces / Noto Serif SC</small>
+          </button>
+        </fieldset>
+        <dl id="type-font-manifest" class="type-font-manifest">
+          <div><dt>DISPLAY</dt><dd>Gloock</dd></div>
+          <div><dt>CJK</dt><dd>Noto Serif SC</dd></div>
+          <div><dt>BODY</dt><dd>Source Serif 4</dd></div>
+          <div><dt>META</dt><dd>IBM Plex Sans / Mono</dd></div>
+        </dl>
+        <div class="type-actions">
+          <button id="wear-type" class="type-action" type="button">穿上这套</button>
+          <button id="reset-type" class="type-action type-reset" type="button">恢复原样</button>
+        </div>
+        <p id="type-status" class="type-status" aria-live="polite"></p>
+      </section>
+    </dialog>
+  </body>
+</html>

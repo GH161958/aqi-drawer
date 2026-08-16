@@ -66,6 +66,7 @@ npm start
 | --- | --- |
 | `C_POCKET_DATA_DIR` | JSON 数据与附件目录 |
 | `C_POCKET_BRIDGE_TOKEN` | 保护远程 REST API |
+| `C_POCKET_DRAWER_SECRET` | 独立的网页 Drawer 登录秘密；只用于换取 HttpOnly session cookie |
 | `C_POCKET_MCP_PATH` | MCP 路径；生产环境应带随机后缀 |
 | `C_POCKET_DROP_SECRET` | iPhone 单向投递入口的私密路径 |
 | `C_POCKET_ALLOWED_ORIGINS` | 可选 CORS 白名单 |

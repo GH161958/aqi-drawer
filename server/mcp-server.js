@@ -121,6 +121,11 @@ export function createPocketMcpServer({ store, cmemory, contentReader }) {
         refresh,
       })
       if (read.snapshot) await store.setContentSnapshot(id, read.snapshot)
+      await store.recordContentRead(id, {
+        actor: 'Aqi',
+        mode: refresh ? 'refresh' : video_frames > 0 ? 'video_frames' : detail,
+        sourceRefreshed: refresh && read.cache?.hit !== true,
+      })
       const media = (read.media ?? []).slice(0, max_images + video_frames).map((entry) => ({
         type: 'image',
         data: entry.data.toString('base64'),
@@ -164,6 +169,31 @@ export function createPocketMcpServer({ store, cmemory, contentReader }) {
     }
   })
 
+  server.registerTool('pocket_edit_metadata', {
+    title: 'Edit Drawer collection and tags',
+    description: 'Set or clear one primary Collection and incrementally add or remove shared Tags. Source tags remain read-only in sourceData.',
+    inputSchema: {
+      id: z.string().min(1),
+      collection: z.string().max(80).optional(),
+      clear_collection: z.boolean().default(false),
+      tags_add: z.array(z.string().min(1).max(50)).max(40).default([]),
+      tags_remove: z.array(z.string().min(1).max(50)).max(40).default([]),
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false, idempotentHint: true },
+  }, async ({ id, collection, clear_collection, tags_add, tags_remove }) => {
+    try {
+      const saved = await store.editMetadata(id, {
+        ...(collection !== undefined ? { collection } : {}),
+        clearCollection: clear_collection,
+        tagsAdd: tags_add,
+        tagsRemove: tags_remove,
+      }, { actor: 'Aqi' })
+      return result(saved, saved.changed ? 'Drawer metadata updated.' : 'Drawer metadata was already up to date.')
+    } catch (error) {
+      return errorResult(error.message)
+    }
+  })
+
   server.registerTool('pocket_review', {
     title: 'Review an Aqi Drawer item',
     description: 'Move an item through the Pocket workflow. memory_candidate stages a pending C-Memory candidate only.',
@@ -176,8 +206,8 @@ export function createPocketMcpServer({ store, cmemory, contentReader }) {
     try {
       const item = await store.get(id)
       if (!item) return errorResult('Pocket item not found.')
-      const candidate = action === 'memory_candidate' ? await cmemory.stagePocketCandidate(item) : undefined
-      const saved = await store.review(id, action, candidate)
+      const candidate = action === 'memory_candidate' && item.status !== action ? await cmemory.stagePocketCandidate(item) : undefined
+      const saved = await store.review(id, action, candidate, { actor: 'Aqi' })
       return result({ item: saved }, action === 'memory_candidate'
         ? candidate?.ok ? 'Pending memory candidate staged for review.' : 'Item kept as pending_sync; durable memory was not changed.'
         : `Pocket item moved to ${action}.`)
@@ -266,6 +296,8 @@ function renderItem(item) {
     item.receivedCount > 1 && `伊伊分享了 ${item.receivedCount} 次`,
     item.text,
     item.sourceUrl,
+    item.collection && `分类：${item.collection}`,
+    item.tags?.length && `标签：${item.tags.join('、')}`,
     item.attachments.length && `附件：${item.attachments.length} 个`,
     item.sourceData?.provider === 'xiaohongshu' && renderXhsSummary(item.sourceData),
     item.note && `伊伊: ${item.note}`,

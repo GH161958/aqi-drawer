@@ -1,6 +1,7 @@
 const errors = []
 
 requireSecret('C_POCKET_BRIDGE_TOKEN', 32)
+requireSecret('C_POCKET_DRAWER_SECRET', 32)
 requireSecret('C_POCKET_DROP_SECRET', 48)
 
 const mcpPath = cleanEnvironmentValue(process.env.C_POCKET_MCP_PATH)

@@ -8,6 +8,7 @@ const STATUSES = new Set(['inbox', 'tonight', 'discussed', 'deferred', 'memory_c
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000
 const MAX_XHS_IMAGES = 30
 const MAX_XHS_DOWNLOAD_BYTES = 80 * 1024 * 1024
+const ACTIVITY_TYPES = new Set(['received', 'seen_by_aqi', 'content_read', 'reply_added', 'status_changed', 'metadata_changed', 'source_refreshed'])
 
 export class PocketStore {
   constructor(dataDir) {
@@ -76,7 +77,10 @@ export class PocketStore {
         return publicItem(state.items[duplicateIndex])
       }
       const index = state.items.findIndex((item) => item.id === normalized.id)
-      if (index < 0) state.items.push(normalized)
+      if (index < 0) {
+        appendActivity(normalized, 'received', inferReceivedActor(normalized), { count: normalized.receivedCount }, normalized.lastReceivedAt)
+        state.items.push(normalized)
+      }
       else if (normalized.updatedAt >= state.items[index].updatedAt) state.items[index] = normalized
       return publicItem(index < 0 ? normalized : state.items[index])
     })
@@ -195,6 +199,7 @@ export class PocketStore {
       }, now)
 
       if (!existing) {
+        appendActivity(normalized, 'received', inferReceivedActor(normalized), { count: normalized.receivedCount }, normalized.lastReceivedAt)
         state.items.push(normalized)
         return publicItem(normalized)
       }
@@ -216,6 +221,8 @@ export class PocketStore {
         updatedAt: now,
         syncState: 'synced',
       }
+      appendActivity(refreshed, 'received', inferReceivedActor(normalized), { count: refreshed.receivedCount }, now)
+      appendActivity(refreshed, 'source_refreshed', 'system', {}, now)
       state.items[existingIndex] = refreshed
       return publicItem(refreshed)
     })
@@ -231,6 +238,7 @@ export class PocketStore {
       for (const item of items) {
         item.seenByCAt = now
         item.updatedAt = now
+        appendActivity(item, 'seen_by_aqi', 'Aqi', {}, now)
       }
       return items.map(publicItem)
     })
@@ -255,16 +263,19 @@ export class PocketStore {
       item.replies.push(reply)
       item.updatedAt = reply.createdAt
       item.syncState = 'synced'
+      appendActivity(item, 'reply_added', reply.author, { replyId: reply.id, author: reply.author }, reply.createdAt)
       return { item: publicItem(item), reply: clone(reply), duplicate: false }
     })
   }
 
-  async review(id, action, candidateResult) {
+  async review(id, action, candidateResult, { actor = 'system' } = {}) {
     return this.#mutate((state) => {
       const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
       if (!item) throw httpError(404, 'Pocket item not found.')
       if (!STATUSES.has(action)) throw httpError(400, 'Unknown pocket review action.')
+      if (item.status === action) return publicItem(item)
       const now = new Date().toISOString()
+      const previousStatus = item.status
       item.status = action
       item.updatedAt = now
       item.syncState = 'synced'
@@ -287,6 +298,48 @@ export class PocketStore {
               updatedAt: now,
             }
       }
+      appendActivity(item, 'status_changed', normalizeActor(actor), { from: previousStatus, to: action }, now)
+      return publicItem(item)
+    })
+  }
+
+  async editMetadata(id, input, { actor = 'system' } = {}) {
+    return this.#mutate((state) => {
+      const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
+      if (!item) throw httpError(404, 'Pocket item not found.')
+      const collectionFrom = item.collection || null
+      const tagsFrom = normalizeTags(item.tags)
+      let collectionTo = collectionFrom
+      if (input?.clearCollection === true) collectionTo = null
+      else if (Object.hasOwn(input || {}, 'collection')) collectionTo = normalizeCollection(input.collection)
+      const remove = new Set(normalizeTags(input?.tagsRemove))
+      const tagsAfterRemove = tagsFrom.filter((tag) => !remove.has(tag))
+      const tagsTo = normalizeTags([...tagsAfterRemove, ...normalizeTags(input?.tagsAdd)])
+      const tagsAdded = tagsTo.filter((tag) => !tagsFrom.includes(tag))
+      const tagsRemoved = tagsFrom.filter((tag) => !tagsTo.includes(tag))
+      const changed = collectionFrom !== collectionTo || tagsAdded.length > 0 || tagsRemoved.length > 0
+      if (!changed) return { item: publicItem(item), changed: false }
+      const now = new Date().toISOString()
+      item.collection = collectionTo
+      item.tags = tagsTo
+      item.updatedAt = now
+      item.syncState = 'synced'
+      appendActivity(item, 'metadata_changed', normalizeActor(actor), {
+        collectionFrom,
+        collectionTo,
+        tagsAdded,
+        tagsRemoved,
+      }, now)
+      return { item: publicItem(item), changed: true }
+    })
+  }
+
+  async recordContentRead(id, { mode = 'compact', actor = 'system', sourceRefreshed = false } = {}) {
+    return this.#mutate((state) => {
+      const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
+      if (!item) throw httpError(404, 'Pocket item not found.')
+      appendActivity(item, 'content_read', normalizeActor(actor), { mode: normalizeReadMode(mode) })
+      if (sourceRefreshed) appendActivity(item, 'source_refreshed', 'system')
       return publicItem(item)
     })
   }
@@ -338,6 +391,7 @@ export class PocketStore {
     const raw = await readFile(this.filePath, 'utf8')
     const parsed = JSON.parse(raw)
     if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed.items)) throw new Error('Pocket store is invalid.')
+    parsed.items = parsed.items.map(hydrateStoredItem)
     return parsed
   }
 
@@ -386,6 +440,9 @@ function normalizeItem(input, now) {
     status: STATUSES.has(incoming.status) ? incoming.status : 'inbox',
     attachments,
     replies: Array.isArray(incoming.replies) ? incoming.replies.map(normalizeReply).filter(Boolean) : [],
+    collection: normalizeCollection(incoming.collection),
+    tags: normalizeTags(incoming.tags),
+    activity: normalizeActivity(incoming.activity),
     memoryCandidate: normalizeCandidate(incoming.memoryCandidate, createdAt),
     ...(incoming.contentSnapshot ? { contentSnapshot: normalizeContentSnapshot(incoming.contentSnapshot) } : {}),
     ...(incoming.sourceIdentity ? { sourceIdentity: normalizeSourceIdentity(incoming.sourceIdentity) } : {}),
@@ -435,7 +492,7 @@ function mergeDuplicate(existing, incoming, now) {
       : entry.name === attachment.name && entry.size === attachment.size)
     if (!duplicate) attachments.push(attachment)
   }
-  return {
+  const merged = {
     ...existing,
     title: existing.title || incoming.title,
     text: incoming.text.length > clean(existing.text).length ? incoming.text : existing.text,
@@ -455,6 +512,8 @@ function mergeDuplicate(existing, incoming, now) {
     updatedAt: now,
     syncState: 'synced',
   }
+  appendActivity(merged, 'received', inferReceivedActor(incoming), { count: merged.receivedCount }, now)
+  return merged
 }
 
 function findSourceIdentityDuplicate(items, candidate) {
@@ -620,9 +679,95 @@ function publicItem(item, { includeContentSnapshot = false } = {}) {
     lastReceivedAt: item.lastReceivedAt || item.createdAt,
     seenByCAt: item.seenByCAt || null,
     discussedAt: item.discussedAt || null,
+    collection: item.collection || null,
+    tags: normalizeTags(item.tags),
+    activity: normalizeActivity(item.activity),
     attachments: item.attachments.map(publicAttachment),
     ...(contentSnapshot && !includeContentSnapshot ? { contentRead: summarizeContentSnapshot(contentSnapshot) } : {}),
   }
+}
+
+function hydrateStoredItem(item) {
+  return {
+    ...item,
+    collection: normalizeCollection(item?.collection),
+    tags: normalizeTags(item?.tags),
+    activity: normalizeActivity(item?.activity),
+    attachments: Array.isArray(item?.attachments) ? item.attachments : [],
+    replies: Array.isArray(item?.replies) ? item.replies : [],
+  }
+}
+
+function normalizeCollection(value) {
+  const normalized = clean(value).replace(/\s+/g, ' ').slice(0, 80)
+  return normalized || null
+}
+
+function normalizeTags(value) {
+  const values = Array.isArray(value) ? value : []
+  const result = []
+  for (const entry of values) {
+    const tag = clean(entry).replace(/^#+/u, '').replace(/\s+/g, ' ').slice(0, 50)
+    if (tag && !result.includes(tag)) result.push(tag)
+    if (result.length >= 40) break
+  }
+  return result
+}
+
+function normalizeActivity(value) {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => normalizeActivityEntry(entry)).filter(Boolean)
+}
+
+function normalizeActivityEntry(entry) {
+  if (!entry || !ACTIVITY_TYPES.has(entry.type) || !validIso(entry.at)) return null
+  const detail = normalizeActivityDetail(entry.type, entry.detail)
+  return {
+    id: clean(entry.id) || randomUUID(),
+    type: entry.type,
+    actor: normalizeActor(entry.actor),
+    at: entry.at,
+    ...(Object.keys(detail).length ? { detail } : {}),
+  }
+}
+
+function appendActivity(item, type, actor, detail = {}, at = new Date().toISOString()) {
+  if (!ACTIVITY_TYPES.has(type)) return
+  item.activity = normalizeActivity(item.activity)
+  item.activity.push({
+    id: randomUUID(),
+    type,
+    actor: normalizeActor(actor),
+    at: validIso(at) ? at : new Date().toISOString(),
+    ...(Object.keys(normalizeActivityDetail(type, detail)).length ? { detail: normalizeActivityDetail(type, detail) } : {}),
+  })
+}
+
+function normalizeActivityDetail(type, detail = {}) {
+  if (type === 'received') return { count: Math.max(1, Number(detail.count) || 1) }
+  if (type === 'content_read') return { mode: normalizeReadMode(detail.mode) }
+  if (type === 'reply_added') return { replyId: clean(detail.replyId).slice(0, 120), author: normalizeActor(detail.author) }
+  if (type === 'status_changed') return STATUSES.has(detail.from) && STATUSES.has(detail.to) ? { from: detail.from, to: detail.to } : {}
+  if (type === 'metadata_changed') return {
+    collectionFrom: normalizeCollection(detail.collectionFrom),
+    collectionTo: normalizeCollection(detail.collectionTo),
+    tagsAdded: normalizeTags(detail.tagsAdded),
+    tagsRemoved: normalizeTags(detail.tagsRemoved),
+  }
+  return {}
+}
+
+function normalizeActor(value) {
+  return ['EE', 'Aqi', 'system'].includes(value) ? value : 'system'
+}
+
+function normalizeReadMode(value) {
+  return ['compact', 'full', 'images', 'video_frames', 'refresh'].includes(value) ? value : 'compact'
+}
+
+function inferReceivedActor(item) {
+  const source = clean(item?.sourceApp).toLowerCase()
+  return /iphone|快捷指令|shortcut|分享菜单/u.test(source) ? 'EE' : 'system'
 }
 
 function summarizeContentSnapshot(snapshot) {

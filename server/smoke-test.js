@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -9,7 +9,9 @@ import { startBridge } from './index.js'
 import { fetchSafeResource, isPrivateAddress } from './safe-fetch.js'
 
 const dataDir = await mkdtemp(path.join(os.tmpdir(), 'aqi-drawer-'))
+const authDataDir = await mkdtemp(path.join(os.tmpdir(), 'aqi-drawer-auth-'))
 let bridge
+let authBridge
 let fixture
 try {
   for (const address of [
@@ -59,6 +61,25 @@ try {
   }).then(checkJson)
   assert.equal(saved.item.id, source.id)
 
+  await bridge.store.upsert({
+    id: 'legacy-item',
+    text: 'legacy compatibility fixture',
+    status: 'archived',
+    createdAt: '2020-01-01T00:00:00.000Z',
+    updatedAt: '2020-01-01T00:00:00.000Z',
+  })
+  const storePath = path.join(dataDir, 'pocket-store.json')
+  const legacyState = JSON.parse(await readFile(storePath, 'utf8'))
+  const legacyStored = legacyState.items.find((item) => item.id === 'legacy-item')
+  delete legacyStored.collection
+  delete legacyStored.tags
+  delete legacyStored.activity
+  await writeFile(storePath, JSON.stringify(legacyState, null, 2), 'utf8')
+  const legacyPublic = await bridge.store.get('legacy-item')
+  assert.equal(legacyPublic.collection, null)
+  assert.deepEqual(legacyPublic.tags, [])
+  assert.deepEqual(legacyPublic.activity, [])
+
   const client = new Client({ name: 'aqi-drawer-smoke', version: '1.0.0' })
   const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`))
   await client.connect(transport)
@@ -70,6 +91,7 @@ try {
     'memory_turn_post',
     'memory_turn_pre',
     'pocket_get',
+    'pocket_edit_metadata',
     'pocket_list',
     'pocket_read_content',
     'pocket_reply',
@@ -82,6 +104,38 @@ try {
   const listed = await client.callTool({ name: 'pocket_list', arguments: { limit: 10 } })
   assert.equal(listed.isError, undefined)
   assert.equal(listed.structuredContent.items[0].id, source.id)
+  assert.equal(listed.structuredContent.items[0].collection, null)
+  assert.deepEqual(listed.structuredContent.items[0].tags, [])
+  assert.deepEqual(listed.structuredContent.items[0].activity.map((entry) => entry.type), ['received'])
+
+  const activityBeforeReads = listed.structuredContent.items[0].activity.length
+  await client.callTool({ name: 'pocket_get', arguments: { id: source.id } })
+  await client.callTool({ name: 'pocket_list', arguments: { limit: 10 } })
+  assert.equal((await bridge.store.get(source.id)).activity.length, activityBeforeReads)
+
+  const metadataRest = await fetch(`${baseUrl}/api/pocket/items/${source.id}/metadata`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ collection: '记忆研究', tagsAdd: ['Ombre', 'evidence'] }),
+  }).then(checkJson)
+  assert.equal(metadataRest.changed, true)
+  assert.equal(metadataRest.item.collection, '记忆研究')
+  assert.deepEqual(metadataRest.item.tags, ['Ombre', 'evidence'])
+  const metadataActivityCount = metadataRest.item.activity.length
+  const metadataNoop = await fetch(`${baseUrl}/api/pocket/items/${source.id}/metadata`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ collection: '记忆研究', tagsAdd: ['Ombre'] }),
+  }).then(checkJson)
+  assert.equal(metadataNoop.changed, false)
+  assert.equal(metadataNoop.item.activity.length, metadataActivityCount)
+
+  const metadataMcp = await client.callTool({
+    name: 'pocket_edit_metadata',
+    arguments: { id: source.id, tags_add: ['continuity'], tags_remove: ['evidence'] },
+  })
+  assert.equal(metadataMcp.isError, undefined)
+  assert.deepEqual(metadataMcp.structuredContent.item.tags, ['Ombre', 'continuity'])
 
   const readContent = await client.callTool({
     name: 'pocket_read_content',
@@ -124,6 +178,8 @@ try {
   assert.equal('contentSnapshot' in publicCachedItem, false)
   assert.equal(publicCachedItem.contentRead.detail, 'full')
   assert.equal(internalCachedItem.contentSnapshot.detail, 'full')
+  assert.equal(publicCachedItem.activity.filter((entry) => entry.type === 'content_read').length, 4)
+  assert.equal(publicCachedItem.activity.some((entry) => entry.type === 'source_refreshed'), true)
 
   const restReadBefore = fixture.articleReads
   const restRead = await fetch(`${baseUrl}/api/pocket/items/${source.id}/read-content`, {
@@ -166,6 +222,7 @@ try {
   assert.equal(dropped[0].message, '阿栖收到了：这个桌面灯')
   assert.equal(dropped[1].receipt.status, 'merged')
   assert.equal(dropped[1].message, '阿栖又收到一次，已经合并好了：这个桌面灯')
+  assert.deepEqual(dropped[1].item.activity.filter((entry) => entry.type === 'received').map((entry) => entry.detail.count), [1, 2])
 
   const plainTextDrop = await fetch(`${baseUrl}/drop/${dropSecret}?response=json`, {
     method: 'POST',
@@ -219,6 +276,8 @@ try {
   assert.equal(opened.structuredContent.items.every((item) => item.seenByCAt), true)
   const openedAgain = await client.callTool({ name: 'pocket_turn_open', arguments: { limit: 8 } })
   assert.equal(openedAgain.structuredContent.items.length, 0)
+  const afterOpenRecord = await bridge.store.get(source.id)
+  assert.equal(afterOpenRecord.activity.filter((entry) => entry.type === 'seen_by_aqi').length, 1)
 
   const repeatedAfterSeen = await fetch(`${baseUrl}/drop/${dropSecret}?response=json`, {
     method: 'POST',
@@ -266,6 +325,7 @@ try {
   }
   const afterReply = await bridge.store.get(source.id)
   assert.equal(afterReply.replies.length, 1)
+  assert.equal(afterReply.activity.filter((entry) => entry.type === 'reply_added').length, 1)
 
   const staged = await client.callTool({
     name: 'pocket_review',
@@ -275,13 +335,99 @@ try {
   const afterStage = await bridge.store.get(source.id)
   assert.equal(afterStage.memoryCandidate.status, 'pending_sync')
   assert.equal(afterStage.memoryCandidate.candidateIds.length, 0)
+  assert.equal(afterStage.activity.filter((entry) => entry.type === 'status_changed').length, 1)
+  const activityBeforeSameStatus = afterStage.activity.length
+  await client.callTool({ name: 'pocket_review', arguments: { id: source.id, action: 'memory_candidate' } })
+  assert.equal((await bridge.store.get(source.id)).activity.length, activityBeforeSameStatus)
+
+  const clearedMetadata = await fetch(`${baseUrl}/api/pocket/items/${source.id}/metadata`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ clearCollection: true, tagsRemove: ['Ombre', 'continuity'] }),
+  }).then(checkJson)
+  assert.equal(clearedMetadata.item.collection, null)
+  assert.deepEqual(clearedMetadata.item.tags, [])
+  const serializedActivity = JSON.stringify(clearedMetadata.item.activity)
+  assert.equal(serializedActivity.includes(dropSecret), false)
+  assert.equal(serializedActivity.includes('真正需要读到的正文'), false)
 
   await client.close()
+
+  const publicDrawerSource = await readFile(path.join(process.cwd(), 'public', 'drawer.js'), 'utf8')
+  assert.equal(/https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\/api\//i.test(publicDrawerSource), false)
+  assert.match(publicDrawerSource, /\/api\/pocket/)
+
+  const bridgeToken = 'bridge-token-abcdefghijklmnopqrstuvwxyz-123456'
+  const drawerSecret = 'drawer-secret-abcdefghijklmnopqrstuvwxyz-123456'
+  authBridge = await startBridge({
+    dataDir: authDataDir,
+    port: 0,
+    host: '127.0.0.1',
+    bridgeToken,
+    drawerSecret,
+    dropSecret: 'auth-smoke-drop-secret-abcdefghijklmnopqrstuvwxyz-123456',
+  })
+  const authBaseUrl = `http://127.0.0.1:${authBridge.address.port}`
+  const remoteHeaders = { 'x-forwarded-for': '203.0.113.9' }
+  await authBridge.store.upsert({ id: 'browser-auth-item', text: 'browser auth metadata test' })
+
+  const unauthorizedBrowser = await fetch(`${authBaseUrl}/api/pocket/items`, { headers: remoteHeaders })
+  assert.equal(unauthorizedBrowser.status, 401)
+  const unauthorizedMcp = await fetch(`${authBaseUrl}/mcp`, { headers: remoteHeaders })
+  assert.equal(unauthorizedMcp.status, 401)
+  const bearerRead = await fetch(`${authBaseUrl}/api/pocket/items`, {
+    headers: { ...remoteHeaders, authorization: `Bearer ${bridgeToken}` },
+  })
+  assert.equal(bearerRead.status, 200)
+
+  const wrongOriginLogin = await fetch(`${authBaseUrl}/drawer/session`, {
+    method: 'POST',
+    headers: { ...remoteHeaders, origin: 'https://not-the-drawer.example', 'content-type': 'application/json' },
+    body: JSON.stringify({ secret: drawerSecret }),
+  })
+  assert.equal(wrongOriginLogin.status, 403)
+  const browserLogin = await fetch(`${authBaseUrl}/drawer/session`, {
+    method: 'POST',
+    headers: { ...remoteHeaders, origin: authBaseUrl, 'content-type': 'application/json' },
+    body: JSON.stringify({ secret: drawerSecret }),
+  })
+  assert.equal(browserLogin.status, 200)
+  const sessionCookie = browserLogin.headers.get('set-cookie')?.split(';')[0]
+  assert.match(sessionCookie || '', /^aqi_drawer_session=/)
+  assert.match(browserLogin.headers.get('set-cookie') || '', /HttpOnly/i)
+  assert.match(browserLogin.headers.get('set-cookie') || '', /SameSite=Strict/i)
+
+  const browserRead = await fetch(`${authBaseUrl}/api/pocket/items`, {
+    headers: { ...remoteHeaders, cookie: sessionCookie },
+  }).then(checkJson)
+  assert.equal(browserRead.items[0].id, 'browser-auth-item')
+
+  const missingOriginWrite = await fetch(`${authBaseUrl}/api/pocket/items/browser-auth-item/metadata`, {
+    method: 'PATCH',
+    headers: { ...remoteHeaders, cookie: sessionCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ collection: 'Core Loop', tagsAdd: ['Ombre'] }),
+  })
+  assert.equal(missingOriginWrite.status, 401)
+  const browserMetadata = await fetch(`${authBaseUrl}/api/pocket/items/browser-auth-item/metadata`, {
+    method: 'PATCH',
+    headers: { ...remoteHeaders, cookie: sessionCookie, origin: authBaseUrl, 'content-type': 'application/json' },
+    body: JSON.stringify({ collection: 'Core Loop', tagsAdd: ['Ombre'] }),
+  }).then(checkJson)
+  assert.equal(browserMetadata.item.collection, 'Core Loop')
+  assert.deepEqual(browserMetadata.item.tags, ['Ombre'])
+  const refreshedBrowserItem = await fetch(`${authBaseUrl}/api/pocket/items/browser-auth-item`, {
+    headers: { ...remoteHeaders, cookie: sessionCookie },
+  }).then(checkJson)
+  assert.equal(refreshedBrowserItem.item.collection, 'Core Loop')
+  assert.deepEqual(refreshedBrowserItem.item.tags, ['Ombre'])
+
   console.log('Aqi Drawer MCP smoke test passed.')
 } finally {
+  if (authBridge) await authBridge.stop()
   if (bridge) await bridge.stop()
   if (fixture) await fixture.stop()
   await rm(dataDir, { recursive: true, force: true })
+  await rm(authDataDir, { recursive: true, force: true })
 }
 
 async function checkJson(response) {
