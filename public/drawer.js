@@ -115,6 +115,66 @@ window.visualViewport?.addEventListener('resize', updateVisibleViewport)
 window.visualViewport?.addEventListener('scroll', updateVisibleViewport)
 window.addEventListener('resize', updateVisibleViewport)
 
+/* DETAIL KEYBOARD VIEWPORT FREEZE V2 BEGIN */
+
+var detailKeyboardViewportFrozen = false
+let detailKeyboardReleaseTimer = null
+
+function isDetailEditorControl(node) {
+  return Boolean(
+    node
+    && detailContent.contains(node)
+    && node.matches('input, textarea, select')
+  )
+}
+
+detailContent.addEventListener('focusin', (event) => {
+  if (!isDetailEditorControl(event.target)) return
+
+  if (detailKeyboardReleaseTimer) {
+    window.clearTimeout(detailKeyboardReleaseTimer)
+    detailKeyboardReleaseTimer = null
+  }
+
+  /*
+    Freeze BEFORE the software keyboard changes visualViewport.
+    The paper keeps the exact geometry it had when editing began.
+  */
+  detailKeyboardViewportFrozen = true
+  document.body.classList.add('is-detail-keyboard-editing')
+})
+
+detailContent.addEventListener('focusout', () => {
+  if (detailKeyboardReleaseTimer) {
+    window.clearTimeout(detailKeyboardReleaseTimer)
+  }
+
+  /*
+    iOS animates the keyboard closed for a short moment.
+    Keep the geometry frozen during that animation too.
+  */
+  detailKeyboardReleaseTimer = window.setTimeout(() => {
+    if (isDetailEditorControl(document.activeElement)) {
+      return
+    }
+
+    detailKeyboardViewportFrozen = false
+    detailKeyboardReleaseTimer = null
+
+    document.body.classList.remove(
+      'is-detail-keyboard-editing',
+    )
+
+    /*
+      Only now, after the keyboard has returned the viewport,
+      recalculate the visible browser area.
+    */
+    updateVisibleViewport()
+  }, 360)
+})
+
+/* DETAIL KEYBOARD VIEWPORT FREEZE V2 END */
+
 async function loadCabinetCounts() {
   try {
     const response = await apiFetch(pocketApi('/items?limit=500'), { headers: { accept: 'application/json' } })
@@ -1044,47 +1104,145 @@ function setDetailPanel(panel) {
 
 async function saveMetadata(item, form, clearCollection) {
   const feedback = form.querySelector('.metadata-feedback')
-  const collection = form.elements.collection.value.trim()
-  const nextTags = parseTags(form.elements.tags.value)
-  const currentTags = Array.isArray(item.tags) ? item.tags : []
+  const save = form.querySelector('button[type="submit"]')
+
+  const collection =
+    form.elements.collection.value.trim()
+
+  const nextTags =
+    parseTags(form.elements.tags.value)
+
+  const currentTags =
+    Array.isArray(item.tags)
+      ? item.tags
+      : []
+
+  if (save) {
+    save.disabled = true
+  }
+
+  feedback.textContent = '正在记下……'
+
   try {
-    const response = await apiFetch(pocketApi(`/items/${encodeURIComponent(item.id)}/metadata`), {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({
-        ...(clearCollection ? { clearCollection: true } : { collection }),
-        tagsAdd: nextTags.filter((tag) => !currentTags.includes(tag)),
-        tagsRemove: currentTags.filter((tag) => !nextTags.includes(tag)),
-      }),
-    })
+    const response = await apiFetch(
+      pocketApi(
+        `/items/${encodeURIComponent(item.id)}/metadata`,
+      ),
+      {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify({
+          ...(clearCollection
+            ? { clearCollection: true }
+            : { collection }),
+          tagsAdd: nextTags.filter(
+            (tag) => !currentTags.includes(tag),
+          ),
+          tagsRemove: currentTags.filter(
+            (tag) => !nextTags.includes(tag),
+          ),
+        }),
+      },
+    )
+
     const payload = await response.json()
+
     if (!response.ok) {
-      console.error(`Drawer metadata save failed with HTTP ${response.status}.`, payload.error || '')
-      feedback.textContent = response.status === 403
-        ? '当前页面不能提交这次修改。'
-        : response.status === 404
-          ? '当前网站没有找到保存入口。'
-          : payload.error || `这次没有记下来（${response.status}）。`
-      return
+      throw new Error(
+        response.status === 403
+          ? '当前页面不能提交这次修改。'
+          : response.status === 404
+            ? '当前网站没有找到保存入口。'
+            : payload.error
+              || `这次没有记下来（${response.status}）。`,
+      )
     }
-    activeDetailItem = payload.item
+
+    const updatedItem = payload.item
+
+    activeDetailItem = updatedItem
+
+    Object.assign(
+      item,
+      updatedItem,
+    )
+
+    const loadedIndex =
+      loadedItems.findIndex(
+        (entry) => entry.id === updatedItem.id,
+      )
+
+    if (loadedIndex !== -1) {
+      loadedItems[loadedIndex] =
+        updatedItem
+    }
 
     if (form.elements.collection) {
-      form.elements.collection.value = payload.item.collection || ''
+      form.elements.collection.value =
+        updatedItem.collection || ''
     }
 
-    feedback.textContent = payload.changed
-      ? '已经记进这张 Record。'
-      : '这里已经是这样。'
+    if (form.elements.tags) {
+      form.elements.tags.value =
+        (updatedItem.tags || []).join(' · ')
+    }
 
-    void Promise.all([
-      loadCabinetCounts(),
-      loadItems(),
-    ]).catch((error) => {
-      console.warn('Drawer background refresh failed.', error)
-    })
+    const removeCollection =
+      form.querySelector('.collection-remove')
+
+    if (removeCollection) {
+      removeCollection.hidden =
+        !updatedItem.collection
+    }
+
+    const record =
+      form.closest('.item-record')
+
+    const count =
+      record?.querySelector('.record-count')
+
+    if (count) {
+      const activityCount =
+        Array.isArray(updatedItem.activity)
+          ? updatedItem.activity.length
+          : 0
+
+      count.textContent =
+        activityCount
+          ? archiveNumber(activityCount)
+          : ''
+    }
+
+    feedback.textContent =
+      payload.changed
+        ? '已经记进这张 Record。'
+        : '这里已经是这样。'
+
+    if (save) {
+      save.disabled = false
+    }
+
+    window.setTimeout(() => {
+      if (
+        feedback.isConnected
+        && (
+          feedback.textContent === '已经记进这张 Record。'
+          || feedback.textContent === '这里已经是这样。'
+        )
+      ) {
+        feedback.textContent = ''
+      }
+    }, 1100)
   } catch (error) {
-    feedback.textContent = error.message || '这次没有记下来。'
+    if (save) {
+      save.disabled = false
+    }
+
+    feedback.textContent =
+      error.message || '这次没有记下来。'
   }
 }
 
@@ -1901,6 +2059,8 @@ function lockPageScroll() {
 }
 
 function updateVisibleViewport() {
+
+  if (detailKeyboardViewportFrozen) return
   const viewport = window.visualViewport
 
   const height = Math.round(
