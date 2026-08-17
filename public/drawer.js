@@ -1,3 +1,10 @@
+if (window.gsap && window.Flip) {
+  gsap.registerPlugin(Flip)
+  console.info('[Aqi Drawer] GSAP + Flip ready', gsap.version)
+} else {
+  console.warn('[Aqi Drawer] GSAP or Flip missing')
+}
+
 const list = document.querySelector('#item-list')
 const shell = document.querySelector('.drawer-shell')
 const cabinetHome = document.querySelector('#cabinet-home')
@@ -1148,25 +1155,159 @@ function restoreTypePreset() {
   applyTypePreset('archive')
   typeStatus.textContent = '已经恢复原样。'
 }
+async function animateDrawerPull(trigger, hasItems = true) {
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  if (reducedMotion) return
+
+  if (!window.gsap || !trigger.classList.contains('cabinet-drawer')) {
+    trigger.classList.add('is-opening')
+    await transitionPause()
+    trigger.classList.remove('is-opening')
+    return
+  }
+
+  document
+    .querySelectorAll('.drawer-paper-motion-ghost, .drawer-cavity-motion')
+    .forEach((node) => node.remove())
+
+  const paper = trigger.querySelector('.drawer-peek')
+  const pull = trigger.querySelector('.cabinet-pull')
+
+  gsap.killTweensOf(trigger)
+  if (paper) gsap.killTweensOf(paper)
+  if (pull) gsap.killTweensOf(pull)
+
+  gsap.set(trigger, {
+    zIndex: 5,
+    transformOrigin: '50% 40%',
+  })
+
+  // Empty drawers have less visual information,
+  // so they should finish a little faster.
+  const pressDuration = hasItems ? 0.055 : 0.045
+  const pullDuration = hasItems ? 0.23 : 0.19
+  const settleDuration = hasItems ? 0.055 : 0.025
+
+  await new Promise((resolve) => {
+    const tl = gsap.timeline({ onComplete: resolve })
+
+    tl.to(trigger, {
+      y: 1,
+      scale: 0.995,
+      duration: pressDuration,
+      ease: 'power1.in',
+      overwrite: true,
+    })
+
+    tl.to(trigger, {
+      y: 2,
+      scale: 1.03,
+      duration: pullDuration,
+      ease: 'power3.out',
+      boxShadow:
+        'inset 0 -4px 7px rgba(76, 50, 37, 0.025), 0 16px 23px rgba(47, 33, 26, 0.25)',
+    })
+
+    if (paper && hasItems) {
+      tl.to(
+        paper,
+        {
+          y: -7,
+          rotation: -0.25,
+          scale: 1.01,
+          boxShadow:
+            '0 3px 0 rgba(232, 222, 204, 0.96), 0 6px 0 rgba(218, 205, 183, 0.82)',
+          duration: 0.17,
+          ease: 'power2.out',
+        },
+        0.075,
+      )
+    }
+
+    if (pull) {
+      tl.to(
+        pull,
+        {
+          scale: 1.045,
+          duration: hasItems ? 0.17 : 0.15,
+          ease: 'power2.out',
+        },
+        0.075,
+      )
+    }
+
+    tl.to({}, { duration: settleDuration })
+  })
+}
 
 async function openCollection(trigger) {
   lastCabinetTrigger = trigger
   activeStatus = trigger.dataset.openStatus || ''
   activeCollection = ''
   activeSource = ''
-  const count = activeStatus ? cabinetCounts[activeStatus] || 0 : cabinetCounts.all || 0
-  const label = activeStatus ? statusLabels[activeStatus] : '全部收藏'
-  collectionTitle.textContent = count ? `${label} · ${archiveNumber(count)}` : label
-  trigger.classList.add('is-opening')
-  await transitionPause()
+
+  const count = activeStatus
+    ? cabinetCounts[activeStatus] || 0
+    : cabinetCounts.all || 0
+
+  const label = activeStatus
+    ? statusLabels[activeStatus]
+    : '全部收藏'
+
+  collectionTitle.textContent = count
+    ? `${label} · ${archiveNumber(count)}`
+    : label
+
+  // Important:
+  // Load the real contents while the cabinet is still in front of us.
+  // The transition should never reveal a half-loaded drawer.
+  const contentReady = loadItems()
+
+  await animateDrawerPull(trigger, count > 0)
+  await contentReady
+
   cabinetHome.hidden = true
   document.body.classList.remove('is-cabinet-home')
+
   collectionView.hidden = false
-  collectionView.classList.add('is-entering')
+  collectionView.classList.remove('is-entering')
+
+  if (window.gsap) {
+    gsap.set(trigger, { clearProps: 'transform,boxShadow,zIndex' })
+
+    const paper = trigger.querySelector('.drawer-peek')
+    const pull = trigger.querySelector('.cabinet-pull')
+    const drawerLabel = trigger.querySelector('.cabinet-label')
+
+    if (paper) gsap.set(paper, { clearProps: 'transform,boxShadow' })
+    if (pull) gsap.set(pull, { clearProps: 'transform' })
+    if (drawerLabel) gsap.set(drawerLabel, { clearProps: 'transform' })
+
+    // The already-filled drawer settles into view.
+    await new Promise((resolve) => {
+      gsap.fromTo(
+        collectionView,
+        {
+          y: 7,
+          scale: 0.992,
+          opacity: 0.88,
+        },
+        {
+          y: 0,
+          scale: 1,
+          opacity: 1,
+          duration: 0.19,
+          ease: 'power2.out',
+          clearProps: 'transform,opacity',
+          onComplete: resolve,
+        },
+      )
+    })
+  }
+
   trigger.classList.remove('is-opening')
-  await loadItems()
   closeDrawer.focus({ preventScroll: true })
-  window.setTimeout(() => collectionView.classList.remove('is-entering'), 220)
 }
 
 async function closeCollection() {

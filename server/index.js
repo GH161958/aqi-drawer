@@ -62,6 +62,10 @@ export async function createBridgeApp(config = {}) {
   app.use(express.text({ type: ['text/plain', 'text/*'], limit: '2mb' }))
   app.get('/drawer', (_req, res) => res.sendFile(path.join(drawerRoot, 'index.html')))
   app.use('/drawer', express.static(drawerRoot, { index: false }))
+  app.use(
+  '/drawer/vendor/gsap',
+  express.static(path.join(root, '..', 'node_modules', 'gsap', 'dist'), { index: false }),
+)
   app.use((req, res, next) => {
     const origin = req.get('origin')
     if (origin && settings.allowedOrigins.includes(origin)) {
