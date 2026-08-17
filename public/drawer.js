@@ -175,6 +175,68 @@ detailContent.addEventListener('focusout', () => {
 
 /* DETAIL KEYBOARD VIEWPORT FREEZE V2 END */
 
+/* CABINET VISUAL SYNC V1 BEGIN */
+
+let cabinetVisualRefreshInFlight = null
+
+function syncCabinetVisualPresence() {
+  openTriggers.forEach((trigger) => {
+    if (!trigger.classList.contains('cabinet-drawer')) return
+
+    const status = trigger.dataset.openStatus
+    const count = cabinetCounts[status] || 0
+    const hasItems = count > 0
+
+    trigger.classList.toggle(
+      'has-cabinet-contents',
+      hasItems,
+    )
+
+    const peek =
+      trigger.querySelector('.drawer-peek')
+
+    if (peek) {
+      peek.hidden = !hasItems
+    }
+
+    let edge =
+      trigger.querySelector('.cabinet-presence-edge')
+
+    if (hasItems && !edge) {
+      edge = document.createElement('span')
+      edge.className = 'cabinet-presence-edge'
+      edge.setAttribute('aria-hidden', 'true')
+      trigger.prepend(edge)
+    }
+
+    if (!hasItems && edge) {
+      edge.remove()
+    }
+  })
+}
+
+function refreshCabinetVisualsQuietly() {
+  if (cabinetVisualRefreshInFlight) {
+    return cabinetVisualRefreshInFlight
+  }
+
+  cabinetVisualRefreshInFlight =
+    loadCabinetCounts()
+      .catch((error) => {
+        console.warn(
+          'Quiet cabinet refresh failed.',
+          error,
+        )
+      })
+      .finally(() => {
+        cabinetVisualRefreshInFlight = null
+      })
+
+  return cabinetVisualRefreshInFlight
+}
+
+/* CABINET VISUAL SYNC V1 END */
+
 async function loadCabinetCounts() {
   try {
     const response = await apiFetch(pocketApi('/items?limit=500'), { headers: { accept: 'application/json' } })
@@ -193,6 +255,7 @@ async function loadCabinetCounts() {
       node.setAttribute('aria-label', `${count} 件`)
     })
     applyCabinetContents(items)
+    syncCabinetVisualPresence()
     cabinetStatus.hidden = true
   } catch (error) {
     cabinetStatus.textContent = error.message || '暂时没能核对每一格。'
@@ -211,11 +274,123 @@ async function loadItems() {
     loadedItems = Array.isArray(payload.items) ? payload.items : []
     renderArchiveIndex(loadedItems)
     applyIndexFilters()
+    syncPreviewNoteMarkers()
   } catch (error) {
     errorMessage.textContent = error.message || '无法读取 Drawer items。'
     setState('error')
   }
 }
+
+/* NOTE PREVIEW SYNC V2 BEGIN */
+
+function buildPreviewSticky(label, kind) {
+  const sticky = document.createElement('span')
+  sticky.className = `preview-note-sticky preview-note-sticky--${kind}`
+  sticky.textContent = label
+  sticky.setAttribute('aria-hidden', 'true')
+  return sticky
+}
+
+function syncPreviewNoteMarkers() {
+  if (!Array.isArray(loadedItems)) return
+
+  const itemMap = new Map(
+    loadedItems.map((item) => [String(item.id), item]),
+  )
+
+  document.querySelectorAll('[data-item-id]').forEach((row) => {
+    row.querySelectorAll('.preview-note-stickies').forEach((node) => node.remove())
+
+    row.querySelectorAll('button, a, span, div').forEach((node) => {
+      const text = (node.textContent || '').trim()
+      if (text === 'EE 留了一句' || text === 'Aqi 留了一张回条') {
+        node.style.display = 'none'
+      }
+    })
+
+    const item = itemMap.get(String(row.dataset.itemId))
+    if (!item) return
+
+    const hasEe = Boolean(item.note && String(item.note).trim())
+    const replies = Array.isArray(item.replies) ? item.replies : []
+    const hasAqi = replies.length > 0
+
+    if (!hasEe && !hasAqi) return
+
+    const paper =
+      row.querySelector('.item-button.item-paper') ||
+      row.querySelector('.item-paper') ||
+      row.querySelector('button')
+
+    const host = paper?.parentElement || row
+    if (!host) return
+
+    if (window.getComputedStyle(host).position === 'static') {
+      host.style.position = 'relative'
+    }
+
+    const wrap = document.createElement('div')
+    wrap.className = 'preview-note-stickies'
+
+    if (hasEe) {
+      wrap.append(buildPreviewSticky('EE 留了一句', 'ee'))
+    }
+
+    if (hasAqi) {
+      wrap.append(buildPreviewSticky('Aqi 留了一张回条', 'aqi'))
+    }
+
+    host.append(wrap)
+  })
+}
+
+function refreshVisiblePaperState(updatedItem) {
+  if (!updatedItem || !updatedItem.id) return
+
+  if (Array.isArray(loadedItems)) {
+    const index = loadedItems.findIndex(
+      (entry) => String(entry.id) === String(updatedItem.id),
+    )
+    if (index >= 0) {
+      loadedItems[index] = updatedItem
+    }
+  }
+
+  renderArchiveIndex(loadedItems)
+  applyIndexFilters()
+  syncPreviewNoteMarkers()
+}
+
+function syncCabinetEmptyState() {
+  openTriggers.forEach((trigger) => {
+    if (!trigger.classList.contains('cabinet-drawer')) return
+
+    const status = trigger.dataset.openStatus
+    const count = cabinetCounts?.[status] || 0
+    const hasItems = count > 0
+
+    trigger.classList.toggle('has-cabinet-contents', hasItems)
+
+    const peek = trigger.querySelector('.drawer-peek')
+    if (peek) {
+      peek.hidden = true
+      peek.style.display = 'none'
+    }
+
+    let edge = trigger.querySelector('.cabinet-presence-edge')
+    if (hasItems && !edge) {
+      edge = document.createElement('span')
+      edge.className = 'cabinet-presence-edge'
+      edge.setAttribute('aria-hidden', 'true')
+      trigger.prepend(edge)
+    }
+    if (!hasItems && edge) {
+      edge.remove()
+    }
+  })
+}
+
+/* NOTE PREVIEW SYNC V2 END */
 
 function setState(state) {
   loading.hidden = state !== 'loading'
@@ -253,6 +428,7 @@ function createIndexButton(label, value, kind) {
     else activeSource = value
     renderArchiveIndex(loadedItems)
     applyIndexFilters()
+    syncPreviewNoteMarkers()
   })
   return button
 }
@@ -330,23 +506,76 @@ function createLinkClipping(item) {
 
 function createStorageAdditions(item, row) {
   const hasNote = Boolean(item.note)
-  const replyCount = Array.isArray(item.replies) ? item.replies.length : 0
-  if (!hasNote && !replyCount) return null
-  const additions = element('div', 'storage-additions annotation-rail')
+  const replyCount =
+    Array.isArray(item.replies)
+      ? item.replies.length
+      : 0
+
+  if (!hasNote && !replyCount) {
+    return null
+  }
+
+  const additions = element(
+    'div',
+    'storage-additions annotation-rail preview-edge-tabs',
+  )
+
   if (hasNote) {
-    const note = element('button', 'storage-slip storage-note-slip')
-    note.type = 'button'
-    note.addEventListener('click', () => showDetail(item.id, row, 'ee-note'))
-    note.append(element('strong', '', 'EE 留了一句'))
-    additions.append(note)
+    const ee = element(
+      'button',
+      'storage-slip preview-edge-tab preview-edge-tab-ee',
+      'EE',
+    )
+
+    ee.type = 'button'
+
+    ee.setAttribute(
+      'aria-label',
+      'EE 留了一句',
+    )
+
+    ee.addEventListener('click', (event) => {
+      event.stopPropagation()
+
+      showDetail(
+        item.id,
+        row,
+        'ee-note',
+      )
+    })
+
+    additions.append(ee)
   }
+
   if (replyCount) {
-    const label = replyCount === 1 ? 'Aqi 留了一张回条' : `Aqi 留了 ${replyCount} 张回条`
-    const reply = element('button', 'storage-slip storage-reply-slip', label)
-    reply.type = 'button'
-    reply.addEventListener('click', () => showDetail(item.id, row, 'aqi-note'))
-    additions.append(reply)
+    const aqi = element(
+      'button',
+      'storage-slip preview-edge-tab preview-edge-tab-aqi',
+      'Aqi',
+    )
+
+    aqi.type = 'button'
+
+    aqi.setAttribute(
+      'aria-label',
+      replyCount === 1
+        ? 'Aqi 留了一张回条'
+        : `Aqi 留了 ${replyCount} 张回条`,
+    )
+
+    aqi.addEventListener('click', (event) => {
+      event.stopPropagation()
+
+      showDetail(
+        item.id,
+        row,
+        'aqi-note',
+      )
+    })
+
+    additions.append(aqi)
   }
+
   return additions
 }
 
@@ -568,6 +797,15 @@ async function showDetail(id, row, panel = 'original') {
 
 function renderDetail(item, panel = 'original') {
   activeDetailItem = item
+
+  const previewIndex = loadedItems.findIndex(
+    (entry) => String(entry.id) === String(item.id),
+  )
+
+  if (previewIndex !== -1) {
+    loadedItems[previewIndex] = item
+    applyIndexFilters()
+  }
 
   const fragment = document.createDocumentFragment()
   const visualKind = itemVisualKind(item)
@@ -933,6 +1171,8 @@ function createActivityLedger(item) {
   section.append(list)
   return section
 }
+
+
 
 function inspectPanelSource(panel) {
   return detailContent.querySelector(`[data-inspect-panel="${panel}"]`)
@@ -1355,6 +1595,7 @@ async function saveEeNote(item, value, panel) {
         feedback.textContent = ''
       }
     }, 900)
+    applyIndexFilters()
   } catch (error) {
     if (save) save.disabled = false
 
@@ -1374,14 +1615,6 @@ function createReplySlip(item, reply) {
   if (reply.createdAt) annotations.push(formatLongDate(reply.createdAt))
   if (reply.source) annotations.push(reply.source)
   if (annotations.length) slip.append(element('p', 'slip-annotation', annotations.join(' · ')))
-  if (reply.author === 'Aqi') {
-    const remove = element('button', 'note-action note-remove reply-remove', '收起这张')
-    remove.type = 'button'
-    remove.addEventListener('click', () => {
-      if (window.confirm('把这张 Aqi 回条从当前物件收起？记录仍会保留。')) hideReply(item, reply, slip)
-    })
-    slip.append(remove)
-  }
   return slip
 }
 
@@ -1539,6 +1772,7 @@ async function fileItem(item, status, slip) {
     const updatedItem = payload.item
 
     activeDetailItem = updatedItem
+    refreshCabinetVisualsQuietly()
     updateCabinetCountsAfterMove(
       previousStatus,
       updatedItem.status,
@@ -1571,7 +1805,8 @@ async function fileItem(item, status, slip) {
     if (typeof rerenderDetailQuietly === 'function') {
       rerenderDetailQuietly(updatedItem)
     } else {
-      renderDetail(updatedItem)
+      refreshVisiblePaperState(updatedItem)
+    renderDetail(updatedItem)
     }
 
     const nextFeedback = detailContent.querySelector('.filing-feedback')
@@ -2029,7 +2264,7 @@ async function closeCollection() {
 }
 
 function transitionPause() {
-  const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180
+  const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : (window.matchMedia('(max-width: 520px)').matches ? 105 : 150)
   return new Promise((resolve) => window.setTimeout(resolve, duration))
 }
 
