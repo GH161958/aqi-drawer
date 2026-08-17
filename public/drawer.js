@@ -112,6 +112,7 @@ applyTypePreset(committedTypePreset)
 document.body.classList.add('is-cabinet-home')
 updateVisibleViewport()
 window.visualViewport?.addEventListener('resize', updateVisibleViewport)
+window.visualViewport?.addEventListener('scroll', updateVisibleViewport)
 window.addEventListener('resize', updateVisibleViewport)
 
 async function loadCabinetCounts() {
@@ -374,32 +375,148 @@ function stableVariant(id) {
   return ['a', 'b', 'c', 'd', 'e'][Math.abs(hash) % 5]
 }
 
+function drawerMotionReduced() {
+  return window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  ).matches
+}
+
+async function pickUpSourceRow(row) {
+  if (!row) return
+
+  row.classList.add('is-lifting')
+
+  if (window.gsap && !drawerMotionReduced()) {
+    await new Promise((resolve) => {
+      gsap.to(row, {
+        y: -4,
+        duration: 0.11,
+        ease: 'power2.out',
+        onComplete: resolve,
+      })
+    })
+  } else {
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 80)
+    })
+  }
+
+  row.classList.add('is-picked-up')
+
+  if (window.gsap) {
+    gsap.set(row, {
+      clearProps: 'transform',
+    })
+  }
+}
+
+async function restoreSourceRow(row) {
+  if (!row) return
+
+  if (window.gsap && !drawerMotionReduced()) {
+    gsap.set(row, {
+      opacity: 0,
+      y: -4,
+    })
+
+    row.classList.remove(
+      'is-picked-up',
+      'is-lifting',
+    )
+
+    await new Promise((resolve) => {
+      gsap.to(row, {
+        opacity: 1,
+        y: 0,
+        duration: 0.15,
+        ease: 'power2.out',
+        clearProps: 'transform,opacity',
+        onComplete: resolve,
+      })
+    })
+
+    return
+  }
+
+  row.classList.remove(
+    'is-picked-up',
+    'is-lifting',
+  )
+}
+
+function rerenderDetailQuietly(item, panel = 'original') {
+  detailContent.dataset.quietRefresh = 'true'
+  renderDetail(item, panel)
+  window.requestAnimationFrame(() => {
+    delete detailContent.dataset.quietRefresh
+  })
+}
+
 async function showDetail(id, row, panel = 'original') {
   inspectedItemRow = row
-  row.classList.add('is-lifting')
-  await transitionPause()
-  detailContent.replaceChildren(element('p', 'state-message', '正在取出这张纸……'))
+
+  await pickUpSourceRow(row)
+
+  detailContent.replaceChildren(
+    element(
+      'p',
+      'state-message',
+      '正在取出这张纸……',
+    ),
+  )
+
   lockPageScroll()
+  updateVisibleViewport()
+
   dialog.showModal()
   dialog.classList.add('is-entering')
-  window.setTimeout(() => dialog.classList.remove('is-entering'), 220)
+
+  window.setTimeout(
+    () => dialog.classList.remove('is-entering'),
+    220,
+  )
 
   try {
-    const response = await apiFetch(pocketApi(`/items/${encodeURIComponent(id)}`), { headers: { accept: 'application/json' } })
-    if (!response.ok) throw new Error(`详情读取失败（${response.status}）`)
+    const response = await apiFetch(
+      pocketApi(`/items/${encodeURIComponent(id)}`),
+      {
+        headers: {
+          accept: 'application/json',
+        },
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(
+        `详情读取失败（${response.status}）`,
+      )
+    }
+
     const { item } = await response.json()
+
     renderDetail(item, panel)
   } catch (error) {
-    detailContent.replaceChildren(element('p', 'state-message', error.message || '暂时无法读取详情。'))
+    detailContent.replaceChildren(
+      element(
+        'p',
+        'state-message',
+        error.message || '暂时无法读取详情。',
+      ),
+    )
   }
 }
 
 function renderDetail(item, panel = 'original') {
   activeDetailItem = item
+
   const fragment = document.createDocumentFragment()
   const visualKind = itemVisualKind(item)
+
   dialog.dataset.kind = visualKind
   dialog.dataset.panel = panel
+
+  const stage = element('div', 'inspect-stage')
+
   const original = element('section', 'inspect-original')
   const originalContent = document.createDocumentFragment()
 
@@ -410,13 +527,103 @@ function renderDetail(item, panel = 'original') {
   } else {
     renderPaperDetail(item, originalContent)
   }
-  original.append(createEeNoteTrigger(item), originalContent)
-  fragment.append(createItemRecord(item), original)
+
+  original.append(originalContent)
+
+  stage.append(
+    createInspectRecordPeek(item),
+    original,
+    createInspectSideTabs(item),
+    createInspectFilingPeek(item),
+  )
+
+  fragment.append(stage)
+  fragment.append(createItemRecord(item))
 
   appendSecondaryPapers(item, fragment)
   fragment.append(createFilingSlip(item))
+
+  fragment.querySelectorAll('.detail-aux-panel').forEach((node) => {
+    node.hidden = true
+  })
+
   detailContent.replaceChildren(fragment)
+
+  detailContent.querySelectorAll('.detail-aux-panel').forEach((node) => {
+    ensurePaperReturnControl(node)
+  })
+
   setDetailPanel(panel)
+}
+
+function createInspectRecordPeek(item) {
+  const count = Array.isArray(item.activity) ? item.activity.length : 0
+  const label = count ? `RECEIPT · ${archiveNumber(count)}` : 'RECEIPT'
+
+  const button = element('button', 'inspect-record-peek', label)
+  button.type = 'button'
+  button.dataset.inspectPanel = 'record'
+  button.setAttribute('aria-label', '打开 Record')
+
+  button.addEventListener('click', () => {
+    const current = detailContent.dataset.openPanel || 'original'
+    setDetailPanel(current === 'record' ? 'original' : 'record')
+  })
+
+  return button
+}
+
+function createInspectSideTabs(item) {
+  const tabs = element('div', 'inspect-side-tabs')
+
+  const ee = element('button', 'inspect-side-tab inspect-ee-tab', 'EE')
+  ee.type = 'button'
+  ee.dataset.inspectPanel = 'ee-note'
+  ee.setAttribute('aria-label', item.note ? '打开 EE Note' : '留一句 EE Note')
+
+  ee.addEventListener('click', () => {
+    const current = detailContent.dataset.openPanel || 'original'
+    setDetailPanel(current === 'ee-note' ? 'original' : 'ee-note')
+  })
+
+  tabs.append(ee)
+
+  const replies = Array.isArray(item.replies) ? item.replies : []
+
+  if (replies.length) {
+    const aqi = element('button', 'inspect-side-tab inspect-aqi-tab', 'Aqi')
+    aqi.type = 'button'
+    aqi.dataset.inspectPanel = 'aqi-note'
+    aqi.setAttribute('aria-label', '打开 Aqi Note')
+
+    aqi.addEventListener('click', () => {
+      const current = detailContent.dataset.openPanel || 'original'
+      setDetailPanel(current === 'aqi-note' ? 'original' : 'aqi-note')
+    })
+
+    tabs.append(aqi)
+  }
+
+  return tabs
+}
+
+function createInspectFilingPeek(item) {
+  const button = element('button', 'inspect-filing-peek')
+  button.type = 'button'
+  button.dataset.inspectPanel = 'filing'
+  button.setAttribute('aria-label', '打开 Filing')
+
+  button.append(
+    element('span', 'inspect-filing-label', `FILING · ${statusLabels[item.status] || item.status || '—'}`),
+    element('span', 'inspect-filing-note', '看完放哪儿？'),
+  )
+
+  button.addEventListener('click', () => {
+    const current = detailContent.dataset.openPanel || 'original'
+    setDetailPanel(current === 'filing' ? 'original' : 'filing')
+  })
+
+  return button
 }
 
 function renderPaperDetail(item, fragment) {
@@ -667,16 +874,172 @@ function createActivityLedger(item) {
   return section
 }
 
+function inspectPanelSource(panel) {
+  return detailContent.querySelector(`[data-inspect-panel="${panel}"]`)
+}
+
+function setInspectSourceWithdrawn(panel, withdrawn) {
+  const source = inspectPanelSource(panel)
+  if (!source) return
+  source.classList.toggle('is-withdrawn', withdrawn)
+}
+
+function ensurePaperReturnControl(panelNode) {
+  let control = panelNode.querySelector(':scope > .inspect-paper-return')
+
+  if (control) return control
+
+  control = element('button', 'inspect-paper-return', '放回这张')
+  control.type = 'button'
+  control.addEventListener('click', () => setDetailPanel('original'))
+
+  panelNode.prepend(control)
+
+  return control
+}
+
+function animatePulledPaperIn(panelNode, panel) {
+  if (!window.gsap || drawerMotionReduced()) return
+
+  const from = {
+    record: { marginLeft: -22, marginTop: -15 },
+    'ee-note': { marginLeft: 24, marginTop: 0 },
+    'aqi-note': { marginLeft: 24, marginTop: 4 },
+    filing: { marginLeft: 0, marginTop: 22 },
+  }[panel] || { marginLeft: 0, marginTop: 10 }
+
+  gsap.killTweensOf(panelNode)
+
+  gsap.fromTo(
+    panelNode,
+    {
+      opacity: 0,
+      marginLeft: from.marginLeft,
+      marginTop: from.marginTop,
+    },
+    {
+      opacity: 1,
+      marginLeft: 0,
+      marginTop: 0,
+      duration: 0.22,
+      ease: 'power2.out',
+      clearProps: 'opacity,marginLeft,marginTop',
+    },
+  )
+}
+
+function animatePulledPaperOut(panelNode, panel, done) {
+  if (!window.gsap || drawerMotionReduced()) {
+    done()
+    return
+  }
+
+  const to = {
+    record: { marginLeft: -18, marginTop: -12 },
+    'ee-note': { marginLeft: 20, marginTop: 0 },
+    'aqi-note': { marginLeft: 20, marginTop: 3 },
+    filing: { marginLeft: 0, marginTop: 18 },
+  }[panel] || { marginLeft: 0, marginTop: 8 }
+
+  gsap.killTweensOf(panelNode)
+
+  gsap.to(panelNode, {
+    opacity: 0,
+    marginLeft: to.marginLeft,
+    marginTop: to.marginTop,
+    duration: 0.16,
+    ease: 'power1.in',
+    onComplete: done,
+  })
+}
+
 function setDetailPanel(panel) {
   const auxPanels = [...detailContent.querySelectorAll('.detail-aux-panel')]
   const target = auxPanels.find((node) => node.dataset.panel === panel)
-  auxPanels.forEach((node) => { node.hidden = node !== target })
+  const targetPanel = target?.dataset.panel || 'original'
+  const currentlyOpen = auxPanels.find((node) => !node.hidden)
+
+  if (targetPanel === 'original') {
+    const previousPanel = currentlyOpen?.dataset.panel
+
+    const finishReturn = () => {
+      auxPanels.forEach((node) => {
+        node.hidden = true
+        setInspectSourceWithdrawn(node.dataset.panel, false)
+
+        if (window.gsap) {
+          gsap.set(node, {
+            clearProps: 'opacity,marginLeft,marginTop',
+          })
+        }
+      })
+
+      detailContent.dataset.openPanel = 'original'
+
+      detailContent.querySelectorAll('[data-inspect-panel]').forEach((control) => {
+        control.classList.remove('is-open')
+        control.setAttribute('aria-pressed', 'false')
+      })
+
+      const original = detailContent.querySelector('.inspect-original')
+      original?.classList.remove('has-attached-paper')
+
+      if (previousPanel) {
+        inspectPanelSource(previousPanel)?.focus({
+          preventScroll: true,
+        })
+      }
+    }
+
+    if (currentlyOpen) {
+      animatePulledPaperOut(
+        currentlyOpen,
+        previousPanel,
+        finishReturn,
+      )
+    } else {
+      finishReturn()
+    }
+
+    return
+  }
+
+  auxPanels.forEach((node) => {
+    const isTarget = node === target
+
+    if (!isTarget) {
+      node.hidden = true
+      setInspectSourceWithdrawn(node.dataset.panel, false)
+
+      if (window.gsap) {
+        gsap.set(node, {
+          clearProps: 'opacity,marginLeft,marginTop',
+        })
+      }
+    }
+  })
+
+  target.hidden = false
+
+  ensurePaperReturnControl(target)
+  setInspectSourceWithdrawn(targetPanel, true)
+
+  detailContent.dataset.openPanel = targetPanel
+
+  detailContent.querySelectorAll('[data-inspect-panel]').forEach((control) => {
+    const selected = control.dataset.inspectPanel === targetPanel
+
+    control.classList.toggle('is-open', selected)
+    control.setAttribute('aria-pressed', String(selected))
+  })
+
   const original = detailContent.querySelector('.inspect-original')
-  original.classList.remove('is-background-object')
-  original.classList.toggle('has-attached-paper', Boolean(target))
-  detailContent.dataset.openPanel = target?.dataset.panel || 'original'
-  if (target) target.setAttribute('tabindex', '-1')
-  target?.focus({ preventScroll: true })
+  original?.classList.add('has-attached-paper')
+
+  animatePulledPaperIn(target, targetPanel)
+
+  target.setAttribute('tabindex', '-1')
+  target.focus({ preventScroll: true })
 }
 
 async function saveMetadata(item, form, clearCollection) {
@@ -705,20 +1068,24 @@ async function saveMetadata(item, form, clearCollection) {
       return
     }
     activeDetailItem = payload.item
-    renderDetail(payload.item, 'record')
-    detailContent.querySelector('.metadata-feedback').textContent = payload.changed ? '已经记进这张 Record。' : '这里已经是这样。'
-    await loadCabinetCounts()
-    await loadItems()
+
+    if (form.elements.collection) {
+      form.elements.collection.value = payload.item.collection || ''
+    }
+
+    feedback.textContent = payload.changed
+      ? '已经记进这张 Record。'
+      : '这里已经是这样。'
+
+    void Promise.all([
+      loadCabinetCounts(),
+      loadItems(),
+    ]).catch((error) => {
+      console.warn('Drawer background refresh failed.', error)
+    })
   } catch (error) {
     feedback.textContent = error.message || '这次没有记下来。'
   }
-}
-
-function createEeNoteTrigger(item) {
-  const trigger = element('button', 'detail-note-trigger', item.note ? 'EE · 看附言' : 'EE · 留一句')
-  trigger.type = 'button'
-  trigger.addEventListener('click', () => setDetailPanel('ee-note'))
-  return trigger
 }
 
 function createEeNoteEditor(item) {
@@ -764,7 +1131,7 @@ async function saveEeNote(item, value, panel) {
     })
     const payload = await response.json()
     if (!response.ok) throw new Error(payload.error || `附言保存失败（${response.status}）`)
-    renderDetail(payload.item, payload.item.note ? 'ee-note' : 'original')
+    rerenderDetailQuietly(payload.item, payload.item.note ? 'ee-note' : 'original')
     await loadItems()
   } catch (error) {
     feedback.textContent = error.message || '这句暂时没有夹好。'
@@ -804,7 +1171,7 @@ async function hideReply(item, reply, slip) {
     })
     const payload = await response.json()
     if (!response.ok) throw new Error(payload.error || `回条收起失败（${response.status}）`)
-    renderDetail(payload.item, payload.item.replies.length ? 'aqi-note' : 'original')
+    rerenderDetailQuietly(payload.item, payload.item.replies.length ? 'aqi-note' : 'original')
     await loadItems()
   } catch (error) {
     control.disabled = false
@@ -813,26 +1180,37 @@ async function hideReply(item, reply, slip) {
 }
 
 function createFilingSlip(item) {
-  const slip = element('section', 'filing-slip')
+  const slip = element('section', 'filing-slip detail-aux-panel')
+  slip.dataset.panel = 'filing'
   slip.setAttribute('aria-label', '移动到另一格抽屉')
+
   slip.append(element('p', 'filing-title', '看完放哪儿？'))
+
   const choices = element('div', 'filing-choices')
+
   Object.entries(statusLabels).forEach(([status, label]) => {
     if (status === item.status) {
       const current = element('span', 'filing-choice is-current')
-      current.append(element('span', '', label), element('small', '', '现在在这里'))
+      current.append(
+        element('span', '', label),
+        element('small', '', '现在在这里'),
+      )
       choices.append(current)
       return
     }
+
     const button = element('button', 'filing-choice', label)
     button.type = 'button'
     button.dataset.filingStatus = status
+
     button.addEventListener('click', () => {
       if (status === 'memory_candidate') showMemoryConfirmation(slip, item)
       else fileItem(item, status, slip)
     })
+
     choices.append(button)
   })
+
   slip.append(choices, element('p', 'filing-feedback'))
   return slip
 }
@@ -856,33 +1234,138 @@ function showMemoryConfirmation(slip, item) {
   confirmation.querySelector('.filing-confirm').focus()
 }
 
+function updateCabinetCountsAfterMove(previousStatus, nextStatus) {
+  if (
+    !previousStatus
+    || !nextStatus
+    || previousStatus === nextStatus
+  ) {
+    return
+  }
+
+  if (Object.hasOwn(cabinetCounts, previousStatus)) {
+    cabinetCounts[previousStatus] = Math.max(
+      0,
+      (cabinetCounts[previousStatus] || 0) - 1,
+    )
+  }
+
+  if (Object.hasOwn(cabinetCounts, nextStatus)) {
+    cabinetCounts[nextStatus] =
+      (cabinetCounts[nextStatus] || 0) + 1
+  }
+
+  document.querySelectorAll('[data-count-status]').forEach((node) => {
+    const count =
+      cabinetCounts[node.dataset.countStatus] || 0
+
+    node.textContent =
+      count ? archiveNumber(count) : ''
+
+    node.setAttribute(
+      'aria-label',
+      `${count} 件`,
+    )
+  })
+
+  const all = document.querySelector('#count-all')
+
+  if (all) {
+    all.textContent =
+      archiveNumber(cabinetCounts.all || 0)
+  }
+}
+
 async function fileItem(item, status, slip) {
   const feedback = slip.querySelector('.filing-feedback')
-  const controls = slip.querySelectorAll('button')
-  controls.forEach((control) => { control.disabled = true })
+  const controls = [...slip.querySelectorAll('button')]
+  const targetControl = controls.find(
+    (control) => control.dataset.filingStatus === status,
+  )
+
+  controls.forEach((control) => {
+    control.disabled = true
+  })
+
+  targetControl?.classList.add('is-commit-target')
+  slip.classList.add('is-committing')
+
   feedback.textContent = `正在放进「${statusLabels[status]}」……`
+
   try {
-    const response = await apiFetch(pocketApi(`/items/${encodeURIComponent(item.id)}/review`), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ action: status }),
-    })
-    if (!response.ok) throw new Error(`归档失败（${response.status}）`)
+    const response = await apiFetch(
+      pocketApi(`/items/${encodeURIComponent(item.id)}/review`),
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify({ action: status }),
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(`归档失败（${response.status}）`)
+    }
+
     const payload = await response.json()
+    const previousStatus = item.status
     const updatedItem = payload.item
-    dialog.classList.add('is-filing-away')
-    await Promise.all([loadCabinetCounts(), loadItems()])
+
+    activeDetailItem = updatedItem
+    updateCabinetCountsAfterMove(
+      previousStatus,
+      updatedItem.status,
+    )
+
+    /*
+      The paper can return as soon as the server confirms the move.
+      Cabinet bookkeeping must not make the physical interaction wait.
+    */
     if (activeStatus && activeStatus !== updatedItem.status) {
       await putBackDetail()
-      dialog.classList.remove('is-filing-away')
+
+      window.setTimeout(() => {
+        void loadItems().catch((error) => {
+          console.warn(
+            'Current drawer refresh failed.',
+            error,
+          )
+        })
+      }, 0)
+
       return
     }
-    renderDetail(updatedItem)
-    dialog.classList.remove('is-filing-away')
-    detailContent.querySelector('.filing-feedback').textContent = `已经放进「${statusLabels[updatedItem.status]}」。`
+
+    /*
+      In "all items" / same-drawer views the item remains visible.
+      Refresh the current paper immediately, then update the cabinet
+      quietly in the background.
+    */
+    if (typeof rerenderDetailQuietly === 'function') {
+      rerenderDetailQuietly(updatedItem)
+    } else {
+      renderDetail(updatedItem)
+    }
+
+    const nextFeedback = detailContent.querySelector('.filing-feedback')
+    if (nextFeedback) {
+      nextFeedback.textContent =
+        `已经放进「${statusLabels[updatedItem.status]}」。`
+    }
+
+
   } catch (error) {
-    feedback.textContent = error.message || '暂时没能移动这张纸。'
-    controls.forEach((control) => { control.disabled = false })
+    slip.classList.remove('is-committing')
+    targetControl?.classList.remove('is-commit-target')
+
+    feedback.textContent =
+      error.message || '暂时没能移动这张纸。'
+
+    controls.forEach((control) => {
+      control.disabled = false
+    })
   }
 }
 
@@ -1326,14 +1809,21 @@ function transitionPause() {
 }
 
 async function putBackDetail() {
+  const row = inspectedItemRow
+
   dialog.classList.add('is-returning')
+
   await transitionPause()
+
   dialog.close()
   unlockPageScroll()
+
   dialog.classList.remove('is-returning')
-  inspectedItemRow?.classList.remove('is-lifting')
+
   inspectedItemRow = null
   activeDetailItem = null
+
+  await restoreSourceRow(row)
 }
 
 function lockPageScroll() {
@@ -1344,8 +1834,25 @@ function lockPageScroll() {
 }
 
 function updateVisibleViewport() {
-  const height = Math.round(window.visualViewport?.height || window.innerHeight)
-  document.documentElement.style.setProperty('--drawer-visible-height', `${height}px`)
+  const viewport = window.visualViewport
+
+  const height = Math.round(
+    viewport?.height || window.innerHeight,
+  )
+
+  const top = Math.round(
+    viewport?.offsetTop || 0,
+  )
+
+  document.documentElement.style.setProperty(
+    '--drawer-visible-height',
+    `${height}px`,
+  )
+
+  document.documentElement.style.setProperty(
+    '--drawer-visible-top',
+    `${top}px`,
+  )
 }
 
 function unlockPageScroll() {
@@ -1412,3 +1919,37 @@ authForm.addEventListener('submit', async (event) => {
 authCancel.addEventListener('click', () => authDialog.close())
 
 loadCabinetCounts()
+
+
+/* INSPECT BACKGROUND RETURN V1 */
+dialog.addEventListener('click', (event) => {
+  if (!dialog.open) return
+
+  const protectedTarget = event.target.closest?.(
+    [
+      '#close-detail',
+      '.inspect-original',
+      '.detail-aux-panel',
+      '.inspect-record-peek',
+      '.inspect-side-tab',
+      '.inspect-filing-peek',
+      'a',
+      'button',
+      'input',
+      'textarea',
+      'select',
+      'label',
+    ].join(','),
+  )
+
+  if (protectedTarget) return
+
+  const openPanel = detailContent.dataset.openPanel || 'original'
+
+  if (openPanel !== 'original') {
+    setDetailPanel('original')
+    return
+  }
+
+  putBackDetail()
+})
