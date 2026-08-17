@@ -1908,3 +1908,41 @@ body.has-paper-open { position: fixed; right: 0; left: 0; width: 100%; overflow:
 }
 
 /* EE REVEAL TUNE V3 END */
+
+/* FIXED MOBILE VIEWPORT + INDEX TYPE V1 BEGIN */
+
+@media (max-width: 700px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .detail-dialog input,
+  .detail-dialog textarea,
+  .detail-dialog select,
+  #detail-content input,
+  #detail-content textarea,
+  #detail-content select {
+    font-size: 16px !important;
+  }
+
+  .item-row .item-title {
+    font-size: 1.04rem !important;
+    line-height: 1.34 !important;
+  }
+
+  .item-row .item-preview {
+    font-size: .88rem !important;
+    line-height: 1.56 !important;
+  }
+
+  .item-row .item-meta {
+    font-size: .68rem !important;
+    line-height: 1.4 !important;
+  }
+
+  .xhs-caption-slip .item-title {
+    font-size: .86rem !important;
+  }
+}
+
+/* FIXED MOBILE VIEWPORT + INDEX TYPE V1 END */

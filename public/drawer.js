@@ -1122,19 +1122,86 @@ function createEeNoteEditor(item) {
 
 async function saveEeNote(item, value, panel) {
   const feedback = panel.querySelector('.note-feedback')
+  const input = panel.querySelector('textarea[name="note"]')
+  const save = panel.querySelector('button[type="submit"]')
+  const kicker = panel.querySelector('.slip-kicker')
+  const clear = panel.querySelector('.note-remove')
+
+  if (save) save.disabled = true
   feedback.textContent = '正在夹好……'
+
   try {
-    const response = await apiFetch(pocketApi(`/items/${encodeURIComponent(item.id)}/note`), {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ note: value }),
-    })
+    const response = await apiFetch(
+      pocketApi(`/items/${encodeURIComponent(item.id)}/note`),
+      {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify({ note: value }),
+      },
+    )
+
     const payload = await response.json()
-    if (!response.ok) throw new Error(payload.error || `附言保存失败（${response.status}）`)
-    rerenderDetailQuietly(payload.item, payload.item.note ? 'ee-note' : 'original')
-    await loadItems()
+
+    if (!response.ok) {
+      throw new Error(
+        payload.error || `附言保存失败（${response.status}）`,
+      )
+    }
+
+    const updatedItem = payload.item
+
+    activeDetailItem = updatedItem
+    Object.assign(item, updatedItem)
+
+    const loadedIndex = loadedItems.findIndex(
+      (entry) => entry.id === updatedItem.id,
+    )
+
+    if (loadedIndex !== -1) {
+      loadedItems[loadedIndex] = updatedItem
+    }
+
+    if (input) {
+      input.value = updatedItem.note || ''
+    }
+
+    if (kicker) {
+      kicker.textContent = updatedItem.note
+        ? '伊伊留的一句'
+        : '留一句给阿栖'
+    }
+
+    if (save) {
+      save.textContent = updatedItem.note
+        ? '改好这句'
+        : '夹进抽屉'
+      save.disabled = false
+    }
+
+    if (clear) {
+      clear.hidden = !updatedItem.note
+    }
+
+    feedback.textContent = updatedItem.note
+      ? '夹好了。'
+      : '已经移除。'
+
+    window.setTimeout(() => {
+      if (
+        panel.isConnected
+        && feedback.textContent === '夹好了。'
+      ) {
+        feedback.textContent = ''
+      }
+    }, 900)
   } catch (error) {
-    feedback.textContent = error.message || '这句暂时没有夹好。'
+    if (save) save.disabled = false
+
+    feedback.textContent =
+      error.message || '这句暂时没有夹好。'
   }
 }
 
