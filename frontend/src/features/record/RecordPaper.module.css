@@ -293,3 +293,135 @@
     gap: 10px;
   }
 }
+
+.statusSection {
+  margin-top: 19px;
+
+  padding-top: 15px;
+
+  border-top:
+    1px solid
+    rgba(126, 104, 81, .18);
+}
+
+.sectionHeading {
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  margin-bottom: 8px;
+}
+
+.sectionHeading .tagLabel {
+  margin: 0;
+}
+
+.liveMark {
+  color:
+    var(--drawer-brass);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .49rem;
+
+  letter-spacing: .10em;
+}
+
+.statusChoices {
+  border-top:
+    1px dotted
+    rgba(126, 104, 81, .20);
+}
+
+.statusChoice {
+  display: grid;
+
+  grid-template-columns:
+    16px minmax(0, 1fr) auto;
+
+  align-items: center;
+
+  gap: 7px;
+
+  width: 100%;
+
+  min-height: 35px;
+
+  padding:
+    7px 2px;
+
+  appearance: none;
+
+  border: 0;
+
+  border-bottom:
+    1px dotted
+    rgba(126, 104, 81, .20);
+
+  background: transparent;
+
+  color:
+    rgba(52, 46, 39, .76);
+
+  text-align: left;
+
+  font-size: .69rem;
+
+  cursor: pointer;
+}
+
+.statusChoice:not(:disabled):hover {
+  color:
+    var(--drawer-sage);
+}
+
+.statusChoice[data-current="true"] {
+  color:
+    var(--drawer-sage);
+}
+
+.statusChoice:disabled {
+  cursor: default;
+
+  opacity: .62;
+}
+
+.statusMarker {
+  color:
+    var(--drawer-brass);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .55rem;
+}
+
+.statusAside {
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .50rem;
+
+  letter-spacing: .04em;
+}
+
+.statusFeedback {
+  min-height: 1.45em;
+
+  margin:
+    11px 0 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-size: .62rem;
+
+  line-height: 1.5;
+}

@@ -10,19 +10,37 @@ import {
   RecordPaper,
 } from '../record/RecordPaper'
 
+import type {
+  CabinetSlot,
+  PocketItemSummary,
+} from '../../types/pocket'
+
 import styles from './InspectStage.module.css'
 
 interface InspectStageProps {
   itemId: string
+  originSlot: CabinetSlot
   onBack: () => void
 }
 
 export function InspectStage({
   itemId,
+  originSlot,
   onBack,
 }: InspectStageProps) {
   const query =
     useInspectItem(itemId)
+
+  function handleStatusChanged(
+    item: PocketItemSummary,
+  ) {
+    if (
+      originSlot !== 'all'
+      && originSlot !== item.status
+    ) {
+      onBack()
+    }
+  }
 
   return (
     <section
@@ -69,6 +87,9 @@ export function InspectStage({
           <div className={styles.recordLayer}>
             <RecordPaper
               item={query.data}
+              onStatusChanged={
+                handleStatusChanged
+              }
             />
           </div>
 

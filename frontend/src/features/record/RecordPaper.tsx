@@ -1,11 +1,24 @@
+import {
+  cabinetDrawers,
+  cabinetSlotLabels,
+} from '../cabinet/cabinet'
+
 import type {
   PocketItemSummary,
+  PocketStatus,
 } from '../../types/pocket'
+
+import {
+  useUpdateItemStatus,
+} from './useUpdateItemStatus'
 
 import styles from './RecordPaper.module.css'
 
 interface RecordPaperProps {
   item: PocketItemSummary
+
+  onStatusChanged:
+    (item: PocketItemSummary) => void
 }
 
 function formatRecordDate(
@@ -36,28 +49,39 @@ function formatRecordDate(
   ).format(date)
 }
 
-function humanizeStatus(
-  status: PocketItemSummary['status'],
-): string {
-  const labels:
-    Record<
-      PocketItemSummary['status'],
-      string
-    > = {
-      inbox: '刚放进来',
-      tonight: '今晚看看',
-      discussed: '聊过了',
-      deferred: '晚点再看',
-      memory_candidate: '想留住',
-      archived: '收好了',
-    }
-
-  return labels[status]
-}
-
 export function RecordPaper({
   item,
+  onStatusChanged,
 }: RecordPaperProps) {
+  const mutation =
+    useUpdateItemStatus(
+      item.id,
+    )
+
+  function chooseStatus(
+    status: PocketStatus,
+  ) {
+    if (
+      status === item.status
+      || status ===
+        'memory_candidate'
+      || mutation.isPending
+    ) {
+      return
+    }
+
+    mutation.mutate(
+      status,
+      {
+        onSuccess:
+          onStatusChanged,
+      },
+    )
+  }
+
+  const pendingStatus =
+    mutation.variables
+
   return (
     <details className={styles.paper}>
       <summary className={styles.summary}>
@@ -93,9 +117,11 @@ export function RecordPaper({
             <dt>STATUS</dt>
 
             <dd>
-              {humanizeStatus(
-                item.status,
-              )}
+              {
+                cabinetSlotLabels[
+                  item.status
+                ]
+              }
             </dd>
           </div>
 
@@ -130,7 +156,8 @@ export function RecordPaper({
             <dt>COLLECTION</dt>
 
             <dd>
-              {item.collection || '未归档'}
+              {item.collection
+                || '未归档'}
             </dd>
           </div>
 
@@ -144,6 +171,146 @@ export function RecordPaper({
             </dd>
           </div>
         </dl>
+
+        <section
+          className={
+            styles.statusSection
+          }
+          aria-labelledby={
+            `record-status-${item.id}`
+          }
+        >
+          <div
+            className={
+              styles.sectionHeading
+            }
+          >
+            <p
+              id={
+                `record-status-${item.id}`
+              }
+              className={
+                styles.tagLabel
+              }
+            >
+              整理到
+            </p>
+
+            <span
+              className={
+                styles.liveMark
+              }
+            >
+              LIVE
+            </span>
+          </div>
+
+          <div
+            className={
+              styles.statusChoices
+            }
+          >
+            {cabinetDrawers.map(
+              ({
+                status,
+                label,
+              }) => {
+                const current =
+                  status
+                  === item.status
+
+                const requiresMemoryConfirm =
+                  status
+                  === 'memory_candidate'
+                  && !current
+
+                return (
+                  <button
+                    key={status}
+                    className={
+                      styles.statusChoice
+                    }
+                    data-current={
+                      current
+                        ? 'true'
+                        : undefined
+                    }
+                    type="button"
+                    disabled={
+                      current
+                      || requiresMemoryConfirm
+                      || mutation.isPending
+                    }
+                    onClick={() =>
+                      chooseStatus(
+                        status,
+                      )
+                    }
+                  >
+                    <span
+                      className={
+                        styles.statusMarker
+                      }
+                      aria-hidden="true"
+                    >
+                      {current
+                        ? '●'
+                        : '○'}
+                    </span>
+
+                    <span>
+                      {label}
+                    </span>
+
+                    {current && (
+                      <span
+                        className={
+                          styles.statusAside
+                        }
+                      >
+                        现在
+                      </span>
+                    )}
+
+                    {requiresMemoryConfirm && (
+                      <span
+                        className={
+                          styles.statusAside
+                        }
+                      >
+                        需确认
+                      </span>
+                    )}
+                  </button>
+                )
+              },
+            )}
+          </div>
+
+          <p
+            className={
+              styles.statusFeedback
+            }
+            aria-live="polite"
+          >
+            {mutation.isPending
+              && pendingStatus
+              ? `正在放进「${
+                  cabinetSlotLabels[
+                    pendingStatus
+                  ]
+                }」……`
+              : mutation.isError
+                ? mutation.error.message
+                : mutation.isSuccess
+                  ? `已经放进「${
+                      cabinetSlotLabels[
+                        mutation.data.status
+                      ]
+                    }」。`
+                  : '“想留住”保留原来的确认步骤，下一箱再接。'}
+          </p>
+        </section>
 
         <div className={styles.tagSection}>
           <p className={styles.tagLabel}>
@@ -168,7 +335,7 @@ export function RecordPaper({
         </div>
 
         <p className={styles.readOnly}>
-          READ ONLY · EDITING MOVES NEXT
+          STATUS IS LIVE · OTHER FIELDS NEXT
         </p>
       </div>
     </details>

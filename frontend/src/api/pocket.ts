@@ -336,3 +336,68 @@ export async function getPocketItem(
 
   return item
 }
+
+export async function updatePocketItemStatus(
+  id: string,
+  status: PocketStatus,
+): Promise<PocketItemSummary> {
+  const response =
+    await fetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }/review`,
+      {
+        method: 'POST',
+
+        credentials: 'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            action: status,
+          }),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    const message =
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `Drawer API returned ${response.status}`
+
+    throw new Error(message)
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer API returned an invalid reviewed item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(payload.item)
+
+  if (!item) {
+    throw new Error(
+      'Updated Drawer item could not be read.',
+    )
+  }
+
+  return item
+}
