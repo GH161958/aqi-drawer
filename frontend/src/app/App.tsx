@@ -10,6 +10,10 @@ import {
   CabinetHome,
 } from '../features/cabinet/CabinetHome'
 
+import {
+  InspectStage,
+} from '../features/inspect/InspectStage'
+
 import type {
   CabinetSlot,
 } from '../types/pocket'
@@ -24,6 +28,22 @@ export function App() {
     null,
   )
 
+  const [
+    activeItemId,
+    setActiveItemId,
+  ] = useState<string | null>(
+    null,
+  )
+
+  function returnToCabinet() {
+    setActiveItemId(null)
+    setActiveSlot(null)
+  }
+
+  function returnToDrawer() {
+    setActiveItemId(null)
+  }
+
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
@@ -36,17 +56,23 @@ export function App() {
         </h1>
       </header>
 
-      {activeSlot === null ? (
+      {activeItemId ? (
+        <InspectStage
+          itemId={activeItemId}
+          onBack={returnToDrawer}
+        />
+      ) : activeSlot ? (
+        <ArchiveDrawer
+          slot={activeSlot}
+          onBack={returnToCabinet}
+          onInspect={
+            setActiveItemId
+          }
+        />
+      ) : (
         <CabinetHome
           activeSlot={null}
           onOpen={setActiveSlot}
-        />
-      ) : (
-        <ArchiveDrawer
-          slot={activeSlot}
-          onBack={() =>
-            setActiveSlot(null)
-          }
         />
       )}
     </main>

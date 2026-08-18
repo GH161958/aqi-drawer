@@ -5,3 +5,7 @@ import type {
 export interface PocketItemsResponse {
   items: PocketItemSummary[]
 }
+
+export interface PocketItemResponse {
+  item: PocketItemSummary
+}

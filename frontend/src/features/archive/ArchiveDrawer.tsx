@@ -1,8 +1,4 @@
 import {
-  useState,
-} from 'react'
-
-import {
   cabinetSlotLabels,
   formatCabinetCount,
 } from '../cabinet/cabinet'
@@ -25,18 +21,16 @@ import styles from './ArchiveDrawer.module.css'
 interface ArchiveDrawerProps {
   slot: CabinetSlot
   onBack: () => void
+
+  onInspect:
+    (itemId: string) => void
 }
 
 export function ArchiveDrawer({
   slot,
   onBack,
+  onInspect,
 }: ArchiveDrawerProps) {
-  const [
-    inspectedTitle,
-    setInspectedTitle,
-  ] = useState<string | null>(
-    null,
-  )
 
   const {
     items,
@@ -80,7 +74,7 @@ export function ArchiveDrawer({
   function openPreview(
     item: PocketItemSummary,
   ) {
-    setInspectedTitle(item.title)
+    onInspect(item.id)
   }
 
   return (
@@ -152,12 +146,6 @@ export function ArchiveDrawer({
           </ol>
         )}
 
-      {inspectedTitle && (
-        <p className={styles.inspectHint}>
-          「{inspectedTitle}」已经找到。
-          下一箱搬 Inspect。
-        </p>
-      )}
     </section>
   )
 }

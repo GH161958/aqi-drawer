@@ -285,3 +285,54 @@ export async function listTrashItems(
 
   return payload.items
 }
+
+export async function getPocketItem(
+  id: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await fetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }`,
+      {
+        credentials: 'same-origin',
+
+        headers: {
+          accept: 'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      response.status === 404
+        ? '这张纸已经不在当前抽屉里。'
+        : `Drawer API returned ${response.status}`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer API returned an invalid item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(payload.item)
+
+  if (!item) {
+    throw new Error(
+      'Drawer item could not be read.',
+    )
+  }
+
+  return item
+}
