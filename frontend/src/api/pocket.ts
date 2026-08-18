@@ -511,3 +511,287 @@ export async function updatePocketItemStatus(
 
   return item
 }
+
+export interface CreateCollectionResult {
+  collection: string
+  changed: boolean
+}
+
+export interface DeleteCollectionResult {
+  changed: boolean
+  clearedItemIds: string[]
+}
+
+export async function listCollections():
+  Promise<string[]> {
+  const response =
+    await fetch(
+      '/api/pocket/collections',
+      {
+        credentials: 'same-origin',
+
+        headers: {
+          accept: 'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `Drawer API returned ${response.status}`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !Array.isArray(
+      payload.collections,
+    )
+  ) {
+    throw new Error(
+      'Drawer returned an invalid Collection registry.',
+    )
+  }
+
+  return [
+    ...new Set(
+      payload.collections
+        .filter(
+          (
+            value,
+          ): value is string =>
+            typeof value === 'string',
+        )
+        .map(
+          (value) =>
+            value.trim(),
+        )
+        .filter(Boolean),
+    ),
+  ].sort(
+    (a, b) =>
+      a.localeCompare(b),
+  )
+}
+
+export async function createCollection(
+  value: string,
+): Promise<CreateCollectionResult> {
+  const collection =
+    value.trim()
+
+  if (!collection) {
+    throw new Error(
+      'Collection name is required.',
+    )
+  }
+
+  const response =
+    await fetch(
+      '/api/pocket/collections',
+      {
+        method: 'POST',
+
+        credentials: 'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            collection,
+            name: collection,
+          }),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `Drawer API returned ${response.status}`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || typeof payload.collection
+      !== 'string'
+  ) {
+    throw new Error(
+      'Drawer returned an invalid created Collection.',
+    )
+  }
+
+  return {
+    collection:
+      payload.collection,
+
+    changed:
+      payload.changed === true,
+  }
+}
+
+export async function deleteCollection(
+  value: string,
+): Promise<DeleteCollectionResult> {
+  const collection =
+    value.trim()
+
+  if (!collection) {
+    throw new Error(
+      'Collection name is required.',
+    )
+  }
+
+  const response =
+    await fetch(
+      `/api/pocket/collections/${
+        encodeURIComponent(
+          collection,
+        )
+      }`,
+      {
+        method: 'DELETE',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          accept:
+            'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `Drawer API returned ${response.status}`,
+    )
+  }
+
+  return {
+    changed:
+      isRecord(payload)
+      && payload.changed === true,
+
+    clearedItemIds:
+      isRecord(payload)
+      && Array.isArray(
+        payload.clearedItemIds,
+      )
+        ? payload.clearedItemIds
+            .filter(
+              (
+                id,
+              ): id is string =>
+                typeof id === 'string',
+            )
+        : [],
+  }
+}
+
+export async function updatePocketItemCollection(
+  id: string,
+  collection: string | null,
+): Promise<PocketItemSummary> {
+  const normalized =
+    collection?.trim() || null
+
+  const response =
+    await fetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }/metadata`,
+      {
+        method: 'PATCH',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify(
+            normalized
+              ? {
+                  collection:
+                    normalized,
+                }
+              : {
+                  clearCollection:
+                    true,
+                },
+          ),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `Drawer API returned ${response.status}`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid metadata item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      'Updated Drawer item could not be read.',
+    )
+  }
+
+  return item
+}

@@ -11,6 +11,12 @@ export const pocketQueryKeys = {
       id,
     ] as const,
 
+  collections: () =>
+    [
+      ...pocketQueryKeys.all,
+      'collections',
+    ] as const,
+
   trash: () =>
     [...pocketQueryKeys.all, 'trash'] as const,
 }

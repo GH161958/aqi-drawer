@@ -7,6 +7,10 @@ import {
   cabinetSlotLabels,
 } from '../cabinet/cabinet'
 
+import {
+  CollectionEditor,
+} from '../collection/CollectionEditor'
+
 import styles from './RecordPaper.module.css'
 
 interface RecordPaperProps {
@@ -235,10 +239,9 @@ export function RecordPaper({
               {item.sourceApp || '—'}
             </IndexField>
 
-            <IndexField label="COLLECTION">
-              {item.collection
-                || '未归档'}
-            </IndexField>
+            <CollectionEditor
+              item={item}
+            />
 
             <IndexField label="TAGS">
               {item.tags.length
