@@ -1,0 +1,76 @@
+.shell {
+  width:
+    min(100%, 760px);
+
+  margin: 0 auto;
+
+  padding:
+    max(
+      42px,
+      env(safe-area-inset-top)
+    )
+    var(--drawer-page-inline)
+    max(
+      42px,
+      env(safe-area-inset-bottom)
+    );
+}
+
+.header {
+  margin-bottom:
+    clamp(34px, 8vw, 64px);
+}
+
+.kicker {
+  margin: 0 0 8px;
+
+  color:
+    var(--drawer-brass);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .68rem;
+
+  letter-spacing: .11em;
+}
+
+.title {
+  margin: 0;
+
+  font-family:
+    var(--drawer-font-display);
+
+  font-size:
+    clamp(3rem, 11vw, 5.8rem);
+
+  font-weight: 400;
+
+  line-height: .94;
+
+  letter-spacing: -.035em;
+}
+
+.migrationNote {
+  width:
+    min(100%, 520px);
+
+  margin:
+    28px auto 0;
+
+  padding-top: 14px;
+
+  border-top:
+    1px solid
+    var(--drawer-rule);
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .72rem;
+
+  line-height: 1.6;
+}
