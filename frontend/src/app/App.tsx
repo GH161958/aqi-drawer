@@ -3,12 +3,12 @@ import {
 } from 'react'
 
 import {
-  CabinetHome,
-} from '../features/cabinet/CabinetHome'
+  ArchiveDrawer,
+} from '../features/archive/ArchiveDrawer'
 
 import {
-  cabinetSlotLabels,
-} from '../features/cabinet/cabinet'
+  CabinetHome,
+} from '../features/cabinet/CabinetHome'
 
 import type {
   CabinetSlot,
@@ -36,20 +36,19 @@ export function App() {
         </h1>
       </header>
 
-      <CabinetHome
-        activeSlot={activeSlot}
-        onOpen={setActiveSlot}
-      />
-
-      <p className={styles.migrationNote}>
-        {activeSlot
-          ? `「${
-              cabinetSlotLabels[
-                activeSlot
-              ]
-            }」已经接通。下一箱会把里面的纸也搬进来。`
-          : 'Cabinet HOME 已经住进 React 新家。'}
-      </p>
+      {activeSlot === null ? (
+        <CabinetHome
+          activeSlot={null}
+          onOpen={setActiveSlot}
+        />
+      ) : (
+        <ArchiveDrawer
+          slot={activeSlot}
+          onBack={() =>
+            setActiveSlot(null)
+          }
+        />
+      )}
     </main>
   )
 }
