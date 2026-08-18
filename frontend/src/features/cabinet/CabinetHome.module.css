@@ -348,3 +348,12 @@
     width: 84%;
   }
 }
+
+/*
+  Functional-migration phase:
+  closed Cabinet stays quiet.
+  Presence paper returns during the final visual system pass.
+*/
+.paperEdge {
+  display: none;
+}

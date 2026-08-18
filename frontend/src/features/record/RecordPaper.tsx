@@ -11,6 +11,10 @@ import {
   CollectionEditor,
 } from '../collection/CollectionEditor'
 
+import {
+  TagEditor,
+} from '../tags/TagEditor'
+
 import styles from './RecordPaper.module.css'
 
 interface RecordPaperProps {
@@ -243,16 +247,9 @@ export function RecordPaper({
               item={item}
             />
 
-            <IndexField label="TAGS">
-              {item.tags.length
-                ? item.tags
-                    .map(
-                      (tag) =>
-                        `#${tag}`,
-                    )
-                    .join('  ')
-                : '—'}
-            </IndexField>
+            <TagEditor
+              item={item}
+            />
 
             {item.sourceTags.length > 0 && (
               <IndexField label="SOURCE TAGS">

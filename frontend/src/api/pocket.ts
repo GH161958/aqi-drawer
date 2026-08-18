@@ -795,3 +795,219 @@ export async function updatePocketItemCollection(
 
   return item
 }
+
+export interface UpdatePocketItemTagsInput {
+  tagsAdd?: string[]
+  tagsRemove?: string[]
+}
+
+export interface DeleteTagEverywhereResult {
+  tag: string
+  changedCount: number
+}
+
+function normalizeTagList(
+  values: string[],
+): string[] {
+  return [
+    ...new Set(
+      values
+        .map(
+          (value) =>
+            value.trim(),
+        )
+        .filter(Boolean),
+    ),
+  ]
+}
+
+export async function updatePocketItemTags(
+  id: string,
+  input: UpdatePocketItemTagsInput,
+): Promise<PocketItemSummary> {
+  const tagsAdd =
+    normalizeTagList(
+      input.tagsAdd ?? [],
+    )
+
+  const tagsRemove =
+    normalizeTagList(
+      input.tagsRemove ?? [],
+    )
+
+  const response =
+    await fetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }/metadata`,
+      {
+        method: 'PATCH',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            tagsAdd,
+            tagsRemove,
+          }),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `Drawer API returned ${response.status}`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid metadata item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      'Updated Drawer item could not be read.',
+    )
+  }
+
+  return item
+}
+
+export async function listTagVocabulary():
+  Promise<string[]> {
+  const response =
+    await fetch(
+      '/api/pocket/tags',
+      {
+        credentials:
+          'same-origin',
+
+        headers: {
+          accept:
+            'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `Drawer API returned ${response.status}`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !Array.isArray(
+      payload.tags,
+    )
+  ) {
+    throw new Error(
+      'Drawer returned an invalid Tag registry.',
+    )
+  }
+
+  return normalizeTagList(
+    payload.tags.filter(
+      (
+        value,
+      ): value is string =>
+        typeof value === 'string',
+    ),
+  ).sort(
+    (a, b) =>
+      a.localeCompare(b),
+  )
+}
+
+export async function deleteTagEverywhere(
+  value: string,
+): Promise<DeleteTagEverywhereResult> {
+  const tag =
+    value.trim()
+
+  if (!tag) {
+    throw new Error(
+      'Tag name is required.',
+    )
+  }
+
+  const response =
+    await fetch(
+      `/api/pocket/tags/${
+        encodeURIComponent(tag)
+      }`,
+      {
+        method: 'DELETE',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          accept:
+            'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `Drawer API returned ${response.status}`,
+    )
+  }
+
+  return {
+    tag:
+      isRecord(payload)
+      && typeof payload.tag === 'string'
+        ? payload.tag
+        : tag,
+
+    changedCount:
+      isRecord(payload)
+      && typeof payload.changedCount === 'number'
+        ? payload.changedCount
+        : 0,
+  }
+}

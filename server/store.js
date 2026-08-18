@@ -8,6 +8,7 @@ const EMPTY_STORE = {
   updatedAt: null,
   items: [],
   collections: [],
+  tags: [],
 }
 const STATUSES = new Set(['inbox', 'tonight', 'discussed', 'deferred', 'memory_candidate', 'archived'])
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000
@@ -770,12 +771,220 @@ export class PocketStore {
     })
   }
 
+  async listTags() {
+    const state = await this.#read()
+
+    return [
+      ...new Set([
+        ...(
+          Array.isArray(state.tags)
+            ? state.tags
+            : []
+        ),
+        ...state.items
+          .filter((item) => !item.deletedAt)
+          .flatMap((item) =>
+            normalizeTags(item.tags),
+          ),
+      ]
+        .map((value) =>
+          normalizeTags([value])[0],
+        )
+        .filter(Boolean)),
+    ].sort((a, b) =>
+      a.localeCompare(b),
+    )
+  }
+
+  async createTag(value) {
+    const tag =
+      normalizeTags([value])[0]
+
+    if (!tag) {
+      throw httpError(
+        422,
+        'Tag name is required.',
+      )
+    }
+
+    return this.#mutate((state) => {
+      state.tags =
+        Array.isArray(state.tags)
+          ? state.tags
+          : []
+
+      if (state.tags.includes(tag)) {
+        return {
+          tag,
+          changed: false,
+        }
+      }
+
+      state.tags = [
+        ...state.tags,
+        tag,
+      ].sort((a, b) =>
+        a.localeCompare(b),
+      )
+
+      return {
+        tag,
+        changed: true,
+      }
+    })
+  }
+
+  async deleteTag(
+    value,
+    { actor = 'system' } = {},
+  ) {
+    const tag =
+      normalizeTags([value])[0]
+
+    if (!tag) {
+      throw httpError(
+        422,
+        'Tag name is required.',
+      )
+    }
+
+    return this.#mutate((state) => {
+      state.tags =
+        Array.isArray(state.tags)
+          ? state.tags
+          : []
+
+      /*
+        Repair old stores before deletion:
+        existing item tags belong to the registry,
+        even when state.tags did not exist yet.
+      */
+      state.tags = [
+        ...new Set([
+          ...state.tags,
+          ...state.items
+            .filter(
+              (item) =>
+                !item.deletedAt,
+            )
+            .flatMap(
+              (item) =>
+                normalizeTags(
+                  item.tags,
+                ),
+            ),
+        ]),
+      ].sort((a, b) =>
+        a.localeCompare(b),
+      )
+
+      const existed =
+        state.tags.includes(tag)
+
+      state.tags =
+        state.tags.filter(
+          (entry) =>
+            entry !== tag,
+        )
+
+      const now =
+        new Date().toISOString()
+
+      const changedItemIds = []
+
+      for (const item of state.items) {
+        if (item.deletedAt) {
+          continue
+        }
+
+        const before =
+          normalizeTags(item.tags)
+
+        if (!before.includes(tag)) {
+          continue
+        }
+
+        item.tags =
+          before.filter(
+            (entry) =>
+              entry !== tag,
+          )
+
+        item.updatedAt = now
+        item.syncState = 'synced'
+
+        appendActivity(
+          item,
+          'metadata_changed',
+          normalizeActor(actor),
+          {
+            collectionFrom:
+              item.collection || null,
+
+            collectionTo:
+              item.collection || null,
+
+            tagsAdded: [],
+
+            tagsRemoved:
+              [tag],
+          },
+          now,
+        )
+
+        changedItemIds.push(
+          item.id,
+        )
+      }
+
+      return {
+        tag,
+
+        changed:
+          existed
+          || changedItemIds.length > 0,
+
+        changedCount:
+          changedItemIds.length,
+
+        changedItemIds,
+      }
+    })
+  }
+
   async editMetadata(id, input, { actor = 'system' } = {}) {
     return this.#mutate((state) => {
       const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
       if (!item) throw httpError(404, 'Pocket item not found.')
       const collectionFrom = item.collection || null
       const tagsFrom = normalizeTags(item.tags)
+
+      /*
+        Tag Registry V1:
+        a tag remains part of the Drawer vocabulary
+        even when this item becomes its last user.
+
+        Fold both the existing item tags and requested
+        additions into the registry before applying
+        tagsRemove.
+      */
+      state.tags =
+        Array.isArray(state.tags)
+          ? state.tags
+          : []
+
+      state.tags = [
+        ...new Set([
+          ...state.tags,
+          ...tagsFrom,
+          ...normalizeTags(
+            input?.tagsAdd,
+          ),
+        ]),
+      ].sort((a, b) =>
+        a.localeCompare(b),
+      )
+
       let collectionTo = collectionFrom
       if (input?.clearCollection === true) collectionTo = null
       else if (Object.hasOwn(input || {}, 'collection')) collectionTo = normalizeCollection(input.collection)
