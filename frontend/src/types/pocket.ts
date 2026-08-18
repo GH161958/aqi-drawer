@@ -30,14 +30,26 @@ export interface PocketReplySummary {
   content?: string
 }
 
+export interface PocketActivityEntry {
+  type: string
+  actor: string
+  at: string
+
+  detail:
+    Record<string, unknown>
+}
+
 export interface PocketItemSummary {
   id: string
   title: string
   text: string
+
   sourceApp: string
   sourceUrl: string
+
   kind: PocketKind
   status: PocketStatus
+
   deletedAt: string | null
 
   note: string
@@ -49,7 +61,12 @@ export interface PocketItemSummary {
     PocketReplySummary[]
 
   collection: string | null
+
   tags: string[]
+  sourceTags: string[]
+
+  activity:
+    PocketActivityEntry[]
 
   createdAt: string
   lastReceivedAt: string

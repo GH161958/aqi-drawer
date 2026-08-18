@@ -1,31 +1,32 @@
-import {
-  cabinetDrawers,
-  cabinetSlotLabels,
-} from '../cabinet/cabinet'
-
 import type {
+  PocketActivityEntry,
   PocketItemSummary,
-  PocketStatus,
 } from '../../types/pocket'
 
 import {
-  useUpdateItemStatus,
-} from './useUpdateItemStatus'
+  cabinetSlotLabels,
+} from '../cabinet/cabinet'
 
 import styles from './RecordPaper.module.css'
 
 interface RecordPaperProps {
   item: PocketItemSummary
-
-  onStatusChanged:
-    (item: PocketItemSummary) => void
 }
 
-function formatRecordDate(
+function archiveNumber(
+  value: number,
+): string {
+  return String(
+    Math.max(
+      0,
+      value,
+    ),
+  ).padStart(2, '0')
+}
+
+function formatActivityTime(
   value: string,
 ): string {
-  if (!value) return '—'
-
   const date =
     new Date(value)
 
@@ -34,64 +35,166 @@ function formatRecordDate(
       date.getTime(),
     )
   ) {
-    return '—'
+    return '时间未记下'
   }
 
   return new Intl.DateTimeFormat(
-    'zh-CN',
+    'en-GB',
     {
-      year: 'numeric',
-      month: '2-digit',
       day: '2-digit',
+      month: 'short',
       hour: '2-digit',
       minute: '2-digit',
+      hour12: false,
     },
-  ).format(date)
+  )
+    .format(date)
+    .toUpperCase()
+}
+
+function actorLabel(
+  actor: string,
+): string {
+  if (actor === 'EE') {
+    return 'EE'
+  }
+
+  if (actor === 'Aqi') {
+    return 'AQI'
+  }
+
+  return 'SYSTEM'
+}
+
+function activityLabel(
+  entry: PocketActivityEntry,
+): string {
+  const actor =
+    actorLabel(entry.actor)
+
+  if (
+    entry.type === 'received'
+  ) {
+    const count =
+      typeof entry.detail.count === 'number'
+        ? entry.detail.count
+        : 0
+
+    return (
+      `${actor} LEFT THIS HERE`
+      + (
+        count > 1
+          ? ` · ${count}`
+          : ''
+      )
+    )
+  }
+
+  if (
+    entry.type === 'seen_by_aqi'
+  ) {
+    return 'AQI SAW THIS'
+  }
+
+  if (
+    entry.type === 'content_read'
+  ) {
+    const mode =
+      typeof entry.detail.mode === 'string'
+        ? entry.detail.mode
+        : 'compact'
+
+    return (
+      `${actor} READ SOURCE · `
+      + mode.toUpperCase()
+    )
+  }
+
+  if (
+    entry.type === 'reply_added'
+  ) {
+    return `${actor} LEFT A NOTE`
+  }
+
+  if (
+    entry.type === 'status_changed'
+  ) {
+    const status =
+      typeof entry.detail.to === 'string'
+        ? entry.detail.to
+        : ''
+
+    const label =
+      status in cabinetSlotLabels
+        ? cabinetSlotLabels[
+            status as keyof typeof cabinetSlotLabels
+          ]
+        : status
+
+    return (
+      `${actor} MOVED IT`
+      + (
+        label
+          ? ` · ${label}`
+          : ''
+      )
+    )
+  }
+
+  if (
+    entry.type === 'metadata_changed'
+  ) {
+    return `${actor} UPDATED THE INDEX`
+  }
+
+  if (
+    entry.type === 'source_refreshed'
+  ) {
+    return 'SOURCE REFRESHED'
+  }
+
+  return entry.type
+}
+
+function IndexField({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className={styles.field}>
+      <dt>{label}</dt>
+
+      <dd>{children}</dd>
+    </div>
+  )
 }
 
 export function RecordPaper({
   item,
-  onStatusChanged,
 }: RecordPaperProps) {
-  const mutation =
-    useUpdateItemStatus(
-      item.id,
+  const activity =
+    [...item.activity].sort(
+      (a, b) =>
+        a.at.localeCompare(b.at),
     )
-
-  function chooseStatus(
-    status: PocketStatus,
-  ) {
-    if (
-      status === item.status
-      || status ===
-        'memory_candidate'
-      || mutation.isPending
-    ) {
-      return
-    }
-
-    mutation.mutate(
-      status,
-      {
-        onSuccess:
-          onStatusChanged,
-      },
-    )
-  }
-
-  const pendingStatus =
-    mutation.variables
 
   return (
     <details className={styles.paper}>
       <summary className={styles.summary}>
-        <span className={styles.index}>
-          RECORD
+        <span className={styles.receiptLabel}>
+          RECEIPT
         </span>
 
-        <span className={styles.summaryTitle}>
-          登记这张
-        </span>
+        {activity.length > 0 && (
+          <span className={styles.receiptCount}>
+            {archiveNumber(
+              activity.length,
+            )}
+          </span>
+        )}
 
         <span
           className={styles.disclosure}
@@ -101,242 +204,111 @@ export function RecordPaper({
         </span>
       </summary>
 
-      <div className={styles.body}>
-        <div className={styles.heading}>
-          <p className={styles.eyebrow}>
-            DRAWER REGISTRATION
+      <div className={styles.sheet}>
+        <header className={styles.heading}>
+          <p className={styles.kicker}>
+            AQI DRAWER
           </p>
 
-          <p className={styles.number}>
-            {item.id.slice(0, 8)}
-          </p>
-        </div>
+          <div className={styles.titleRow}>
+            <h2 className={styles.title}>
+              ITEM RECORD
+            </h2>
 
-        <dl className={styles.fields}>
-          <div className={styles.field}>
-            <dt>STATUS</dt>
-
-            <dd>
-              {
-                cabinetSlotLabels[
-                  item.status
-                ]
-              }
-            </dd>
-          </div>
-
-          <div className={styles.field}>
-            <dt>TYPE</dt>
-
-            <dd>
-              {item.kind.toUpperCase()}
-            </dd>
-          </div>
-
-          <div className={styles.field}>
-            <dt>SOURCE</dt>
-
-            <dd>
-              {item.sourceApp || '—'}
-            </dd>
-          </div>
-
-          <div className={styles.field}>
-            <dt>RECEIVED</dt>
-
-            <dd>
-              {formatRecordDate(
-                item.lastReceivedAt
-                || item.createdAt,
-              )}
-            </dd>
-          </div>
-
-          <div className={styles.field}>
-            <dt>COLLECTION</dt>
-
-            <dd>
-              {item.collection
-                || '未归档'}
-            </dd>
-          </div>
-
-          <div className={styles.field}>
-            <dt>ATTACHMENTS</dt>
-
-            <dd>
-              {String(
-                item.attachments.length,
-              ).padStart(2, '0')}
-            </dd>
-          </div>
-        </dl>
-
-        <section
-          className={
-            styles.statusSection
-          }
-          aria-labelledby={
-            `record-status-${item.id}`
-          }
-        >
-          <div
-            className={
-              styles.sectionHeading
-            }
-          >
-            <p
-              id={
-                `record-status-${item.id}`
-              }
-              className={
-                styles.tagLabel
-              }
-            >
-              整理到
-            </p>
-
-            <span
-              className={
-                styles.liveMark
-              }
-            >
-              LIVE
-            </span>
-          </div>
-
-          <div
-            className={
-              styles.statusChoices
-            }
-          >
-            {cabinetDrawers.map(
-              ({
-                status,
-                label,
-              }) => {
-                const current =
-                  status
-                  === item.status
-
-                const requiresMemoryConfirm =
-                  status
-                  === 'memory_candidate'
-                  && !current
-
-                return (
-                  <button
-                    key={status}
-                    className={
-                      styles.statusChoice
-                    }
-                    data-current={
-                      current
-                        ? 'true'
-                        : undefined
-                    }
-                    type="button"
-                    disabled={
-                      current
-                      || requiresMemoryConfirm
-                      || mutation.isPending
-                    }
-                    onClick={() =>
-                      chooseStatus(
-                        status,
-                      )
-                    }
-                  >
-                    <span
-                      className={
-                        styles.statusMarker
-                      }
-                      aria-hidden="true"
-                    >
-                      {current
-                        ? '●'
-                        : '○'}
-                    </span>
-
-                    <span>
-                      {label}
-                    </span>
-
-                    {current && (
-                      <span
-                        className={
-                          styles.statusAside
-                        }
-                      >
-                        现在
-                      </span>
-                    )}
-
-                    {requiresMemoryConfirm && (
-                      <span
-                        className={
-                          styles.statusAside
-                        }
-                      >
-                        需确认
-                      </span>
-                    )}
-                  </button>
-                )
-              },
+            {activity.length > 0 && (
+              <span className={styles.count}>
+                {archiveNumber(
+                  activity.length,
+                )}
+              </span>
             )}
           </div>
+        </header>
 
-          <p
-            className={
-              styles.statusFeedback
-            }
-            aria-live="polite"
-          >
-            {mutation.isPending
-              && pendingStatus
-              ? `正在放进「${
-                  cabinetSlotLabels[
-                    pendingStatus
-                  ]
-                }」……`
-              : mutation.isError
-                ? mutation.error.message
-                : mutation.isSuccess
-                  ? `已经放进「${
-                      cabinetSlotLabels[
-                        mutation.data.status
-                      ]
-                    }」。`
-                  : '“想留住”保留原来的确认步骤，下一箱再接。'}
+        <section className={styles.section}>
+          <h3 className={styles.sectionTitle}>
+            CURRENT INDEX
+          </h3>
+
+          <dl className={styles.fields}>
+            <IndexField label="SOURCE">
+              {item.sourceApp || '—'}
+            </IndexField>
+
+            <IndexField label="COLLECTION">
+              {item.collection
+                || '未归档'}
+            </IndexField>
+
+            <IndexField label="TAGS">
+              {item.tags.length
+                ? item.tags
+                    .map(
+                      (tag) =>
+                        `#${tag}`,
+                    )
+                    .join('  ')
+                : '—'}
+            </IndexField>
+
+            {item.sourceTags.length > 0 && (
+              <IndexField label="SOURCE TAGS">
+                {item.sourceTags
+                  .map(
+                    (tag) =>
+                      `#${tag}`,
+                  )
+                  .join('  ')}
+              </IndexField>
+            )}
+          </dl>
+
+          <p className={styles.indexNote}>
+            INDEX EDITING MOVES NEXT
           </p>
         </section>
 
-        <div className={styles.tagSection}>
-          <p className={styles.tagLabel}>
-            TAGS
-          </p>
+        <section className={styles.section}>
+          <h3 className={styles.sectionTitle}>
+            LIVING RECORD
+          </h3>
 
-          {item.tags.length > 0 ? (
-            <ul className={styles.tags}>
-              {item.tags.map(
-                (tag) => (
-                  <li key={tag}>
-                    {tag}
+          {activity.length === 0 ? (
+            <p className={styles.empty}>
+              还没有留下可记录的动作。
+            </p>
+          ) : (
+            <ol className={styles.activityList}>
+              {activity.map(
+                (
+                  entry,
+                  index,
+                ) => (
+                  <li
+                    key={
+                      `${entry.at}-${entry.type}-${index}`
+                    }
+                    className={
+                      styles.activityRow
+                    }
+                  >
+                    <time>
+                      {formatActivityTime(
+                        entry.at,
+                      )}
+                    </time>
+
+                    <span>
+                      {activityLabel(
+                        entry,
+                      )}
+                    </span>
                   </li>
                 ),
               )}
-            </ul>
-          ) : (
-            <p className={styles.empty}>
-              暂无索引词
-            </p>
+            </ol>
           )}
-        </div>
-
-        <p className={styles.readOnly}>
-          STATUS IS LIVE · OTHER FIELDS NEXT
-        </p>
+        </section>
       </div>
     </details>
   )

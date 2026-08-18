@@ -16,7 +16,7 @@ import type {
   PocketStatus,
 } from '../../types/pocket'
 
-export function useUpdateItemStatus(
+export function useFileItem(
   itemId: string,
 ) {
   const queryClient =

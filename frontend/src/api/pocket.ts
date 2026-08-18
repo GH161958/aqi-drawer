@@ -7,6 +7,7 @@ import {
 } from '../types/pocket'
 
 import type {
+  PocketActivityEntry,
   PocketAttachmentSummary,
   PocketItemSummary,
   PocketKind,
@@ -119,6 +120,107 @@ function parseReply(
   }
 }
 
+
+function parseActivityEntry(
+  value: unknown,
+): PocketActivityEntry | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  if (
+    typeof value.type !== 'string'
+    || typeof value.at !== 'string'
+  ) {
+    return null
+  }
+
+  return {
+    type: value.type,
+
+    actor:
+      typeof value.actor === 'string'
+        ? value.actor
+        : 'system',
+
+    at: value.at,
+
+    detail:
+      isRecord(value.detail)
+        ? value.detail
+        : {},
+  }
+}
+
+function parseActivityList(
+  value: unknown,
+): PocketActivityEntry[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map(parseActivityEntry)
+    .filter(
+      (
+        entry,
+      ): entry is PocketActivityEntry =>
+        entry !== null,
+    )
+}
+
+function parseTagStrings(
+  value: unknown,
+): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        return entry
+      }
+
+      if (!isRecord(entry)) {
+        return ''
+      }
+
+      if (typeof entry.name === 'string') {
+        return entry.name
+      }
+
+      if (typeof entry.label === 'string') {
+        return entry.label
+      }
+
+      return ''
+    })
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+}
+
+function parseSourceTags(
+  value: Record<string, unknown>,
+): string[] {
+  const direct =
+    parseTagStrings(
+      value.sourceTags,
+    )
+
+  if (direct.length) {
+    return direct
+  }
+
+  if (isRecord(value.sourceData)) {
+    return parseTagStrings(
+      value.sourceData.tags,
+    )
+  }
+
+  return []
+}
+
 function parsePocketItem(
   value: unknown,
 ): PocketItemSummary | null {
@@ -207,6 +309,14 @@ function parsePocketItem(
         : null,
 
     tags,
+
+    sourceTags:
+      parseSourceTags(value),
+
+    activity:
+      parseActivityList(
+        value.activity,
+      ),
 
     createdAt:
       stringValue(value.createdAt),

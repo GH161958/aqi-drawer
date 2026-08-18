@@ -31,11 +31,11 @@
   display: grid;
 
   grid-template-columns:
-    auto 1fr auto;
+    auto auto 1fr;
 
   align-items: center;
 
-  gap: 13px;
+  gap: 8px;
 
   min-height: 41px;
 
@@ -53,33 +53,41 @@
   display: none;
 }
 
-.index {
-  color:
-    var(--drawer-brass);
-
+.receiptLabel,
+.receiptCount,
+.disclosure,
+.kicker,
+.count,
+.sectionTitle,
+.indexNote {
   font-family:
     var(--drawer-font-meta);
+}
+
+.receiptLabel {
+  color:
+    var(--drawer-brass);
 
   font-size: .58rem;
 
   letter-spacing: .12em;
 }
 
-.summaryTitle {
+.receiptCount {
   color:
-    rgba(52, 46, 39, .76);
+    var(--drawer-quiet-ink);
 
-  font-size: .76rem;
+  font-size: .54rem;
 
-  letter-spacing: .025em;
+  font-variant-numeric:
+    tabular-nums;
 }
 
 .disclosure {
+  justify-self: end;
+
   color:
     var(--drawer-sage);
-
-  font-family:
-    var(--drawer-font-meta);
 
   font-size: .85rem;
 
@@ -92,9 +100,9 @@
     rotate(45deg);
 }
 
-.body {
+.sheet {
   padding:
-    8px 16px 25px;
+    18px 17px 26px;
 
   border-top:
     1px solid
@@ -102,40 +110,72 @@
 }
 
 .heading {
+  margin-bottom: 25px;
+}
+
+.kicker {
+  margin:
+    0 0 7px;
+
+  color:
+    var(--drawer-brass);
+
+  font-size: .52rem;
+
+  letter-spacing: .12em;
+}
+
+.titleRow {
   display: flex;
 
   align-items: baseline;
   justify-content: space-between;
 
-  gap: 16px;
-
-  margin:
-    5px 0 18px;
+  gap: 20px;
 }
 
-.eyebrow,
-.number {
+.title {
   margin: 0;
 
   font-family:
-    var(--drawer-font-meta);
+    var(--drawer-font-body);
 
-  font-size: .54rem;
+  font-size:
+    clamp(
+      1.18rem,
+      4.5vw,
+      1.55rem
+    );
 
-  letter-spacing: .08em;
+  font-weight: 400;
+
+  letter-spacing: .025em;
 }
 
-.eyebrow {
+.count {
   color:
     var(--drawer-quiet-ink);
-}
 
-.number {
-  color:
-    var(--drawer-brass);
+  font-size: .58rem;
 
   font-variant-numeric:
     tabular-nums;
+}
+
+.section + .section {
+  margin-top: 30px;
+}
+
+.sectionTitle {
+  margin:
+    0 0 12px;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-size: .54rem;
+
+  letter-spacing: .10em;
 }
 
 .fields {
@@ -146,10 +186,10 @@
   display: grid;
 
   grid-template-columns:
-    minmax(82px, .68fr)
+    minmax(86px, .65fr)
     minmax(0, 1fr);
 
-  gap: 15px;
+  gap: 14px;
 
   padding:
     8px 0;
@@ -166,7 +206,7 @@
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .54rem;
+  font-size: .53rem;
 
   letter-spacing: .06em;
 }
@@ -179,66 +219,26 @@
   color:
     rgba(52, 46, 39, .82);
 
-  font-size: .72rem;
+  font-size: .69rem;
 
-  line-height: 1.45;
+  line-height: 1.55;
 
   overflow-wrap:
     anywhere;
 }
 
-.tagSection {
-  margin-top: 17px;
-}
-
-.tagLabel {
+.indexNote {
   margin:
-    0 0 9px;
+    15px 0 0;
+
+  text-align: right;
 
   color:
-    var(--drawer-quiet-ink);
+    rgba(52, 46, 39, .34);
 
-  font-family:
-    var(--drawer-font-meta);
-
-  font-size: .54rem;
+  font-size: .47rem;
 
   letter-spacing: .08em;
-}
-
-.tags {
-  display: flex;
-
-  flex-wrap: wrap;
-
-  gap:
-    5px 11px;
-
-  margin: 0;
-
-  padding: 0;
-
-  list-style: none;
-}
-
-.tags li {
-  position: relative;
-
-  color:
-    var(--drawer-sage);
-
-  font-size: .67rem;
-}
-
-.tags li:not(:last-child)::after {
-  content: "·";
-
-  position: absolute;
-
-  right: -8px;
-
-  color:
-    var(--drawer-rule);
 }
 
 .empty {
@@ -247,24 +247,56 @@
   color:
     var(--drawer-quiet-ink);
 
-  font-size: .67rem;
+  font-size: .70rem;
+
+  line-height: 1.6;
 }
 
-.readOnly {
-  margin:
-    22px 0 0;
+.activityList {
+  margin: 0;
 
-  text-align: right;
+  padding: 0;
 
+  list-style: none;
+}
+
+.activityRow {
+  display: grid;
+
+  grid-template-columns:
+    74px minmax(0, 1fr);
+
+  gap: 12px;
+
+  padding:
+    8px 0;
+
+  border-bottom:
+    1px dotted
+    rgba(126, 104, 81, .23);
+}
+
+.activityRow time {
   color:
-    rgba(52, 46, 39, .36);
+    var(--drawer-quiet-ink);
 
   font-family:
     var(--drawer-font-meta);
 
   font-size: .49rem;
 
-  letter-spacing: .08em;
+  line-height: 1.45;
+
+  letter-spacing: .03em;
+}
+
+.activityRow span {
+  color:
+    rgba(52, 46, 39, .79);
+
+  font-size: .66rem;
+
+  line-height: 1.45;
 }
 
 @media (max-width: 520px) {
@@ -281,147 +313,22 @@
       8px 11px;
   }
 
-  .body {
+  .sheet {
     padding:
-      8px 13px 22px;
+      17px 13px 23px;
   }
 
   .field {
     grid-template-columns:
-      78px minmax(0, 1fr);
+      80px minmax(0, 1fr);
 
     gap: 10px;
   }
-}
 
-.statusSection {
-  margin-top: 19px;
+  .activityRow {
+    grid-template-columns:
+      68px minmax(0, 1fr);
 
-  padding-top: 15px;
-
-  border-top:
-    1px solid
-    rgba(126, 104, 81, .18);
-}
-
-.sectionHeading {
-  display: flex;
-
-  align-items: baseline;
-  justify-content: space-between;
-
-  gap: 14px;
-
-  margin-bottom: 8px;
-}
-
-.sectionHeading .tagLabel {
-  margin: 0;
-}
-
-.liveMark {
-  color:
-    var(--drawer-brass);
-
-  font-family:
-    var(--drawer-font-meta);
-
-  font-size: .49rem;
-
-  letter-spacing: .10em;
-}
-
-.statusChoices {
-  border-top:
-    1px dotted
-    rgba(126, 104, 81, .20);
-}
-
-.statusChoice {
-  display: grid;
-
-  grid-template-columns:
-    16px minmax(0, 1fr) auto;
-
-  align-items: center;
-
-  gap: 7px;
-
-  width: 100%;
-
-  min-height: 35px;
-
-  padding:
-    7px 2px;
-
-  appearance: none;
-
-  border: 0;
-
-  border-bottom:
-    1px dotted
-    rgba(126, 104, 81, .20);
-
-  background: transparent;
-
-  color:
-    rgba(52, 46, 39, .76);
-
-  text-align: left;
-
-  font-size: .69rem;
-
-  cursor: pointer;
-}
-
-.statusChoice:not(:disabled):hover {
-  color:
-    var(--drawer-sage);
-}
-
-.statusChoice[data-current="true"] {
-  color:
-    var(--drawer-sage);
-}
-
-.statusChoice:disabled {
-  cursor: default;
-
-  opacity: .62;
-}
-
-.statusMarker {
-  color:
-    var(--drawer-brass);
-
-  font-family:
-    var(--drawer-font-meta);
-
-  font-size: .55rem;
-}
-
-.statusAside {
-  color:
-    var(--drawer-quiet-ink);
-
-  font-family:
-    var(--drawer-font-meta);
-
-  font-size: .50rem;
-
-  letter-spacing: .04em;
-}
-
-.statusFeedback {
-  min-height: 1.45em;
-
-  margin:
-    11px 0 0;
-
-  color:
-    var(--drawer-quiet-ink);
-
-  font-size: .62rem;
-
-  line-height: 1.5;
+    gap: 9px;
+  }
 }
