@@ -50,6 +50,29 @@
   letter-spacing: .08em;
 }
 
+.workspace {
+  position: relative;
+
+  width: 100%;
+}
+
+.recordLayer {
+  position: relative;
+  z-index: 1;
+
+  margin-bottom: -13px;
+}
+
+.originalLayer {
+  position: relative;
+  z-index: 2;
+
+  width:
+    calc(100% - 14px);
+
+  margin-left: auto;
+}
+
 .state {
   padding:
     42px 24px;
@@ -82,4 +105,15 @@
     var(--drawer-sage);
 
   cursor: pointer;
+}
+
+@media (max-width: 520px) {
+  .recordLayer {
+    margin-bottom: -10px;
+  }
+
+  .originalLayer {
+    width:
+      calc(100% - 7px);
+  }
 }

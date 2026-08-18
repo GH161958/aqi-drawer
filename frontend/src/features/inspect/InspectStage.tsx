@@ -6,6 +6,10 @@ import {
   useInspectItem,
 } from './useInspectItem'
 
+import {
+  RecordPaper,
+} from '../record/RecordPaper'
+
 import styles from './InspectStage.module.css'
 
 interface InspectStageProps {
@@ -35,7 +39,7 @@ export function InspectStage({
         </button>
 
         <span className={styles.kicker}>
-          INSPECT · ORIGINAL
+          INSPECT
         </span>
       </div>
 
@@ -61,9 +65,19 @@ export function InspectStage({
       )}
 
       {query.data && (
-        <OriginalPaper
-          item={query.data}
-        />
+        <div className={styles.workspace}>
+          <div className={styles.recordLayer}>
+            <RecordPaper
+              item={query.data}
+            />
+          </div>
+
+          <div className={styles.originalLayer}>
+            <OriginalPaper
+              item={query.data}
+            />
+          </div>
+        </div>
       )}
     </section>
   )
