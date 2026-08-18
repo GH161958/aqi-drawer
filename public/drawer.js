@@ -16,6 +16,14 @@ const collectionIndex = document.querySelector('#collection-index')
 const sourceIndex = document.querySelector('#source-index')
 const closeDrawer = document.querySelector('#close-drawer')
 const openTriggers = [...document.querySelectorAll('[data-open-status]')]
+
+/* TRASH DOM V1 BEGIN */
+const trashTrigger =
+  document.querySelector('#discard-tray')
+
+const trashCount =
+  document.querySelector('#count-trash')
+/* TRASH DOM V1 END */
 const loading = document.querySelector('#loading')
 const empty = document.querySelector('#empty')
 const errorState = document.querySelector('#error')
@@ -97,11 +105,17 @@ const typePresetManifest = {
 }
 
 let activeStatus = ''
+
+/* TRASH STATE V1 BEGIN */
+let isTrashView = false
+let trashCountValue = 0
+/* TRASH STATE V1 END */
 let lastCabinetTrigger = null
 let cabinetCounts = { all: 0 }
 let inspectedItemRow = null
 let activeDetailItem = null
 let loadedItems = []
+let loadedCollections = []
 let activeCollection = ''
 let activeSource = ''
 let committedTypePreset = readTypePreset()
@@ -115,10 +129,12 @@ window.visualViewport?.addEventListener('resize', updateVisibleViewport)
 window.visualViewport?.addEventListener('scroll', updateVisibleViewport)
 window.addEventListener('resize', updateVisibleViewport)
 
-/* DETAIL KEYBOARD VIEWPORT FREEZE V2 BEGIN */
+/* DETAIL KEYBOARD VIEWPORT FREEZE V3 BEGIN */
 
 var detailKeyboardViewportFrozen = false
-let detailKeyboardReleaseTimer = null
+let detailKeyboardReleaseRaf = 0
+let detailKeyboardBaselineHeight = 0
+let detailKeyboardBaselineTop = 0
 
 function isDetailEditorControl(node) {
   return Boolean(
@@ -128,52 +144,154 @@ function isDetailEditorControl(node) {
   )
 }
 
-detailContent.addEventListener('focusin', (event) => {
-  if (!isDetailEditorControl(event.target)) return
+function currentDetailViewportGeometry() {
+  const viewport = window.visualViewport
 
-  if (detailKeyboardReleaseTimer) {
-    window.clearTimeout(detailKeyboardReleaseTimer)
-    detailKeyboardReleaseTimer = null
+  return {
+    height: Math.round(
+      viewport?.height || window.innerHeight,
+    ),
+    top: Math.round(
+      viewport?.offsetTop || 0,
+    ),
   }
+}
 
-  /*
-    Freeze BEFORE the software keyboard changes visualViewport.
-    The paper keeps the exact geometry it had when editing began.
-  */
-  detailKeyboardViewportFrozen = true
-  document.body.classList.add('is-detail-keyboard-editing')
-})
+function cancelDetailKeyboardRelease() {
+  if (!detailKeyboardReleaseRaf) return
 
-detailContent.addEventListener('focusout', () => {
-  if (detailKeyboardReleaseTimer) {
-    window.clearTimeout(detailKeyboardReleaseTimer)
-  }
+  window.cancelAnimationFrame(
+    detailKeyboardReleaseRaf,
+  )
 
-  /*
-    iOS animates the keyboard closed for a short moment.
-    Keep the geometry frozen during that animation too.
-  */
-  detailKeyboardReleaseTimer = window.setTimeout(() => {
-    if (isDetailEditorControl(document.activeElement)) {
+  detailKeyboardReleaseRaf = 0
+}
+
+detailContent.addEventListener(
+  'focusin',
+  (event) => {
+    if (!isDetailEditorControl(event.target)) {
       return
     }
 
-    detailKeyboardViewportFrozen = false
-    detailKeyboardReleaseTimer = null
-
-    document.body.classList.remove(
-      'is-detail-keyboard-editing',
-    )
+    cancelDetailKeyboardRelease()
 
     /*
-      Only now, after the keyboard has returned the viewport,
-      recalculate the visible browser area.
+      Capture the full Record geometry BEFORE
+      the software keyboard starts resizing Safari.
     */
-    updateVisibleViewport()
-  }, 360)
-})
+    if (!detailKeyboardViewportFrozen) {
+      const geometry =
+        currentDetailViewportGeometry()
 
-/* DETAIL KEYBOARD VIEWPORT FREEZE V2 END */
+      detailKeyboardBaselineHeight =
+        geometry.height
+
+      detailKeyboardBaselineTop =
+        geometry.top
+    }
+
+    detailKeyboardViewportFrozen = true
+
+    document.body.classList.add(
+      'is-detail-keyboard-editing',
+    )
+  },
+)
+
+detailContent.addEventListener(
+  'focusout',
+  () => {
+    cancelDetailKeyboardRelease()
+
+    const startedAt =
+      performance.now()
+
+    function waitForKeyboardToSettle() {
+      /*
+        Focus may simply have moved from one
+        Drawer editor control to another.
+      */
+      if (
+        isDetailEditorControl(
+          document.activeElement,
+        )
+      ) {
+        detailKeyboardReleaseRaf = 0
+        return
+      }
+
+      const geometry =
+        currentDetailViewportGeometry()
+
+      /*
+        Small tolerance avoids waiting forever
+        because of Safari toolbar / fractional
+        viewport differences.
+      */
+      const heightSettled =
+        !window.visualViewport
+        || Math.abs(
+          geometry.height
+          - detailKeyboardBaselineHeight
+        ) <= 24
+
+      const topSettled =
+        !window.visualViewport
+        || Math.abs(
+          geometry.top
+          - detailKeyboardBaselineTop
+        ) <= 12
+
+      const timedOut =
+        performance.now()
+        - startedAt
+        > 1400
+
+      if (
+        !heightSettled
+        || !topSettled
+      ) {
+        if (!timedOut) {
+          detailKeyboardReleaseRaf =
+            window.requestAnimationFrame(
+              waitForKeyboardToSettle,
+            )
+
+          return
+        }
+      }
+
+      /*
+        Keyboard is really gone now.
+        Release the frozen geometry.
+      */
+      detailKeyboardViewportFrozen = false
+      detailKeyboardReleaseRaf = 0
+
+      document.body.classList.remove(
+        'is-detail-keyboard-editing',
+      )
+
+      /*
+        Two frames let Safari finish committing
+        its viewport before we refresh our CSS vars.
+      */
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          updateVisibleViewport()
+        })
+      })
+    }
+
+    detailKeyboardReleaseRaf =
+      window.requestAnimationFrame(
+        waitForKeyboardToSettle,
+      )
+  },
+)
+
+/* DETAIL KEYBOARD VIEWPORT FREEZE V3 END */
 
 /* CABINET VISUAL SYNC V1 BEGIN */
 
@@ -237,6 +355,16 @@ function refreshCabinetVisualsQuietly() {
 
 /* CABINET VISUAL SYNC V1 END */
 
+/* TRASH COUNT V1 BEGIN */
+
+/*
+  Trash has its own lifecycle endpoint.
+  It is deliberately counted separately
+  from the six normal filing statuses.
+*/
+
+/* TRASH COUNT V1 END */
+
 async function loadCabinetCounts() {
   try {
     const response = await apiFetch(pocketApi('/items?limit=500'), { headers: { accept: 'application/json' } })
@@ -256,27 +384,694 @@ async function loadCabinetCounts() {
     })
     applyCabinetContents(items)
     syncCabinetVisualPresence()
+
+    await loadTrashCount()
+
     cabinetStatus.hidden = true
   } catch (error) {
     cabinetStatus.textContent = error.message || '暂时没能核对每一格。'
   }
 }
 
-async function loadItems() {
-  setState('loading')
-  const query = new URLSearchParams({ limit: '200' })
-  if (activeStatus) query.set('status', activeStatus)
+async function loadCollectionRegistry() {
+  try {
+    const response =
+      await apiFetch(
+        pocketApi('/collections'),
+      )
+
+    const payload =
+      await response.json()
+
+    if (!response.ok) {
+      throw new Error(
+        payload.error
+        || `读取分类失败（${response.status}）。`,
+      )
+    }
+
+    loadedCollections =
+      Array.isArray(payload.collections)
+        ? payload.collections
+        : []
+  } catch (error) {
+    /*
+      Items remain usable even if collection
+      registry loading temporarily fails.
+    */
+    console.warn(
+      'Collection registry unavailable:',
+      error,
+    )
+
+    loadedCollections = []
+  }
+}
+
+/* TRASH VIEW V1 BEGIN */
+
+function setDrawerEmptyCopy() {
+  const title =
+    empty.querySelector('.state-title')
+
+  const paragraphs =
+    [...empty.querySelectorAll('p')]
+
+  const body =
+    paragraphs.find(
+      (node) =>
+        !node.classList.contains(
+          'state-title',
+        ),
+    )
+
+  if (isTrashView) {
+    if (title) {
+      title.textContent =
+        '废纸槽是空的'
+    }
+
+    if (body) {
+      body.textContent =
+        '这里暂时没有被放下的纸。'
+    }
+
+    return
+  }
+
+  if (title) {
+    title.textContent =
+      '这一格还是空的'
+  }
+
+  if (body) {
+    body.textContent =
+      'EE 放进来的东西，会安静地待在这里。'
+  }
+}
+
+function syncCollectionViewTitle() {
+  const count =
+    Array.isArray(loadedItems)
+      ? loadedItems.length
+      : 0
+
+  const label =
+    isTrashView
+      ? 'DISCARDED'
+      : activeStatus
+        ? statusLabels[activeStatus]
+        : '全部收藏'
+
+  collectionTitle.textContent =
+    count
+      ? `${label} · ${archiveNumber(count)}`
+      : label
+}
+
+async function trashMutation(
+  path,
+  options = {},
+) {
+  const response =
+    await apiFetch(
+      pocketApi(path),
+      {
+        headers: {
+          accept: 'application/json',
+          ...(options.body
+            ? {
+                'content-type':
+                  'application/json',
+              }
+            : {}),
+          ...(options.headers || {}),
+        },
+        ...options,
+      },
+    )
+
+  const payload =
+    await response
+      .json()
+      .catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(
+      payload.error
+      || `整理失败（${response.status}）`,
+    )
+  }
+
+  return payload
+}
+
+async function loadTrashCount() {
+  if (!trashTrigger || !trashCount) {
+    return
+  }
 
   try {
-    const response = await apiFetch(pocketApi(`/items?${query}`), { headers: { accept: 'application/json' } })
-    if (!response.ok) throw new Error(response.status === 401 ? '本地 API 需要授权。' : `请求失败（${response.status}）`)
-    const payload = await response.json()
-    loadedItems = Array.isArray(payload.items) ? payload.items : []
-    renderArchiveIndex(loadedItems)
+    const response =
+      await apiFetch(
+        pocketApi(
+          '/trash?limit=500',
+        ),
+        {
+          headers: {
+            accept: 'application/json',
+          },
+        },
+      )
+
+    const payload =
+      await response
+        .json()
+        .catch(() => ({}))
+
+    if (!response.ok) {
+      throw new Error(
+        payload.error
+        || `读取废纸槽失败（${response.status}）`,
+      )
+    }
+
+    const items =
+      Array.isArray(payload.items)
+        ? payload.items
+        : []
+
+    trashCountValue =
+      items.length
+
+    trashCount.textContent =
+      trashCountValue
+        ? archiveNumber(
+            trashCountValue,
+          )
+        : ''
+
+    trashCount.setAttribute(
+      'aria-label',
+      `${trashCountValue} 件废纸`,
+    )
+
+    trashTrigger.classList.toggle(
+      'has-contents',
+      trashCountValue > 0,
+    )
+  } catch (error) {
+    console.warn(
+      'Trash count unavailable:',
+      error,
+    )
+
+    trashCountValue = 0
+    trashCount.textContent = ''
+
+    trashTrigger.classList.remove(
+      'has-contents',
+    )
+  }
+}
+
+function createDiscardAction(
+  item,
+  row,
+) {
+  const wrap =
+    element(
+      'div',
+      'item-secondary-actions',
+    )
+
+  const button =
+    element(
+      'button',
+      'item-discard-action',
+      '丢到废纸槽',
+    )
+
+  button.type = 'button'
+
+  button.setAttribute(
+    'aria-label',
+    `把「${item.title || '这张纸'}」丢到废纸槽`,
+  )
+
+  button.addEventListener(
+    'click',
+    async (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+
+      const originalLabel =
+        button.textContent
+
+      button.disabled = true
+      button.textContent =
+        '正在放下…'
+
+      try {
+        await trashMutation(
+          `/items/${
+            encodeURIComponent(item.id)
+          }/trash`,
+          {
+            method: 'POST',
+          },
+        )
+
+        loadedItems =
+          loadedItems.filter(
+            (entry) =>
+              String(entry.id)
+              !== String(item.id),
+          )
+
+        renderArchiveIndex(
+          loadedItems,
+        )
+
+        applyIndexFilters()
+        syncPreviewNoteMarkers()
+        syncCollectionViewTitle()
+
+        await refreshCabinetVisualsQuietly()
+      } catch (error) {
+        console.error(
+          'Trash item failed.',
+          error,
+        )
+
+        button.disabled = false
+        button.textContent =
+          '暂时没放进去'
+
+        window.setTimeout(
+          () => {
+            button.textContent =
+              originalLabel
+          },
+          1400,
+        )
+      }
+    },
+  )
+
+  wrap.append(button)
+
+  return wrap
+}
+
+function createTrashPaper(item) {
+  const visualKind =
+    itemVisualKind(item)
+
+  const paper =
+    element(
+      'article',
+      'item-button item-paper trash-paper',
+    )
+
+  if (visualKind === 'xiaohongshu') {
+    paper.classList.add(
+      'xhs-object',
+    )
+
+    paper.append(
+      createXhsPreview(item),
+    )
+  } else if (visualKind === 'link') {
+    paper.classList.add(
+      'link-object',
+    )
+
+    paper.append(
+      createLinkClipping(item),
+    )
+  } else if (visualKind === 'image') {
+    paper.classList.add(
+      'image-object',
+    )
+
+    paper.append(
+      createImagePreview(item),
+    )
+  } else if (
+    visualKind === 'attachment'
+  ) {
+    paper.classList.add(
+      'document-object',
+    )
+
+    paper.append(
+      createDocumentPreview(item),
+    )
+  } else {
+    paper.append(
+      element(
+        'h2',
+        'item-title',
+        item.title
+        || '没有标题的一张纸',
+      ),
+      element(
+        'p',
+        'item-preview',
+        item.text
+        || item.contentRead?.textPreview
+        || '这件东西没有留下文字。',
+      ),
+      createItemMeta(item),
+    )
+  }
+
+  return paper
+}
+
+async function removeTrashItemFromView(
+  id,
+) {
+  loadedItems =
+    loadedItems.filter(
+      (entry) =>
+        String(entry.id)
+        !== String(id),
+    )
+
+  renderTrashItems(
+    loadedItems,
+  )
+
+  setState(
+    loadedItems.length
+      ? 'ready'
+      : 'empty',
+  )
+
+  syncCollectionViewTitle()
+
+  await refreshCabinetVisualsQuietly()
+}
+
+async function restoreTrashItem(
+  item,
+  button,
+) {
+  const original =
+    button.textContent
+
+  button.disabled = true
+  button.textContent =
+    '正在放回…'
+
+  try {
+    await trashMutation(
+      `/items/${
+        encodeURIComponent(item.id)
+      }/restore`,
+      {
+        method: 'POST',
+      },
+    )
+
+    await removeTrashItemFromView(
+      item.id,
+    )
+  } catch (error) {
+    console.error(
+      'Restore trash item failed.',
+      error,
+    )
+
+    button.disabled = false
+    button.textContent =
+      '暂时没放回'
+
+    window.setTimeout(
+      () => {
+        button.textContent =
+          original
+      },
+      1400,
+    )
+  }
+}
+
+async function permanentlyDeleteTrashItem(
+  item,
+  button,
+) {
+  const confirmed =
+    await confirmDrawerAction({
+      kicker: 'DISCARDED',
+      title: '真的不要这张了吗？',
+      message:
+        '这次放下以后，就不能再从 Drawer 里捡回来了。',
+      confirmLabel:
+        '彻底丢掉',
+      cancelLabel:
+        '先留着',
+      destructive: true,
+    })
+
+  if (!confirmed) return
+
+  const original =
+    button.textContent
+
+  button.disabled = true
+  button.textContent =
+    '正在丢掉…'
+
+  try {
+    const payload =
+      await trashMutation(
+        `/items/${
+          encodeURIComponent(item.id)
+        }`,
+        {
+          method: 'DELETE',
+        },
+      )
+
+    if (
+      Array.isArray(
+        payload.mediaCleanupFailed,
+      )
+      && payload.mediaCleanupFailed.length
+    ) {
+      console.warn(
+        'Item deleted but some media cleanup failed:',
+        payload.mediaCleanupFailed,
+      )
+    }
+
+    await removeTrashItemFromView(
+      item.id,
+    )
+  } catch (error) {
+    console.error(
+      'Permanent delete failed.',
+      error,
+    )
+
+    button.disabled = false
+    button.textContent =
+      '暂时没丢掉'
+
+    window.setTimeout(
+      () => {
+        button.textContent =
+          original
+      },
+      1400,
+    )
+  }
+}
+
+function renderTrashItems(items) {
+  list.replaceChildren(
+    ...items.map((item, index) => {
+      const visualKind =
+        itemVisualKind(item)
+
+      const row =
+        document.createElement('li')
+
+      row.className =
+        `item-row item-${visualKind} trash-item-row`
+
+      row.dataset.kind =
+        visualKind
+
+      row.dataset.itemId =
+        item.id
+
+      row.style.setProperty(
+        '--trash-index',
+        index,
+      )
+
+      const paper =
+        createTrashPaper(item)
+
+      const actions =
+        element(
+          'div',
+          'trash-item-actions',
+        )
+
+      const restore =
+        element(
+          'button',
+          'trash-action trash-restore',
+          '放回抽屉',
+        )
+
+      restore.type = 'button'
+
+      restore.addEventListener(
+        'click',
+        () =>
+          restoreTrashItem(
+            item,
+            restore,
+          ),
+      )
+
+      const remove =
+        element(
+          'button',
+          'trash-action trash-delete',
+          '彻底丢掉',
+        )
+
+      remove.type = 'button'
+
+      remove.addEventListener(
+        'click',
+        () =>
+          permanentlyDeleteTrashItem(
+            item,
+            remove,
+          ),
+      )
+
+      actions.append(
+        restore,
+        remove,
+      )
+
+      row.append(
+        paper,
+        actions,
+      )
+
+      return row
+    }),
+  )
+}
+
+/* TRASH VIEW V1 END */
+
+async function loadItems() {
+  if (!isTrashView) {
+    await loadCollectionRegistry()
+  }
+
+  setDrawerEmptyCopy()
+  setState('loading')
+
+  try {
+    let response
+
+    if (isTrashView) {
+      response =
+        await apiFetch(
+          pocketApi(
+            '/trash?limit=200',
+          ),
+          {
+            headers: {
+              accept:
+                'application/json',
+            },
+          },
+        )
+    } else {
+      const query =
+        new URLSearchParams({
+          limit: '200',
+        })
+
+      if (activeStatus) {
+        query.set(
+          'status',
+          activeStatus,
+        )
+      }
+
+      response =
+        await apiFetch(
+          pocketApi(
+            `/items?${query}`,
+          ),
+          {
+            headers: {
+              accept:
+                'application/json',
+            },
+          },
+        )
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        response.status === 401
+          ? '本地 API 需要授权。'
+          : `请求失败（${response.status}）`,
+      )
+    }
+
+    const payload =
+      await response.json()
+
+    loadedItems =
+      Array.isArray(payload.items)
+        ? payload.items
+        : []
+
+    syncCollectionViewTitle()
+
+    if (isTrashView) {
+      archiveIndex.hidden = true
+
+      renderTrashItems(
+        loadedItems,
+      )
+
+      setState(
+        loadedItems.length
+          ? 'ready'
+          : 'empty',
+      )
+
+      return
+    }
+
+    renderArchiveIndex(
+      loadedItems,
+    )
+
     applyIndexFilters()
     syncPreviewNoteMarkers()
   } catch (error) {
-    errorMessage.textContent = error.message || '无法读取 Drawer items。'
+    errorMessage.textContent =
+      error.message
+      || '无法读取 Drawer items。'
+
     setState('error')
   }
 }
@@ -401,7 +1196,7 @@ function setState(state) {
 }
 
 function renderArchiveIndex(items) {
-  archiveIndex.hidden = Boolean(activeStatus)
+  archiveIndex.hidden = Boolean(activeStatus) || isTrashView
   if (activeStatus) return
   const collections = [...new Set(items.map((item) => item.collection).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
   const sources = [...new Set(items.map(sourceCategory))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
@@ -483,9 +1278,31 @@ function renderItems(items) {
       button.append(title, preview, createItemMeta(item))
     }
     const additions = createStorageAdditions(item, row)
-    row.classList.toggle('has-side-notes', Boolean(additions))
-    row.append(recordTab, button)
-    if (additions) row.append(additions)
+
+    row.classList.toggle(
+      'has-side-notes',
+      Boolean(additions),
+    )
+
+    const secondaryActions =
+      createDiscardAction(
+        item,
+        row,
+      )
+
+    row.append(
+      recordTab,
+      button,
+    )
+
+    if (additions) {
+      row.append(additions)
+    }
+
+    row.append(
+      secondaryActions,
+    )
+
     return row
   }))
 }
@@ -1095,39 +1912,861 @@ function createRecordIndex(item) {
   section.append(recordField('SOURCE', sourceName(item)))
 
   const form = element('form', 'metadata-form')
-  const collectionLabel = element('label', 'record-edit-field')
-  collectionLabel.append(element('span', '', 'COLLECTION'))
-  const collectionInput = document.createElement('input')
-  collectionInput.name = 'collection'
-  collectionInput.maxLength = 80
-  collectionInput.value = item.collection || ''
-  collectionInput.placeholder = '尚未分类'
-  collectionLabel.append(collectionInput)
-  const existingCollections = [...new Set(loadedItems.map((entry) => entry.collection).filter(Boolean))]
-  const collectionSuggestions = element('div', 'collection-suggestions')
-  existingCollections.forEach((collection) => {
-    const suggestion = element('button', 'collection-suggestion', collection)
-    suggestion.type = 'button'
-    suggestion.addEventListener('click', () => { collectionInput.value = collection })
-    collectionSuggestions.append(suggestion)
-  })
+  const collectionField = element(
+    'div',
+    'record-edit-field record-collection-field',
+  )
 
-  const tagsLabel = element('label', 'record-edit-field')
-  tagsLabel.append(element('span', '', 'INDEX TERMS'))
+  collectionField.append(
+    element('span', '', 'COLLECTION'),
+  )
+
+  /*
+    Canonical value used by saveMetadata().
+    The visible UI below is only a picker for this value.
+  */
+  const collectionInput =
+    document.createElement('input')
+
+  collectionInput.type = 'hidden'
+  collectionInput.name = 'collection'
+  collectionInput.value =
+    item.collection || ''
+
+  const collectionCurrentCaption = element(
+    'span',
+    'collection-picker-caption',
+    'CURRENT',
+  )
+
+  const collectionCurrent = element(
+    'div',
+    'collection-current',
+  )
+
+  const collectionValue = element(
+    'span',
+    'collection-current-value',
+  )
+
+  const removeCollection = element(
+    'button',
+    'collection-remove',
+    '移出分类',
+  )
+
+  removeCollection.type = 'button'
+
+  const collectionEditToggle = element(
+    'button',
+    'collection-edit-toggle',
+    '调整',
+  )
+
+  collectionEditToggle.type = 'button'
+  collectionEditToggle.setAttribute(
+    'aria-expanded',
+    'false',
+  )
+
+  const collectionActions = element(
+    'div',
+    'collection-actions',
+  )
+
+  collectionActions.append(
+    collectionEditToggle,
+    removeCollection,
+  )
+
+  collectionCurrent.append(
+    collectionValue,
+    collectionActions,
+  )
+
+  const collectionAvailableCaption = element(
+    'span',
+    'collection-picker-caption',
+    'AVAILABLE',
+  )
+
+  const collectionAvailable = element(
+    'div',
+    'collection-picker-available',
+  )
+
+  const collectionNewCaption = element(
+    'span',
+    'collection-picker-caption',
+    'NEW COLLECTION',
+  )
+
+  const collectionUtilityRow = element(
+    'div',
+    'collection-utility-row',
+  )
+
+  const collectionNewToggle = element(
+    'button',
+    'collection-new-toggle',
+    '+ 新分类',
+  )
+
+  collectionNewToggle.type = 'button'
+  collectionNewToggle.setAttribute(
+    'aria-expanded',
+    'false',
+  )
+
+  const collectionManageToggle = element(
+    'button',
+    'collection-manage-toggle',
+    '管理分类',
+  )
+
+  collectionManageToggle.type = 'button'
+  collectionManageToggle.setAttribute(
+    'aria-expanded',
+    'false',
+  )
+
+  collectionUtilityRow.append(
+    collectionNewToggle,
+    collectionManageToggle,
+  )
+
+  const collectionNewRow = element(
+    'div',
+    'collection-picker-new',
+  )
+
+  const collectionNewInput =
+    document.createElement('input')
+
+  collectionNewInput.type = 'text'
+  collectionNewInput.autocomplete = 'off'
+  collectionNewInput.maxLength = 80
+  collectionNewInput.placeholder =
+    '输入新的分类'
+  collectionNewInput.className =
+    'collection-new-input'
+
+  const collectionAdd = element(
+    'button',
+    'collection-picker-add',
+    '＋',
+  )
+
+  collectionAdd.type = 'button'
+  collectionAdd.setAttribute(
+    'aria-label',
+    '加入新的分类',
+  )
+
+  collectionNewRow.append(
+    collectionNewInput,
+    collectionAdd,
+  )
+
+  collectionNewRow.hidden = true
+
+  const collectionManager = element(
+    'div',
+    'collection-manager',
+  )
+
+  collectionManager.hidden = true
+
+  function currentCollectionValue() {
+    return String(
+      collectionInput.value || '',
+    ).trim()
+  }
+
+  function writeCollection(value) {
+    const normalized =
+      String(value || '').trim()
+
+    collectionInput.value =
+      normalized
+
+    if (
+      normalized
+      && !loadedCollections.includes(normalized)
+    ) {
+      loadedCollections = [
+        ...loadedCollections,
+        normalized,
+      ].sort(
+        (a, b) => a.localeCompare(b),
+      )
+    }
+
+    collectionField.classList.remove(
+      'is-editing',
+    )
+
+    collectionEditToggle.setAttribute(
+      'aria-expanded',
+      'false',
+    )
+
+    syncCollectionPicker()
+  }
+
+  function syncCollectionPicker() {
+    const current =
+      currentCollectionValue()
+
+    const editing =
+      collectionField.classList.contains(
+        'is-editing',
+      )
+
+    collectionValue.textContent =
+      current || '尚未分类'
+
+    collectionEditToggle.textContent =
+      editing ? '完成' : '调整'
+
+    collectionEditToggle.setAttribute(
+      'aria-expanded',
+      String(editing),
+    )
+
+    const vocabulary =
+      drawerCollectionVocabulary()
+
+    const available =
+      vocabulary.filter(
+        (collection) =>
+          collection !== current,
+      )
+
+    collectionAvailable.replaceChildren()
+    collectionManager.replaceChildren()
+
+    available.forEach((collection) => {
+      const choice = element(
+        'button',
+        'collection-choice',
+        collection,
+      )
+
+      choice.type = 'button'
+
+      choice.addEventListener(
+        'click',
+        () => writeCollection(collection),
+      )
+
+      collectionAvailable.append(choice)
+    })
+
+    vocabulary.forEach((collection) => {
+      const row = element(
+        'div',
+        'collection-manager-row',
+      )
+
+      const name = element(
+        'span',
+        'collection-manager-name',
+        collection,
+      )
+
+      const remove = element(
+        'button',
+        'collection-manager-delete',
+        '删除整个分类',
+      )
+
+      remove.type = 'button'
+
+      remove.addEventListener(
+        'click',
+        () => deleteCollectionEverywhere(
+          collection,
+          item,
+          form,
+        ),
+      )
+
+      row.append(
+        name,
+        remove,
+      )
+
+      collectionManager.append(row)
+    })
+
+    collectionAvailableCaption.hidden = true
+    collectionNewCaption.hidden = true
+
+    collectionAvailable.hidden =
+      !editing || available.length === 0
+
+    collectionUtilityRow.hidden =
+      !editing
+
+    removeCollection.hidden =
+      !editing || !current
+
+    collectionManageToggle.hidden =
+      vocabulary.length === 0
+
+    if (!editing) {
+      collectionNewRow.hidden = true
+      collectionManager.hidden = true
+
+      collectionNewToggle.setAttribute(
+        'aria-expanded',
+        'false',
+      )
+
+      collectionManageToggle.setAttribute(
+        'aria-expanded',
+        'false',
+      )
+    }
+  }
+
+  function commitNewCollection() {
+    const value =
+      String(collectionNewInput.value || '')
+        .trim()
+
+    if (!value) return
+
+    writeCollection(value)
+
+    collectionNewInput.value = ''
+
+    collectionNewInput.focus({
+      preventScroll: true,
+    })
+  }
+
+  collectionNewToggle.addEventListener(
+    'click',
+    () => {
+      const opening =
+        collectionNewRow.hidden
+
+      collectionNewRow.hidden =
+        !opening
+
+      collectionNewToggle.setAttribute(
+        'aria-expanded',
+        String(opening),
+      )
+
+      if (opening) {
+        collectionManager.hidden = true
+
+        collectionManageToggle.setAttribute(
+          'aria-expanded',
+          'false',
+        )
+
+        collectionNewInput.focus({
+          preventScroll: true,
+        })
+      }
+    },
+  )
+
+  collectionManageToggle.addEventListener(
+    'click',
+    () => {
+      const opening =
+        collectionManager.hidden
+
+      collectionManager.hidden =
+        !opening
+
+      collectionManageToggle.setAttribute(
+        'aria-expanded',
+        String(opening),
+      )
+
+      if (opening) {
+        collectionNewRow.hidden = true
+
+        collectionNewToggle.setAttribute(
+          'aria-expanded',
+          'false',
+        )
+      }
+    },
+  )
+
+  collectionEditToggle.addEventListener(
+    'click',
+    () => {
+      collectionField.classList.toggle(
+        'is-editing',
+      )
+
+      syncCollectionPicker()
+
+    },
+  )
+
+  removeCollection.addEventListener(
+    'click',
+    () => writeCollection(''),
+  )
+
+  collectionAdd.addEventListener(
+    'click',
+    commitNewCollection,
+  )
+
+  collectionNewInput.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key !== 'Enter') return
+
+      event.preventDefault()
+      commitNewCollection()
+    },
+  )
+
+  /*
+    saveMetadata() refreshes this UI
+    after the server returns the canonical item.
+  */
+  form._syncCollectionPicker =
+    syncCollectionPicker
+
+  const collectionEditorStack = element(
+    'div',
+    'collection-editor-stack',
+  )
+
+  collectionEditorStack.append(
+    collectionAvailableCaption,
+    collectionAvailable,
+    collectionUtilityRow,
+    collectionNewCaption,
+    collectionNewRow,
+    collectionManager,
+  )
+
+  collectionField.append(
+    collectionInput,
+    collectionCurrentCaption,
+    collectionCurrent,
+    collectionEditorStack,
+  )
+
+  syncCollectionPicker()
+
+  const tagsField = element(
+    'div',
+    'record-edit-field record-tags-field',
+  )
+
+  tagsField.append(
+    element('span', '', 'INDEX TERMS'),
+  )
+
+  /*
+    Canonical tag state for this item.
+
+    This stays hidden deliberately:
+    tags are no longer "whatever happens to be written
+    in one text input".
+  */
   const tagsInput = document.createElement('input')
+  tagsInput.type = 'hidden'
   tagsInput.name = 'tags'
   tagsInput.value = (item.tags || []).join(' · ')
-  tagsInput.placeholder = '用逗号或 · 分开'
-  tagsLabel.append(tagsInput)
-  form.append(collectionLabel)
-  if (item.collection) {
-    const removeCollection = element('button', 'record-action record-clear collection-remove', '移出分类')
-    removeCollection.type = 'button'
-    removeCollection.addEventListener('click', () => saveMetadata(item, form, true))
-    form.append(removeCollection)
+
+  const currentCaption = element(
+    'span',
+    'tag-picker-caption',
+    'CURRENT',
+  )
+
+  const currentTerms = element(
+    'div',
+    'tag-picker-current',
+  )
+
+  const tagEditToggle = element(
+    'button',
+    'tag-edit-toggle',
+    '＋ 添加',
+  )
+
+  tagEditToggle.type = 'button'
+  tagEditToggle.setAttribute(
+    'aria-expanded',
+    'false',
+  )
+
+  const tagSummary = element(
+    'div',
+    'tag-picker-summary',
+  )
+
+  tagSummary.append(
+    currentTerms,
+    tagEditToggle,
+  )
+
+  const availableCaption = element(
+    'span',
+    'tag-picker-caption',
+    'AVAILABLE',
+  )
+
+  const availableTerms = element(
+    'div',
+    'tag-picker-available',
+  )
+
+  const newCaption = element(
+    'span',
+    'tag-picker-caption',
+    'NEW TERM',
+  )
+
+  const newRow = element(
+    'div',
+    'tag-picker-new',
+  )
+
+  const newTagInput = document.createElement('input')
+  newTagInput.type = 'text'
+  newTagInput.autocomplete = 'off'
+  newTagInput.maxLength = 80
+  newTagInput.placeholder = '输入新的标签'
+
+  const addTag = element(
+    'button',
+    'tag-picker-add',
+    '＋',
+  )
+
+  addTag.type = 'button'
+  addTag.setAttribute(
+    'aria-label',
+    '加入新的标签',
+  )
+
+  newRow.append(
+    newTagInput,
+    addTag,
+  )
+
+  const manageToggle = element(
+    'button',
+    'tag-manage-toggle',
+    '管理标签',
+  )
+
+  manageToggle.type = 'button'
+  manageToggle.setAttribute(
+    'aria-expanded',
+    'false',
+  )
+
+  const manager = element(
+    'div',
+    'tag-manager',
+  )
+
+  manager.hidden = true
+
+  function currentTagValues() {
+    return parseTags(tagsInput.value)
   }
-  if (existingCollections.length) form.append(collectionSuggestions)
-  form.append(tagsLabel)
+
+  function writeCurrentTags(values) {
+    tagsInput.value =
+      parseTags(values.join(' · '))
+        .join(' · ')
+  }
+
+  function addTags(values) {
+    const next = [
+      ...currentTagValues(),
+      ...values,
+    ]
+
+    writeCurrentTags(next)
+    syncTagPicker()
+  }
+
+  function removeCurrentTag(tag) {
+    writeCurrentTags(
+      currentTagValues().filter(
+        (entry) => entry !== tag,
+      ),
+    )
+
+    syncTagPicker()
+  }
+
+  function syncTagPicker() {
+    const current = currentTagValues()
+
+    const editing =
+      tagsField.classList.contains(
+        'is-editing',
+      )
+
+    const vocabulary = [
+      ...new Set([
+        ...drawerTagVocabulary(),
+        ...current,
+      ]),
+    ].sort(
+      (a, b) => a.localeCompare(b),
+    )
+
+    currentTerms.replaceChildren()
+    availableTerms.replaceChildren()
+    manager.replaceChildren()
+
+    current.forEach((tag) => {
+      const chip = element(
+        'button',
+        'tag-current-chip',
+      )
+
+      chip.type = 'button'
+
+      chip.setAttribute(
+        'aria-label',
+        `从当前物件移除标签 ${tag}`,
+      )
+
+      chip.append(
+        element(
+          'span',
+          'tag-chip-label',
+          tag,
+        ),
+        element(
+          'span',
+          'tag-chip-remove',
+          '×',
+        ),
+      )
+
+      chip.addEventListener(
+        'click',
+        () => removeCurrentTag(tag),
+      )
+
+      currentTerms.append(chip)
+    })
+
+    currentCaption.hidden = true
+
+    currentTerms.hidden =
+      current.length === 0
+
+    const available =
+      vocabulary.filter(
+        (tag) => !current.includes(tag),
+      )
+
+    available.forEach((tag) => {
+      const choice = element(
+        'button',
+        'tag-available-chip',
+        tag,
+      )
+
+      choice.type = 'button'
+
+      choice.addEventListener(
+        'click',
+        () => addTags([tag]),
+      )
+
+      availableTerms.append(choice)
+    })
+
+    availableCaption.hidden = true
+
+    availableTerms.hidden =
+      !editing || available.length === 0
+
+    newCaption.hidden = true
+    newRow.hidden = !editing
+
+    tagEditToggle.textContent =
+      editing ? '完成' : '＋ 添加'
+
+    tagEditToggle.setAttribute(
+      'aria-expanded',
+      String(editing),
+    )
+
+    manageToggle.hidden =
+      !editing || vocabulary.length === 0
+
+    if (!editing) {
+      manager.hidden = true
+
+      manageToggle.setAttribute(
+        'aria-expanded',
+        'false',
+      )
+    }
+
+    vocabulary.forEach((tag) => {
+      const row = element(
+        'div',
+        'tag-manager-row',
+      )
+
+      const name = element(
+        'span',
+        'tag-manager-name',
+        tag,
+      )
+
+      const remove = element(
+        'button',
+        'tag-manager-delete',
+        '删除整个标签',
+      )
+
+      remove.type = 'button'
+
+      remove.addEventListener(
+        'click',
+        () => deleteTagEverywhere(
+          tag,
+          item,
+          form,
+        ),
+      )
+
+      row.append(
+        name,
+        remove,
+      )
+
+      manager.append(row)
+    })
+  }
+
+  function commitNewTags() {
+    const values =
+      parseTags(newTagInput.value)
+
+    if (!values.length) return
+
+    addTags(values)
+
+    newTagInput.value = ''
+    newTagInput.focus({
+      preventScroll: true,
+    })
+  }
+
+  addTag.addEventListener(
+    'click',
+    commitNewTags,
+  )
+
+  newTagInput.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key !== 'Enter') return
+
+      event.preventDefault()
+      commitNewTags()
+    },
+  )
+
+  tagEditToggle.addEventListener(
+    'click',
+    () => {
+      tagsField.classList.toggle(
+        'is-editing',
+      )
+
+      if (
+        !tagsField.classList.contains(
+          'is-editing',
+        )
+      ) {
+        manager.hidden = true
+
+        manageToggle.setAttribute(
+          'aria-expanded',
+          'false',
+        )
+      }
+
+      syncTagPicker()
+
+      if (
+        tagsField.classList.contains(
+          'is-editing',
+        )
+      ) {
+        newTagInput.focus({
+          preventScroll: true,
+        })
+      }
+    },
+  )
+
+  manageToggle.addEventListener(
+    'click',
+    () => {
+      manager.hidden = !manager.hidden
+
+      manageToggle.setAttribute(
+        'aria-expanded',
+        String(!manager.hidden),
+      )
+    },
+  )
+
+  /*
+    saveMetadata() can call this after a successful PATCH
+    without rebuilding the whole Record paper.
+  */
+  form._syncTagPicker = syncTagPicker
+
+  const tagEditorStack = element(
+    'div',
+    'tag-editor-stack',
+  )
+
+  tagEditorStack.append(
+    availableCaption,
+    availableTerms,
+    newCaption,
+    newRow,
+    manageToggle,
+    manager,
+  )
+
+  tagsField.append(
+    tagsInput,
+    currentCaption,
+    tagSummary,
+    tagEditorStack,
+  )
+
+  syncTagPicker()
+
+  form.append(
+    collectionField,
+    tagsField,
+  )
 
   const sourceTags = getSourceTags(item)
   if (sourceTags.length) form.append(recordField('SOURCE TAGS', sourceTags.map((tag) => `#${tag}`).join('  ')))
@@ -1375,9 +3014,12 @@ async function saveMetadata(item, form, clearCollection) {
           accept: 'application/json',
         },
         body: JSON.stringify({
-          ...(clearCollection
-            ? { clearCollection: true }
-            : { collection }),
+          ...(
+            clearCollection
+            || (!collection && Boolean(item.collection))
+              ? { clearCollection: true }
+              : { collection }
+          ),
           tagsAdd: nextTags.filter(
             (tag) => !currentTags.includes(tag),
           ),
@@ -1423,19 +3065,15 @@ async function saveMetadata(item, form, clearCollection) {
     if (form.elements.collection) {
       form.elements.collection.value =
         updatedItem.collection || ''
+
+      form._syncCollectionPicker?.()
     }
 
     if (form.elements.tags) {
       form.elements.tags.value =
         (updatedItem.tags || []).join(' · ')
-    }
 
-    const removeCollection =
-      form.querySelector('.collection-remove')
-
-    if (removeCollection) {
-      removeCollection.hidden =
-        !updatedItem.collection
+      form._syncTagPicker?.()
     }
 
     const record =
@@ -1504,8 +3142,13 @@ function createEeNoteEditor(item) {
   if (item.note) {
     const clear = element('button', 'note-action note-remove', '移除这句')
     clear.type = 'button'
-    clear.addEventListener('click', () => {
-      if (window.confirm('把这句 EE Note 从当前物件移除？')) saveEeNote(item, '', note)
+    clear.addEventListener('click', async () => {
+      if (await confirmDrawerAction({
+      title: '移除 EE 小纸条？',
+      message: '这张 EE 小纸条会从当前物件上移除。',
+      confirmLabel: '移除',
+      destructive: true,
+    })) saveEeNote(item, '', note)
     })
     actions.append(clear)
   }
@@ -1966,6 +3609,453 @@ function textPreview(value, length) {
   return normalized.length > length ? `${normalized.slice(0, length)}…` : normalized
 }
 
+
+function drawerCollectionVocabulary() {
+  return [
+    ...new Set([
+      ...loadedCollections,
+      ...loadedItems
+        .map((entry) =>
+          String(entry.collection || '').trim(),
+        )
+        .filter(Boolean),
+    ]),
+  ].sort(
+    (a, b) => a.localeCompare(b),
+  )
+}
+
+function drawerTagVocabulary() {
+  const values = []
+
+  loadedItems.forEach((entry) => {
+    if (!Array.isArray(entry.tags)) return
+
+    entry.tags.forEach((tag) => {
+      const normalized =
+        String(tag || '')
+          .trim()
+          .replace(/^#+/u, '')
+
+      if (normalized) values.push(normalized)
+    })
+  })
+
+  return [...new Set(values)]
+}
+
+function confirmDrawerAction({
+  kicker = 'AQI DRAWER',
+  title = '确认整理',
+  message = '',
+  confirmLabel = '确认',
+  cancelLabel = '取消',
+  destructive = false,
+} = {}) {
+  return new Promise((resolve) => {
+    document
+      .querySelectorAll('.drawer-confirm-dialog')
+      .forEach((node) => node.remove())
+
+    const dialog =
+      document.createElement('dialog')
+
+    dialog.className =
+      'drawer-confirm-dialog'
+
+    const sheet = element(
+      'section',
+      'drawer-confirm-sheet',
+    )
+
+    const heading = element(
+      'div',
+      'drawer-confirm-heading',
+    )
+
+    heading.append(
+      element(
+        'span',
+        'drawer-confirm-kicker',
+        kicker,
+      ),
+      element(
+        'h2',
+        'drawer-confirm-title',
+        title,
+      ),
+    )
+
+    const body = element(
+      'p',
+      'drawer-confirm-message',
+      message,
+    )
+
+    const actions = element(
+      'div',
+      'drawer-confirm-actions',
+    )
+
+    const cancel = element(
+      'button',
+      'drawer-confirm-cancel',
+      cancelLabel,
+    )
+
+    cancel.type = 'button'
+
+    const confirm = element(
+      'button',
+      destructive
+        ? 'drawer-confirm-submit is-destructive'
+        : 'drawer-confirm-submit',
+      confirmLabel,
+    )
+
+    confirm.type = 'button'
+
+    actions.append(
+      cancel,
+      confirm,
+    )
+
+    sheet.append(
+      heading,
+      body,
+      actions,
+    )
+
+    dialog.append(sheet)
+    document.body.append(dialog)
+
+    let settled = false
+
+    function finish(value) {
+      if (settled) return
+      settled = true
+
+      if (dialog.open) {
+        dialog.close()
+      }
+
+      dialog.remove()
+      resolve(value)
+    }
+
+    cancel.addEventListener(
+      'click',
+      () => finish(false),
+    )
+
+    confirm.addEventListener(
+      'click',
+      () => finish(true),
+    )
+
+    dialog.addEventListener(
+      'cancel',
+      (event) => {
+        event.preventDefault()
+        finish(false)
+      },
+    )
+
+    dialog.addEventListener(
+      'click',
+      (event) => {
+        if (event.target === dialog) {
+          finish(false)
+        }
+      },
+    )
+
+    if (
+      typeof dialog.showModal
+      === 'function'
+    ) {
+      dialog.showModal()
+    } else {
+      dialog.setAttribute('open', '')
+    }
+
+    cancel.focus({
+      preventScroll: true,
+    })
+  })
+}
+
+async function deleteCollectionEverywhere(
+  collection,
+  currentItem,
+  form,
+) {
+  const normalized =
+    String(collection || '').trim()
+
+  if (!normalized) return
+
+  const confirmed =
+    await confirmDrawerAction({
+      title: '删除整个分类？',
+      message:
+        `「${normalized}」会从整个 Drawer 删除。`
+        + '其中的物件会回到未分类。',
+      confirmLabel: '删除分类',
+      destructive: true,
+    })
+
+  if (!confirmed) return
+
+  const feedback =
+    form.querySelector('.metadata-feedback')
+
+  if (feedback) {
+    feedback.textContent =
+      `正在删除分类「${normalized}」……`
+  }
+
+  try {
+    const response =
+      await apiFetch(
+        pocketApi(
+          `/collections/${encodeURIComponent(normalized)}`,
+        ),
+        {
+          method: 'DELETE',
+          headers: {
+            accept: 'application/json',
+          },
+        },
+      )
+
+    const payload =
+      await response.json()
+
+    if (!response.ok) {
+      throw new Error(
+        payload.error
+        || `删除分类失败（${response.status}）。`,
+      )
+    }
+
+    const cleared =
+      new Set(
+        Array.isArray(payload.clearedItemIds)
+          ? payload.clearedItemIds
+          : [],
+      )
+
+    loadedCollections =
+      loadedCollections.filter(
+        (entry) => entry !== normalized,
+      )
+
+    loadedItems =
+      loadedItems.map((entry) => {
+        if (
+          cleared.has(entry.id)
+          || entry.collection === normalized
+        ) {
+          return {
+            ...entry,
+            collection: null,
+          }
+        }
+
+        return entry
+      })
+
+    if (
+      currentItem.collection === normalized
+      || cleared.has(currentItem.id)
+    ) {
+      currentItem.collection = null
+
+      if (
+        activeDetailItem
+        && activeDetailItem.id === currentItem.id
+      ) {
+        activeDetailItem.collection = null
+      }
+
+      if (form.elements.collection) {
+        form.elements.collection.value = ''
+      }
+    }
+
+    form._syncCollectionPicker?.()
+
+    if (feedback) {
+      feedback.textContent =
+        `已删除分类「${normalized}」。`
+    }
+  } catch (error) {
+    if (feedback) {
+      feedback.textContent =
+        error.message
+        || '这个分类暂时没有删干净。'
+    }
+  }
+}
+
+async function deleteTagEverywhere(
+  tag,
+  currentItem,
+  form,
+) {
+  const normalized =
+    String(tag || '').trim()
+
+  if (!normalized) return
+
+  const confirmed = await confirmDrawerAction({
+    title: '删除整个标签？',
+    message:
+      `「${normalized}」会从所有使用它的物件上一起移除。`,
+    confirmLabel: '删除标签',
+    destructive: true,
+  })
+
+  if (!confirmed) return
+
+  const feedback =
+    form.querySelector('.metadata-feedback')
+
+  const managerButtons =
+    form.querySelectorAll(
+      '.tag-manager-delete',
+    )
+
+  managerButtons.forEach((button) => {
+    button.disabled = true
+  })
+
+  if (feedback) {
+    feedback.textContent =
+      `正在从 Drawer 移除「${normalized}」……`
+  }
+
+  try {
+    const listResponse =
+      await apiFetch(
+        pocketApi('/items'),
+      )
+
+    const listPayload =
+      await listResponse.json()
+
+    if (!listResponse.ok) {
+      throw new Error(
+        listPayload.error
+          || `读取 Drawer 失败（${listResponse.status}）。`,
+      )
+    }
+
+    const allItems =
+      Array.isArray(listPayload.items)
+        ? listPayload.items
+        : []
+
+    const targets =
+      allItems.filter(
+        (entry) =>
+          Array.isArray(entry.tags)
+          && entry.tags.includes(normalized),
+      )
+
+    let changedCount = 0
+
+    for (const target of targets) {
+      const response =
+        await apiFetch(
+          pocketApi(
+            `/items/${encodeURIComponent(target.id)}/metadata`,
+          ),
+          {
+            method: 'PATCH',
+            headers: {
+              'content-type': 'application/json',
+              accept: 'application/json',
+            },
+            body: JSON.stringify({
+              tagsRemove: [normalized],
+            }),
+          },
+        )
+
+      const payload =
+        await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          payload.error
+            || `删除标签失败（${response.status}）。`,
+        )
+      }
+
+      const updated = payload.item
+
+      const loadedIndex =
+        loadedItems.findIndex(
+          (entry) => entry.id === updated.id,
+        )
+
+      if (loadedIndex !== -1) {
+        loadedItems[loadedIndex] = updated
+      }
+
+      if (updated.id === currentItem.id) {
+        Object.assign(
+          currentItem,
+          updated,
+        )
+
+        activeDetailItem = updated
+      }
+
+      if (payload.changed !== false) {
+        changedCount += 1
+      }
+    }
+
+    /*
+      Also remove it from an unsaved current draft,
+      in case the user created it but had not saved yet.
+    */
+    if (form.elements.tags) {
+      form.elements.tags.value =
+        parseTags(
+          form.elements.tags.value,
+        )
+          .filter(
+            (entry) =>
+              entry !== normalized,
+          )
+          .join(' · ')
+    }
+
+    form._syncTagPicker?.()
+
+    if (feedback) {
+      feedback.textContent =
+        targets.length
+          ? `已从 ${changedCount} 件物件移除「${normalized}」。`
+          : `「${normalized}」目前没有已保存的使用记录。`
+    }
+  } catch (error) {
+    if (feedback) {
+      feedback.textContent =
+        error.message
+          || '这个标签暂时没有删干净。'
+    }
+  } finally {
+    managerButtons.forEach((button) => {
+      button.disabled = false
+    })
+  }
+}
+
 function parseTags(value) {
   return [...new Set(String(value || '').split(/[,，·\n]/u).map((tag) => tag.trim().replace(/^#+/u, '')).filter(Boolean))].slice(0, 40)
 }
@@ -2184,7 +4274,64 @@ async function animateDrawerPull(trigger, hasItems = true) {
   })
 }
 
+/* TRASH OPEN V1 BEGIN */
+
+async function openTrash() {
+  if (!trashTrigger) return
+
+  lastCabinetTrigger =
+    trashTrigger
+
+  isTrashView = true
+  activeStatus = ''
+  activeCollection = ''
+  activeSource = ''
+
+  collectionTitle.textContent =
+    trashCountValue
+      ? `DISCARDED · ${
+          archiveNumber(
+            trashCountValue,
+          )
+        }`
+      : 'DISCARDED'
+
+  /*
+    Load while HOME remains visible,
+    matching the normal drawer principle:
+    never reveal a half-loaded interior.
+  */
+  const contentReady =
+    loadItems()
+
+  trashTrigger.classList.add(
+    'is-opening',
+  )
+
+  await transitionPause()
+  await contentReady
+
+  cabinetHome.hidden = true
+
+  document.body.classList.remove(
+    'is-cabinet-home',
+  )
+
+  collectionView.hidden = false
+
+  trashTrigger.classList.remove(
+    'is-opening',
+  )
+
+  closeDrawer.focus({
+    preventScroll: true,
+  })
+}
+
+/* TRASH OPEN V1 END */
+
 async function openCollection(trigger) {
+  isTrashView = false
   lastCabinetTrigger = trigger
   activeStatus = trigger.dataset.openStatus || ''
   activeCollection = ''
@@ -2323,6 +4470,13 @@ function unlockPageScroll() {
   document.body.style.top = ''
   window.scrollTo(0, lockedScrollY)
 }
+
+/* TRASH EVENT V1 BEGIN */
+trashTrigger?.addEventListener(
+  'click',
+  openTrash,
+)
+/* TRASH EVENT V1 END */
 
 openTriggers.forEach((trigger) => trigger.addEventListener('click', () => openCollection(trigger)))
 

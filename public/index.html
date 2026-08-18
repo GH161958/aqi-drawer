@@ -8,10 +8,10 @@
     <title>Aqi Drawer</title>
     <link rel="stylesheet" href="/drawer/drawer.css?v=20260816-visual-consolidation-v1">
     <link rel="stylesheet" href="/drawer/drawer-room.css?v=20260816-index-record-v3">
-    <link rel="stylesheet" href="/drawer/layout-correction.css?v=20260818-aqi-clean-edge-023048">
+    <link rel="stylesheet" href="/drawer/layout-correction.css?v=20260818221433">
 <script src="/drawer/vendor/gsap/gsap.min.js" defer></script>
 <script src="/drawer/vendor/gsap/Flip.min.js" defer></script>
-<script src="/drawer/drawer.js?v=20260818-aqi-paper-clean-022856" defer></script>
+<script src="/drawer/drawer.js?v=20260818221433" defer></script>
   </head>
   <body>
     <header class="cabinet-top">
@@ -62,6 +62,34 @@
               <span class="cabinet-pull" aria-hidden="true"></span>
             </button>
           </div>
+          <!-- TRASH UI V1 BEGIN -->
+          <button
+            id="discard-tray"
+            class="discard-tray"
+            type="button"
+            aria-label="打开废纸槽"
+          >
+            <span
+              class="discard-tray-papers"
+              aria-hidden="true"
+            >
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+
+            <span class="discard-tray-label">
+              DISCARDED
+            </span>
+
+            <span
+              id="count-trash"
+              class="discard-tray-count"
+              aria-label="废纸数量"
+            ></span>
+          </button>
+          <!-- TRASH UI V1 END -->
+
           <div class="cabinet-base" aria-hidden="true"></div>
         </div>
         <p id="cabinet-status" class="cabinet-status" aria-live="polite">正在核对每一格里的东西……</p>

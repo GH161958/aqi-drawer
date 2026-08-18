@@ -1747,20 +1747,6 @@ body.has-paper-open { position: fixed; right: 0; left: 0; width: 100%; overflow:
   Keep editor controls at 16px on phones so the page stays still.
 */
 @media (max-width: 430px) {
-  .detail-content input,
-  .detail-content textarea,
-  .detail-content select {
-    font-size: 16px !important;
-  }
-
-  .record-edit-field input {
-    font: 16px/1.35 var(--font-meta) !important;
-  }
-
-  .ee-note-form textarea {
-    font-size: 16px !important;
-    line-height: 1.55 !important;
-  }
 }
 
 /*
@@ -1914,15 +1900,6 @@ body.has-paper-open { position: fixed; right: 0; left: 0; width: 100%; overflow:
 @media (max-width: 700px) {
   html {
     -webkit-text-size-adjust: 100%;
-  }
-
-  .detail-dialog input,
-  .detail-dialog textarea,
-  .detail-dialog select,
-  #detail-content input,
-  #detail-content textarea,
-  #detail-content select {
-    font-size: 16px !important;
   }
 
   .item-row .item-title {
@@ -2565,3 +2542,3083 @@ body.has-paper-open { position: fixed; right: 0; left: 0; width: 100%; overflow:
 }
 
 /* AQI CLEAN PAPER EDGE V1 END */
+
+/* RECORD METADATA COMPACT V2 BEGIN */
+
+/*
+  Resting state is deliberately sparse.
+
+  Collection:
+    current filing location + Adjust
+
+  Index Terms:
+    current chips + Add
+
+  Editors only appear on demand.
+*/
+
+.record-collection-field,
+.record-tags-field {
+  display: block !important;
+  padding: 9px 0 16px !important;
+  border: 0 !important;
+}
+
+.record-collection-field > span:first-child,
+.record-tags-field > span:first-child {
+  display: block;
+  margin: 0 0 9px;
+
+  color: rgba(91, 78, 63, .58);
+
+  font-size: .54rem;
+  letter-spacing: .09em;
+}
+
+
+/* all explanatory sublabels are unnecessary */
+
+.collection-picker-caption,
+.tag-picker-caption {
+  display: none !important;
+}
+
+
+/* --------------------------------
+   Collection resting summary
+-------------------------------- */
+
+.collection-current,
+.tag-picker-summary {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  min-height: 32px;
+}
+
+.collection-current-value {
+  min-width: 0;
+
+  overflow-wrap: anywhere;
+
+  color: var(--ink);
+
+  font: .7rem/1.4 var(--font-meta);
+}
+
+.collection-actions {
+  display: flex;
+
+  align-items: center;
+
+  gap: 12px;
+
+  flex: 0 0 auto;
+}
+
+
+/* --------------------------------
+   Quiet text actions
+-------------------------------- */
+
+.collection-edit-toggle,
+.collection-remove,
+.tag-edit-toggle,
+.tag-manage-toggle,
+.tag-manager-delete {
+  appearance: none;
+  -webkit-appearance: none;
+
+  margin: 0;
+  padding: 3px 0;
+
+  border: 0 !important;
+  border-bottom: 0 !important;
+
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: rgba(83, 96, 78, .68);
+
+  font: .51rem/1.2 var(--font-meta);
+
+  letter-spacing: .02em;
+
+  text-decoration: none !important;
+
+  cursor: pointer;
+}
+
+.collection-remove {
+  color: rgba(122, 79, 63, .56);
+}
+
+.collection-remove[hidden],
+.tag-manage-toggle[hidden] {
+  display: none !important;
+}
+
+
+/* --------------------------------
+   Current tag row
+-------------------------------- */
+
+.tag-picker-summary {
+  align-items: flex-start;
+}
+
+.tag-picker-current {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 6px;
+
+  min-width: 0;
+
+  margin: 0;
+}
+
+.tag-picker-current[hidden] {
+  display: none !important;
+}
+
+
+/* --------------------------------
+   Editors
+-------------------------------- */
+
+.collection-picker-available,
+.tag-picker-available {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 6px;
+
+  margin: 9px 0 7px;
+}
+
+.collection-picker-available[hidden],
+.tag-picker-available[hidden] {
+  display: none !important;
+}
+
+.collection-picker-new,
+.tag-picker-new {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+
+  gap: 7px;
+
+  align-items: center;
+
+  margin: 8px 0 3px;
+}
+
+.collection-picker-new[hidden],
+.tag-picker-new[hidden] {
+  display: none !important;
+}
+
+
+/*
+  iPhone safety:
+  DO NOT specify font-size.
+  Existing 16px input protection keeps control.
+*/
+
+.collection-new-input,
+.tag-picker-new input {
+  min-width: 0;
+  min-height: 36px;
+
+  padding: 7px 9px;
+
+  border:
+    1px solid
+    rgba(116, 93, 71, .10) !important;
+
+  border-radius: 1px;
+
+  color: var(--ink);
+
+  background:
+    rgba(255, 255, 255, .13);
+
+  box-shadow: none !important;
+
+  font-family: var(--font-meta);
+  font-weight: 400;
+}
+
+.collection-new-input::placeholder,
+.tag-picker-new input::placeholder {
+  color: rgba(91, 78, 63, .44);
+  opacity: 1;
+}
+
+
+/* --------------------------------
+   Add controls
+-------------------------------- */
+
+.collection-picker-add,
+.tag-picker-add {
+  appearance: none;
+  -webkit-appearance: none;
+
+  display: grid;
+  place-items: center;
+
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+
+  margin: 0;
+  padding: 0;
+
+  border:
+    1px solid
+    rgba(137, 109, 69, .18);
+
+  border-radius: 1px;
+
+  color:
+    rgba(81, 73, 61, .56);
+
+  background:
+    rgba(232, 222, 205, .32);
+
+  box-shadow: none;
+
+  font: .82rem/1 var(--font-body);
+
+  cursor: pointer;
+}
+
+
+/* --------------------------------
+   Chips
+-------------------------------- */
+
+.collection-choice,
+.tag-current-chip,
+.tag-available-chip {
+  appearance: none;
+  -webkit-appearance: none;
+
+  min-height: 28px;
+
+  margin: 0;
+
+  padding: 5px 9px;
+
+  border-radius: 1px;
+
+  color: rgba(81, 73, 61, .78);
+
+  font: .54rem/1.1 var(--font-meta);
+
+  cursor: pointer;
+}
+
+.collection-choice {
+  border:
+    1px solid
+    rgba(137, 109, 69, .18);
+
+  background:
+    rgba(241, 233, 218, .42);
+}
+
+.tag-current-chip {
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 7px;
+
+  border:
+    1px solid
+    rgba(137, 109, 69, .26);
+
+  background:
+    rgba(241, 233, 218, .68);
+}
+
+.tag-chip-remove {
+  opacity: .44;
+
+  font-size: .7rem;
+
+  line-height: 1;
+}
+
+.tag-available-chip {
+  border:
+    1px dashed
+    rgba(83, 96, 78, .24);
+
+  background:
+    rgba(225, 230, 218, .30);
+
+  color:
+    rgba(83, 96, 78, .80);
+}
+
+
+/* --------------------------------
+   Tag manager
+-------------------------------- */
+
+.tag-manage-toggle {
+  display: block;
+
+  width: max-content;
+
+  margin:
+    6px 0 0 auto;
+}
+
+.tag-manager {
+  margin:
+    8px 0 0;
+
+  border-top:
+    1px solid
+    rgba(116, 93, 71, .08);
+}
+
+.tag-manager[hidden] {
+  display: none !important;
+}
+
+.tag-manager-row {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 12px;
+
+  min-height: 34px;
+
+  border-bottom:
+    1px solid
+    rgba(116, 93, 71, .07);
+}
+
+.tag-manager-name {
+  min-width: 0;
+
+  overflow-wrap: anywhere;
+
+  color:
+    rgba(52, 46, 39, .72);
+
+  font:
+    .55rem/1.25
+    var(--font-meta);
+}
+
+
+/* --------------------------------
+   NO ghost rules
+-------------------------------- */
+
+.record-collection-field,
+.record-tags-field,
+.collection-current,
+.tag-picker-summary,
+.collection-picker-new,
+.tag-picker-new {
+  border-bottom: 0 !important;
+}
+
+.record-collection-field input,
+.record-tags-field input {
+  box-shadow: none !important;
+}
+
+
+/* --------------------------------
+   Focus
+-------------------------------- */
+
+.collection-new-input:focus-visible,
+.tag-picker-new input:focus-visible,
+.collection-choice:focus-visible,
+.tag-current-chip:focus-visible,
+.tag-available-chip:focus-visible,
+.collection-edit-toggle:focus-visible,
+.collection-remove:focus-visible,
+.tag-edit-toggle:focus-visible,
+.collection-picker-add:focus-visible,
+.tag-picker-add:focus-visible {
+  outline:
+    1px solid
+    rgba(137, 112, 73, .38);
+
+  outline-offset: 2px;
+}
+
+
+@media (hover: hover) {
+  .collection-edit-toggle:hover,
+  .tag-edit-toggle:hover {
+    color:
+      rgba(83, 96, 78, .94);
+  }
+
+  .collection-choice:hover,
+  .tag-current-chip:hover {
+    background:
+      rgba(232, 222, 205, .66);
+  }
+}
+
+
+/*
+  Keep touch targets usable.
+  Input font-size remains owned by the existing
+  iPhone stability layer.
+*/
+
+@media (max-width: 430px) {
+  .collection-choice,
+  .tag-current-chip,
+  .tag-available-chip {
+    min-height: 30px;
+  }
+}
+
+/* RECORD METADATA COMPACT V2 END */
+
+/* COMPACT COLLECTION V3 BEGIN */
+
+/*
+  Collection is a filing location, not a chip system.
+  Existing choices read like handwritten index links.
+*/
+
+.collection-picker-available {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 9px 0 7px;
+}
+
+.collection-picker-available[hidden],
+.collection-utility-row[hidden],
+.collection-picker-new[hidden],
+.collection-manager[hidden] {
+  display: none !important;
+}
+
+.collection-choice {
+  appearance: none;
+  -webkit-appearance: none;
+
+  min-height: 26px !important;
+
+  margin: 0;
+  padding: 3px 1px 4px !important;
+
+  border: 0 !important;
+
+  border-bottom:
+    1px solid
+    rgba(137, 109, 69, .26) !important;
+
+  border-radius: 0 !important;
+
+  color:
+    rgba(81, 73, 61, .76) !important;
+
+  background:
+    transparent !important;
+
+  box-shadow:
+    none !important;
+
+  font:
+    .54rem/1.1
+    var(--font-meta);
+
+  cursor: pointer;
+}
+
+.collection-utility-row {
+  display: flex;
+
+  gap: 16px;
+
+  align-items: center;
+
+  margin-top: 8px;
+}
+
+.collection-new-toggle,
+.collection-manage-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+
+  min-height: 27px;
+
+  margin: 0;
+  padding: 3px 0;
+
+  border: 0 !important;
+  border-bottom: 0 !important;
+
+  color:
+    rgba(83, 96, 78, .67);
+
+  background:
+    transparent !important;
+
+  box-shadow:
+    none !important;
+
+  font:
+    .51rem/1.2
+    var(--font-meta);
+
+  text-decoration: none !important;
+
+  cursor: pointer;
+}
+
+.collection-remove {
+  margin-left: 2px !important;
+
+  color:
+    rgba(122, 79, 63, .56) !important;
+}
+
+.collection-picker-new {
+  margin-top: 8px !important;
+}
+
+
+/* manager stays hidden until requested */
+
+.collection-manager {
+  margin-top: 8px;
+
+  border-top:
+    1px solid
+    rgba(116, 93, 71, .08);
+}
+
+.collection-manager-row {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 12px;
+
+  min-height: 34px;
+
+  border-bottom:
+    1px solid
+    rgba(116, 93, 71, .07);
+}
+
+.collection-manager-name {
+  min-width: 0;
+
+  overflow-wrap: anywhere;
+
+  color:
+    rgba(52, 46, 39, .72);
+
+  font:
+    .55rem/1.25
+    var(--font-meta);
+}
+
+.collection-manager-delete {
+  appearance: none;
+  -webkit-appearance: none;
+
+  flex: 0 0 auto;
+
+  min-height: 27px;
+
+  padding: 3px 0;
+
+  border: 0 !important;
+
+  color:
+    rgba(122, 79, 63, .58);
+
+  background:
+    transparent !important;
+
+  box-shadow:
+    none !important;
+
+  font:
+    .49rem/1.2
+    var(--font-meta);
+
+  cursor: pointer;
+}
+
+
+/*
+  Resting Collection value remains plain paper text.
+*/
+
+.collection-current-value {
+  color: var(--ink);
+
+  background: transparent !important;
+
+  border: 0 !important;
+
+  box-shadow: none !important;
+}
+
+@media (hover: hover) {
+  .collection-choice:hover {
+    border-bottom-color:
+      rgba(137, 109, 69, .46) !important;
+
+    background:
+      transparent !important;
+  }
+
+  .collection-manager-delete:hover {
+    color:
+      rgba(122, 79, 63, .9);
+  }
+}
+
+/* COMPACT COLLECTION V3 END */
+
+/* PAPER INDEX TERMS V2 BEGIN */
+
+/*
+  Index Terms belong to the archive paper,
+  not to a modern chip UI.
+
+  CURRENT:
+    darker underline + removable ×
+
+  AVAILABLE:
+    quieter sage underline, click to attach
+*/
+
+.tag-current-chip,
+.tag-available-chip {
+  appearance: none;
+  -webkit-appearance: none;
+
+  min-height: 26px !important;
+
+  margin: 0;
+
+  padding:
+    3px 2px 4px !important;
+
+  border:
+    0 !important;
+
+  border-radius:
+    0 !important;
+
+  background:
+    transparent !important;
+
+  box-shadow:
+    none !important;
+
+  font:
+    .54rem/1.1
+    var(--font-meta);
+
+  cursor:
+    pointer;
+}
+
+
+/* Current term */
+
+.tag-current-chip {
+  display:
+    inline-flex;
+
+  align-items:
+    center;
+
+  gap:
+    5px;
+
+  color:
+    rgba(81, 73, 61, .80) !important;
+
+  border-bottom:
+    1px solid
+    rgba(137, 109, 69, .30) !important;
+}
+
+.tag-chip-remove {
+  margin-left:
+    1px;
+
+  opacity:
+    .38;
+
+  font-size:
+    .66rem;
+
+  line-height:
+    1;
+}
+
+
+/* Available term */
+
+.tag-available-chip {
+  color:
+    rgba(83, 96, 78, .70) !important;
+
+  border-bottom:
+    1px solid
+    rgba(83, 96, 78, .24) !important;
+}
+
+
+/* Give lists the feeling of handwritten index terms */
+
+.tag-picker-current,
+.tag-picker-available {
+  gap:
+    7px 14px !important;
+
+  align-items:
+    flex-start;
+}
+
+
+@media (hover: hover) {
+  .tag-current-chip:hover {
+    color:
+      rgba(81, 73, 61, .96) !important;
+
+    border-bottom-color:
+      rgba(137, 109, 69, .48) !important;
+  }
+
+  .tag-available-chip:hover {
+    color:
+      rgba(83, 96, 78, .94) !important;
+
+    border-bottom-color:
+      rgba(83, 96, 78, .46) !important;
+
+    background:
+      transparent !important;
+  }
+}
+
+
+@media (max-width: 430px) {
+  .tag-current-chip,
+  .tag-available-chip {
+    min-height:
+      27px !important;
+  }
+}
+
+/* PAPER INDEX TERMS V2 END */
+
+/* RECORD RECEIPT POLISH V2 BEGIN */
+
+/*
+  Aqi Drawer · Item Record
+
+  Advanced typography pass:
+  - one metadata label rail
+  - one content rail
+  - one quiet action rail
+  - tighter receipt rhythm
+  - no changes to data or interaction logic
+*/
+
+
+/* ==========================================
+   PAPER HEADER
+========================================== */
+
+.item-record .record-heading {
+  margin-bottom: 0 !important;
+  padding-bottom: 9px !important;
+}
+
+.item-record .record-kicker {
+  margin-bottom: 3px !important;
+}
+
+.item-record .record-title {
+  line-height: 1.12 !important;
+}
+
+.item-record .record-count {
+  bottom: 11px !important;
+}
+
+
+/* ==========================================
+   CURRENT INDEX
+========================================== */
+
+.item-record .record-index {
+  padding-top: 9px !important;
+}
+
+.item-record .record-section-title {
+  margin: 0 0 7px !important;
+
+  color:
+    rgba(91, 78, 63, .60);
+
+  font:
+    .49rem/1.15
+    var(--font-meta) !important;
+
+  letter-spacing:
+    .145em !important;
+}
+
+
+/* ==========================================
+   COMMON RECEIPT GRID
+========================================== */
+
+.item-record .record-field,
+.item-record .record-collection-field,
+.item-record .record-tags-field {
+  grid-template-columns:
+    82px minmax(0, 1fr) !important;
+
+  column-gap:
+    9px !important;
+}
+
+
+/* ------------------------------------------
+   Read-only source row
+------------------------------------------ */
+
+.item-record .record-field {
+  display: grid !important;
+
+  align-items: baseline !important;
+
+  padding:
+    5px 0 6px !important;
+}
+
+.item-record .record-field-label {
+  padding: 0 !important;
+
+  color:
+    rgba(91, 78, 63, .54);
+
+  font:
+    .49rem/1.2
+    var(--font-meta) !important;
+
+  letter-spacing:
+    .08em !important;
+}
+
+.item-record .record-field-value {
+  padding: 0 !important;
+
+  font:
+    .64rem/1.35
+    var(--font-meta) !important;
+}
+
+
+/* ==========================================
+   METADATA FORM
+========================================== */
+
+.item-record .metadata-form {
+  margin-top:
+    1px !important;
+}
+
+.item-record .record-collection-field,
+.item-record .record-tags-field {
+  display: grid !important;
+
+  row-gap:
+    2px !important;
+
+  align-items:
+    baseline !important;
+
+  margin:
+    0 !important;
+
+  padding:
+    5px 0 6px !important;
+
+  border:
+    0 !important;
+}
+
+
+/* left label rail */
+
+.item-record
+.record-collection-field
+> span:first-child,
+.item-record
+.record-tags-field
+> span:first-child {
+  grid-column:
+    1 !important;
+
+  grid-row:
+    1 !important;
+
+  align-self:
+    baseline;
+
+  margin:
+    0 !important;
+
+  padding:
+    0 !important;
+
+  color:
+    rgba(91, 78, 63, .54);
+
+  font:
+    .49rem/1.2
+    var(--font-meta) !important;
+
+  letter-spacing:
+    .08em !important;
+}
+
+
+/* right content rail */
+
+.item-record .collection-current,
+.item-record .tag-picker-summary,
+.item-record .collection-picker-available,
+.item-record .tag-picker-available,
+.item-record .collection-utility-row,
+.item-record .collection-picker-new,
+.item-record .tag-picker-new,
+.item-record .collection-manager,
+.item-record .tag-manager,
+.item-record .tag-manage-toggle {
+  grid-column:
+    2 !important;
+}
+
+
+/* ==========================================
+   RESTING COLLECTION
+========================================== */
+
+.item-record .collection-current {
+  display:
+    grid !important;
+
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+
+  gap:
+    10px !important;
+
+  align-items:
+    baseline !important;
+
+  min-height:
+    22px !important;
+
+  margin:
+    0 !important;
+}
+
+.item-record .collection-current-value {
+  align-self:
+    baseline;
+
+  font:
+    .64rem/1.3
+    var(--font-meta) !important;
+}
+
+.item-record .collection-actions {
+  display:
+    flex !important;
+
+  align-items:
+    baseline !important;
+
+  gap:
+    9px !important;
+
+  white-space:
+    nowrap;
+}
+
+
+/* ==========================================
+   RESTING INDEX TERMS
+========================================== */
+
+.item-record .tag-picker-summary {
+  display:
+    grid !important;
+
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+
+  column-gap:
+    10px !important;
+
+  align-items:
+    baseline !important;
+
+  min-height:
+    22px !important;
+
+  margin:
+    0 !important;
+}
+
+.item-record .tag-picker-current {
+  display:
+    flex !important;
+
+  flex-wrap:
+    wrap;
+
+  align-items:
+    baseline !important;
+
+  gap:
+    4px 12px !important;
+
+  min-width:
+    0;
+
+  margin:
+    0 !important;
+}
+
+.item-record .tag-current-chip,
+.item-record .tag-available-chip,
+.item-record .collection-choice {
+  min-height:
+    21px !important;
+
+  padding:
+    1px 1px 3px !important;
+
+  font:
+    .50rem/1.1
+    var(--font-meta) !important;
+}
+
+.item-record .tag-chip-remove {
+  margin-left:
+    2px !important;
+
+  font-size:
+    .60rem !important;
+
+  vertical-align:
+    baseline;
+}
+
+
+/* ==========================================
+   QUIET ACTION TYPOGRAPHY
+========================================== */
+
+.item-record .collection-edit-toggle,
+.item-record .collection-remove,
+.item-record .collection-new-toggle,
+.item-record .collection-manage-toggle,
+.item-record .tag-edit-toggle,
+.item-record .tag-manage-toggle,
+.item-record .collection-manager-delete,
+.item-record .tag-manager-delete {
+  min-height:
+    21px !important;
+
+  margin:
+    0 !important;
+
+  padding:
+    1px 0 2px !important;
+
+  border:
+    0 !important;
+
+  border-bottom:
+    0 !important;
+
+  background:
+    transparent !important;
+
+  box-shadow:
+    none !important;
+
+  font:
+    .47rem/1.15
+    var(--font-meta) !important;
+
+  letter-spacing:
+    .01em !important;
+
+  vertical-align:
+    baseline;
+}
+
+
+/* ==========================================
+   EXPANDED COLLECTION / TAG EDITORS
+========================================== */
+
+.item-record .collection-picker-available,
+.item-record .tag-picker-available {
+  align-items:
+    baseline !important;
+
+  gap:
+    4px 12px !important;
+
+  margin:
+    3px 0 3px !important;
+}
+
+.item-record .collection-utility-row {
+  align-items:
+    baseline !important;
+
+  gap:
+    12px !important;
+
+  margin:
+    1px 0 2px !important;
+}
+
+.item-record .collection-picker-new,
+.item-record .tag-picker-new {
+  margin:
+    3px 0 2px !important;
+
+  gap:
+    6px !important;
+}
+
+
+/*
+  NEVER set font-size here.
+  Mobile input stability still owns its 16px rule.
+*/
+
+.item-record .collection-new-input,
+.item-record .tag-picker-new input {
+  min-height:
+    32px !important;
+
+  padding:
+    4px 7px !important;
+}
+
+.item-record .collection-picker-add,
+.item-record .tag-picker-add {
+  width:
+    27px !important;
+
+  height:
+    27px !important;
+
+  min-height:
+    27px !important;
+}
+
+
+/* ==========================================
+   MANAGERS
+========================================== */
+
+.item-record .collection-manager,
+.item-record .tag-manager {
+  margin-top:
+    4px !important;
+}
+
+.item-record .collection-manager-row,
+.item-record .tag-manager-row {
+  min-height:
+    28px !important;
+}
+
+
+/* ==========================================
+   SAVE ACTION
+========================================== */
+
+.item-record .metadata-actions {
+  display:
+    flex !important;
+
+  justify-content:
+    flex-end !important;
+
+  align-items:
+    baseline;
+
+  margin:
+    1px 0 0 91px !important;
+
+  padding:
+    1px 0 5px !important;
+}
+
+.item-record
+.metadata-actions
+.record-action {
+  min-height:
+    22px !important;
+
+  margin:
+    0 !important;
+
+  padding:
+    2px 0 3px !important;
+
+  font:
+    .52rem/1.15
+    var(--font-meta) !important;
+}
+
+
+/*
+  Empty feedback = zero visual space.
+*/
+
+.item-record .metadata-feedback:empty {
+  display:
+    none !important;
+}
+
+.item-record .metadata-feedback:not(:empty) {
+  margin:
+    2px 0 3px 91px !important;
+
+  min-height:
+    0 !important;
+
+  font:
+    .49rem/1.3
+    var(--font-meta) !important;
+}
+
+
+/* ==========================================
+   LIVING RECORD
+========================================== */
+
+.item-record .activity-ledger {
+  padding-top:
+    7px !important;
+}
+
+.item-record .activity-list {
+  margin-top:
+    0 !important;
+}
+
+.item-record .activity-list li {
+  grid-template-columns:
+    104px minmax(0, 1fr) !important;
+
+  gap:
+    10px !important;
+
+  align-items:
+    baseline;
+
+  padding:
+    5px 0 !important;
+}
+
+.item-record .activity-time {
+  font:
+    .48rem/1.25
+    var(--font-meta) !important;
+
+  letter-spacing:
+    .025em !important;
+}
+
+.item-record .activity-event {
+  font:
+    .56rem/1.3
+    var(--font-meta) !important;
+
+  letter-spacing:
+    .02em !important;
+}
+
+
+/* ==========================================
+   TOUCH / TAP POLISH
+========================================== */
+
+/*
+  Kill Safari's blue/grey tap flash on Drawer controls.
+  Text inputs are intentionally excluded.
+*/
+
+button,
+a,
+[role="button"],
+summary {
+  -webkit-tap-highlight-color:
+    transparent;
+
+  touch-action:
+    manipulation;
+}
+
+
+/*
+  Buttons should not enter text-selection mode on touch.
+*/
+
+button,
+[role="button"],
+summary {
+  -webkit-user-select:
+    none;
+
+  user-select:
+    none;
+
+  -webkit-touch-callout:
+    none;
+}
+
+
+/*
+  Mouse/keyboard still gets a quiet focus treatment.
+*/
+
+.item-record button:focus {
+  outline:
+    none;
+}
+
+.item-record button:focus-visible {
+  outline:
+    1px solid
+    rgba(137, 112, 73, .34);
+
+  outline-offset:
+    2px;
+}
+
+
+/*
+  Mobile Safari sometimes treats a tap as focus-visible.
+  On coarse touch pointers, keep feedback typographic
+  instead of drawing a rectangular focus box.
+*/
+
+@media (hover: none) and (pointer: coarse) {
+  .item-record button:focus,
+  .item-record button:focus-visible,
+  .cabinet-drawer:focus,
+  .cabinet-drawer:focus-visible,
+  .item-button:focus,
+  .item-button:focus-visible,
+  .inspect-side-tab:focus,
+  .inspect-side-tab:focus-visible {
+    outline:
+      none !important;
+  }
+}
+
+
+/* ==========================================
+   MOBILE RECEIPT GRID
+========================================== */
+
+@media (max-width: 430px) {
+  .item-record .record-field,
+  .item-record .record-collection-field,
+  .item-record .record-tags-field {
+    grid-template-columns:
+      80px minmax(0, 1fr) !important;
+
+    column-gap:
+      8px !important;
+  }
+
+  .item-record .metadata-actions {
+    margin-left:
+      88px !important;
+  }
+
+  .item-record
+  .metadata-feedback:not(:empty) {
+    margin-left:
+      88px !important;
+  }
+
+  .item-record .activity-list li {
+    grid-template-columns:
+      106px minmax(0, 1fr) !important;
+  }
+}
+
+/* RECORD RECEIPT POLISH V2 END */
+
+/* RECEIPT INPUT + CONFIRM POLISH V1 BEGIN */
+
+
+/* =========================================
+   EXPANDED INPUT ROW ALIGNMENT
+========================================= */
+
+/*
+  Collection and Tag editors share exactly
+  the same geometry.
+
+  Font-size is deliberately NOT specified:
+  iPhone 16px stability remains untouched.
+*/
+
+.item-record .collection-picker-new,
+.item-record .tag-picker-new {
+  display: grid !important;
+
+  grid-template-columns:
+    minmax(0, 1fr) 32px !important;
+
+  gap:
+    7px !important;
+
+  align-items:
+    stretch !important;
+
+  width:
+    100% !important;
+
+  margin:
+    4px 0 3px !important;
+}
+
+.item-record .collection-new-input,
+.item-record .tag-picker-new input {
+  appearance:
+    none;
+
+  -webkit-appearance:
+    none;
+
+  display:
+    block;
+
+  box-sizing:
+    border-box;
+
+  width:
+    100% !important;
+
+  height:
+    32px !important;
+
+  min-height:
+    32px !important;
+
+  margin:
+    0 !important;
+
+  padding:
+    4px 8px !important;
+
+  border:
+    1px solid
+    rgba(116, 93, 71, .12) !important;
+
+  border-radius:
+    1px !important;
+
+  outline:
+    none !important;
+
+  color:
+    var(--ink);
+
+  background:
+    rgba(255,255,255,.10) !important;
+
+  box-shadow:
+    none !important;
+
+  font-family:
+    var(--font-meta);
+
+  font-weight:
+    400;
+}
+
+.item-record .collection-new-input:focus,
+.item-record .tag-picker-new input:focus,
+.item-record .collection-new-input:focus-visible,
+.item-record .tag-picker-new input:focus-visible {
+  border-color:
+    rgba(137, 109, 69, .34) !important;
+
+  outline:
+    none !important;
+
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(137, 109, 69, .08) !important;
+}
+
+.item-record .collection-new-input::placeholder,
+.item-record .tag-picker-new input::placeholder {
+  color:
+    rgba(91, 78, 63, .42);
+
+  opacity:
+    1;
+}
+
+.item-record .collection-picker-add,
+.item-record .tag-picker-add {
+  box-sizing:
+    border-box;
+
+  width:
+    32px !important;
+
+  height:
+    32px !important;
+
+  min-height:
+    32px !important;
+
+  margin:
+    0 !important;
+
+  padding:
+    0 !important;
+
+  align-self:
+    stretch;
+
+  border:
+    1px solid
+    rgba(137, 109, 69, .18) !important;
+
+  border-radius:
+    1px !important;
+
+  background:
+    rgba(232, 222, 205, .28) !important;
+
+  box-shadow:
+    none !important;
+}
+
+
+/* =========================================
+   DRAWER CONFIRM SLIP
+========================================= */
+
+.drawer-confirm-dialog {
+  width:
+    100%;
+
+  max-width:
+    none;
+
+  height:
+    100%;
+
+  max-height:
+    none;
+
+  margin:
+    0;
+
+  padding:
+    18px;
+
+  border:
+    0;
+
+  background:
+    transparent;
+
+  color:
+    var(--ink);
+}
+
+.drawer-confirm-dialog[open] {
+  display:
+    grid;
+
+  place-items:
+    center;
+}
+
+.drawer-confirm-dialog::backdrop {
+  background:
+    rgba(52, 46, 39, .20);
+
+  backdrop-filter:
+    blur(1px);
+
+  -webkit-backdrop-filter:
+    blur(1px);
+}
+
+.drawer-confirm-sheet {
+  width:
+    min(82vw, 304px);
+
+  padding:
+    18px 19px 16px;
+
+  border:
+    1px solid
+    rgba(116, 93, 71, .13);
+
+  border-radius:
+    1px;
+
+  background:
+    var(--paper-record, #f4eedf);
+
+  box-shadow:
+    3px 5px 0
+      rgba(74, 58, 43, .06),
+    0 14px 34px
+      rgba(47, 33, 26, .14);
+}
+
+.drawer-confirm-heading {
+  padding-bottom:
+    10px;
+
+  border-bottom:
+    1px solid
+    rgba(116, 93, 71, .12);
+}
+
+.drawer-confirm-kicker {
+  display:
+    block;
+
+  margin-bottom:
+    4px;
+
+  color:
+    rgba(91, 78, 63, .56);
+
+  font:
+    .49rem/1.15
+    var(--font-meta);
+
+  letter-spacing:
+    .15em;
+}
+
+.drawer-confirm-title {
+  margin:
+    0;
+
+  color:
+    var(--ink);
+
+  font:
+    500 .92rem/1.25
+    var(--font-paper-heading);
+
+  letter-spacing:
+    .015em;
+}
+
+.drawer-confirm-message {
+  margin:
+    14px 0 16px;
+
+  color:
+    rgba(52, 46, 39, .78);
+
+  font:
+    .64rem/1.55
+    var(--font-body);
+
+  overflow-wrap:
+    anywhere;
+}
+
+.drawer-confirm-actions {
+  display:
+    flex;
+
+  justify-content:
+    flex-end;
+
+  align-items:
+    baseline;
+
+  gap:
+    18px;
+}
+
+.drawer-confirm-cancel,
+.drawer-confirm-submit {
+  appearance:
+    none;
+
+  -webkit-appearance:
+    none;
+
+  min-height:
+    30px;
+
+  margin:
+    0;
+
+  padding:
+    4px 0;
+
+  border:
+    0;
+
+  border-bottom:
+    1px solid
+    rgba(83, 96, 78, .28);
+
+  border-radius:
+    0;
+
+  background:
+    transparent;
+
+  box-shadow:
+    none;
+
+  color:
+    rgba(83, 96, 78, .76);
+
+  font:
+    .57rem/1.2
+    var(--font-meta);
+
+  cursor:
+    pointer;
+
+  -webkit-tap-highlight-color:
+    transparent;
+}
+
+.drawer-confirm-submit.is-destructive {
+  color:
+    rgba(122, 79, 63, .82);
+
+  border-bottom-color:
+    rgba(122, 79, 63, .30);
+}
+
+.drawer-confirm-cancel:focus,
+.drawer-confirm-submit:focus {
+  outline:
+    none;
+}
+
+.drawer-confirm-cancel:focus-visible,
+.drawer-confirm-submit:focus-visible {
+  outline:
+    1px solid
+    rgba(137, 112, 73, .32);
+
+  outline-offset:
+    3px;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .drawer-confirm-cancel:focus,
+  .drawer-confirm-cancel:focus-visible,
+  .drawer-confirm-submit:focus,
+  .drawer-confirm-submit:focus-visible {
+    outline:
+      none !important;
+  }
+}
+
+
+/* =========================================
+   MOBILE SAFE AREA
+========================================= */
+
+@media (max-width: 430px) {
+  .drawer-confirm-dialog {
+    padding:
+      max(18px, env(safe-area-inset-top))
+      18px
+      max(18px, env(safe-area-inset-bottom));
+  }
+
+  .drawer-confirm-sheet {
+    width:
+      min(86vw, 304px);
+  }
+}
+
+/* RECEIPT INPUT + CONFIRM POLISH V1 END */
+
+/* DISCLOSURE STATE AUTHORITY V1 BEGIN */
+
+/*
+  JS owns progressive disclosure.
+  Nothing in later layout/polish layers may override [hidden].
+*/
+
+.item-record .collection-picker-available[hidden],
+.item-record .tag-picker-available[hidden],
+.item-record .collection-utility-row[hidden],
+.item-record .collection-picker-new[hidden],
+.item-record .tag-picker-new[hidden],
+.item-record .collection-manager[hidden],
+.item-record .tag-manager[hidden],
+.item-record .tag-manage-toggle[hidden],
+.item-record .collection-remove[hidden] {
+  display: none !important;
+}
+
+/* DISCLOSURE STATE AUTHORITY V1 END */
+
+/* RECEIPT UNIFIED POLISH V4 BEGIN */
+
+/*
+  ITEM RECORD
+  Static receipt = one typography system.
+
+  SOURCE / COLLECTION / INDEX TERMS:
+  - same label type
+  - same value type
+  - same color
+  - same baseline
+
+  Editors live in a separate stack below the static row,
+  so opening them never moves the field heading/value row.
+*/
+
+
+/* ==========================================
+   ONE RECEIPT GRID
+========================================== */
+
+.item-record .record-field,
+.item-record .record-collection-field,
+.item-record .record-tags-field {
+  grid-template-columns:
+    82px minmax(0, 1fr) !important;
+
+  column-gap:
+    9px !important;
+}
+
+
+/* ==========================================
+   ONE LABEL STYLE
+========================================== */
+
+.item-record .record-field-label,
+.item-record
+.record-collection-field
+> span:first-child,
+.item-record
+.record-tags-field
+> span:first-child {
+  margin:
+    0 !important;
+
+  padding:
+    0 !important;
+
+  color:
+    rgba(91, 78, 63, .56) !important;
+
+  font:
+    .49rem/1.25
+    var(--font-meta) !important;
+
+  letter-spacing:
+    .08em !important;
+
+  align-self:
+    baseline !important;
+}
+
+
+/* ==========================================
+   ONE VALUE STYLE
+========================================== */
+
+.item-record .record-field-value,
+.item-record .collection-current-value,
+.item-record
+.record-tags-field:not(.is-editing)
+.tag-current-chip {
+  color:
+    rgba(52, 46, 39, .84) !important;
+
+  font:
+    .64rem/1.35
+    var(--font-meta) !important;
+
+  font-weight:
+    400 !important;
+
+  letter-spacing:
+    0 !important;
+}
+
+
+/* SOURCE should be plain receipt text */
+
+.item-record
+.record-index
+> .record-field {
+  border-bottom:
+    0 !important;
+}
+
+
+/* ==========================================
+   FIXED STATIC ROWS
+========================================== */
+
+.item-record .record-collection-field,
+.item-record .record-tags-field {
+  display:
+    grid !important;
+
+  align-items:
+    baseline !important;
+
+  row-gap:
+    0 !important;
+
+  padding:
+    4px 0 5px !important;
+
+  margin:
+    0 !important;
+
+  border:
+    0 !important;
+}
+
+
+/*
+  Label and static content are permanently row 1.
+*/
+
+.item-record
+.record-collection-field
+> span:first-child,
+.item-record
+.record-tags-field
+> span:first-child {
+  grid-column:
+    1 !important;
+
+  grid-row:
+    1 !important;
+}
+
+.item-record .collection-current,
+.item-record .tag-picker-summary {
+  grid-column:
+    2 !important;
+
+  grid-row:
+    1 !important;
+
+  align-self:
+    baseline !important;
+}
+
+
+/*
+  Editors get their own second row.
+  They may grow downward as much as necessary
+  without moving the static row above.
+*/
+
+.item-record .collection-editor-stack,
+.item-record .tag-editor-stack {
+  grid-column:
+    2 !important;
+
+  grid-row:
+    2 !important;
+
+  display:
+    grid;
+
+  grid-template-columns:
+    minmax(0, 1fr);
+
+  min-width:
+    0;
+
+  row-gap:
+    2px;
+
+  margin:
+    2px 0 0;
+}
+
+
+/*
+  Old selectors gave children grid-column:2.
+  Inside the new editor stack they must return to column 1.
+*/
+
+.item-record
+.collection-editor-stack
+> *,
+.item-record
+.tag-editor-stack
+> * {
+  grid-column:
+    1 !important;
+
+  grid-row:
+    auto !important;
+}
+
+
+/* ==========================================
+   COLLECTION STATIC ROW
+========================================== */
+
+.item-record .collection-current {
+  display:
+    grid !important;
+
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+
+  column-gap:
+    10px !important;
+
+  min-height:
+    21px !important;
+
+  margin:
+    0 !important;
+}
+
+.item-record .collection-current-value {
+  align-self:
+    baseline !important;
+}
+
+.item-record .collection-actions {
+  align-self:
+    baseline !important;
+}
+
+
+/* ==========================================
+   TAG STATIC ROW
+========================================== */
+
+.item-record .tag-picker-summary {
+  display:
+    grid !important;
+
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+
+  column-gap:
+    10px !important;
+
+  min-height:
+    21px !important;
+
+  margin:
+    0 !important;
+}
+
+.item-record .tag-picker-current {
+  display:
+    flex !important;
+
+  flex-wrap:
+    wrap;
+
+  align-items:
+    baseline !important;
+
+  gap:
+    3px 12px !important;
+
+  min-width:
+    0;
+
+  margin:
+    0 !important;
+}
+
+
+/*
+  RESTING TAGS:
+  look exactly like ordinary receipt values.
+*/
+
+.item-record
+.record-tags-field:not(.is-editing)
+.tag-current-chip {
+  min-height:
+    auto !important;
+
+  margin:
+    0 !important;
+
+  padding:
+    0 !important;
+
+  border:
+    0 !important;
+
+  border-bottom:
+    0 !important;
+
+  border-radius:
+    0 !important;
+
+  background:
+    transparent !important;
+
+  box-shadow:
+    none !important;
+
+  cursor:
+    default;
+}
+
+.item-record
+.record-tags-field:not(.is-editing)
+.tag-chip-remove {
+  display:
+    none !important;
+}
+
+
+/*
+  EDITING TAGS:
+  only then reveal editing language.
+*/
+
+.item-record
+.record-tags-field.is-editing
+.tag-current-chip {
+  min-height:
+    22px !important;
+
+  padding:
+    1px 1px 3px !important;
+
+  color:
+    rgba(52, 46, 39, .78) !important;
+
+  font:
+    .54rem/1.15
+    var(--font-meta) !important;
+
+  border:
+    0 !important;
+
+  border-bottom:
+    1px solid
+    rgba(137, 109, 69, .28) !important;
+
+  background:
+    transparent !important;
+}
+
+.item-record
+.record-tags-field.is-editing
+.tag-chip-remove {
+  display:
+    inline !important;
+}
+
+
+/* ==========================================
+   ONE ACTION STYLE
+========================================== */
+
+.item-record .collection-edit-toggle,
+.item-record .tag-edit-toggle,
+.item-record .collection-remove,
+.item-record .collection-new-toggle,
+.item-record .collection-manage-toggle,
+.item-record .tag-manage-toggle,
+.item-record .metadata-actions .record-action {
+  color:
+    rgba(83, 96, 78, .62) !important;
+
+  font:
+    .47rem/1.2
+    var(--font-meta) !important;
+
+  font-weight:
+    400 !important;
+
+  letter-spacing:
+    .01em !important;
+}
+
+
+/*
+  Save is still actionable, but not a different
+  typography system.
+*/
+
+.item-record
+.metadata-actions
+.record-action {
+  border-bottom-color:
+    rgba(83, 96, 78, .28) !important;
+}
+
+
+/* ==========================================
+   EDITOR STACK RHYTHM
+========================================== */
+
+.item-record .collection-picker-available,
+.item-record .tag-picker-available {
+  margin:
+    4px 0 2px !important;
+}
+
+.item-record .collection-utility-row {
+  margin:
+    1px 0 2px !important;
+}
+
+.item-record .collection-picker-new,
+.item-record .tag-picker-new {
+  margin:
+    3px 0 2px !important;
+}
+
+.item-record .collection-manager,
+.item-record .tag-manager {
+  margin-top:
+    4px !important;
+}
+
+
+/*
+  Hidden always wins.
+*/
+
+.item-record
+.collection-editor-stack
+[hidden],
+.item-record
+.tag-editor-stack
+[hidden] {
+  display:
+    none !important;
+}
+
+
+/* ==========================================
+   INDEX → SAVE → LIVING RECORD
+========================================== */
+
+.item-record .metadata-actions {
+  margin-top:
+    2px !important;
+
+  padding-bottom:
+    3px !important;
+}
+
+.item-record .activity-ledger {
+  padding-top:
+    6px !important;
+}
+
+
+/* ==========================================
+   MOBILE
+========================================== */
+
+@media (max-width: 430px) {
+  .item-record .record-field,
+  .item-record .record-collection-field,
+  .item-record .record-tags-field {
+    grid-template-columns:
+      80px minmax(0, 1fr) !important;
+
+    column-gap:
+      8px !important;
+  }
+}
+
+/* TAG METRIC LOCK V2 BEGIN */
+
+/*
+  INDEX TERMS static row must never reflow when entering
+  Add / Manage mode.
+
+  Same typography.
+  Same chip box.
+  Same reserved × width.
+  Same action-column width.
+
+  Editing state changes only visibility + underline.
+*/
+
+
+/* One Tag typography everywhere */
+
+.item-record
+.record-tags-field
+.tag-current-chip,
+
+.item-record
+.record-tags-field
+.tag-available-chip,
+
+.item-record
+.record-tags-field
+.tag-manager-name {
+  color:
+    rgba(52, 46, 39, .84) !important;
+
+  font:
+    .64rem/1.35
+    var(--font-meta) !important;
+
+  font-weight:
+    400 !important;
+
+  letter-spacing:
+    0 !important;
+}
+
+
+/* Current Tag owns one immutable box */
+
+.item-record
+.record-tags-field
+.tag-current-chip {
+  box-sizing:
+    border-box;
+
+  display:
+    inline-flex !important;
+
+  align-items:
+    baseline !important;
+
+  min-height:
+    22px !important;
+
+  margin:
+    0 !important;
+
+  padding:
+    0 1px 2px !important;
+
+  border:
+    0 !important;
+
+  /*
+    Transparent while resting.
+    Visible while editing.
+    Same 1px always occupies layout space.
+  */
+  border-bottom:
+    1px solid
+    transparent !important;
+
+  border-radius:
+    0 !important;
+
+  background:
+    transparent !important;
+
+  box-shadow:
+    none !important;
+}
+
+
+/*
+  Reserve the × even while resting.
+  Do NOT display:none it, otherwise the chip width changes.
+*/
+
+.item-record
+.record-tags-field
+.tag-chip-remove {
+  display:
+    inline-block !important;
+
+  flex:
+    0 0 auto;
+
+  width:
+    .72em;
+
+  margin-left:
+    3px !important;
+
+  font:
+    .62rem/1
+    var(--font-meta) !important;
+
+  text-align:
+    center;
+
+  visibility:
+    hidden;
+
+  opacity:
+    0;
+
+  pointer-events:
+    none;
+}
+
+
+/* Editing reveals affordances without changing metrics */
+
+.item-record
+.record-tags-field.is-editing
+.tag-current-chip {
+  border-bottom-color:
+    rgba(137, 109, 69, .28) !important;
+}
+
+.item-record
+.record-tags-field.is-editing
+.tag-chip-remove {
+  visibility:
+    visible;
+
+  opacity:
+    .38;
+
+  pointer-events:
+    auto;
+}
+
+
+/*
+  + 添加 and 完成 must occupy the same action rail.
+  Otherwise CSS grid subtly changes width.
+*/
+
+.item-record
+.record-tags-field
+.tag-edit-toggle {
+  box-sizing:
+    border-box;
+
+  width:
+    46px !important;
+
+  min-width:
+    46px !important;
+
+  max-width:
+    46px !important;
+
+  text-align:
+    right;
+
+  white-space:
+    nowrap;
+}
+
+
+/*
+  Lock summary line metrics too.
+*/
+
+.item-record
+.record-tags-field
+.tag-picker-summary {
+  min-height:
+    22px !important;
+
+  align-items:
+    baseline !important;
+}
+
+.item-record
+.record-tags-field
+.tag-picker-current {
+  min-height:
+    22px;
+
+  align-items:
+    baseline !important;
+}
+
+
+/* TAG METRIC LOCK V2 END */
+
+/* RECEIPT UNIFIED POLISH V4 END */
+
+/* TAG TYPE FINAL V3 BEGIN */
+
+/*
+  Current Index terms have ONE immutable text metric.
+
+  Resting / Add / Manage:
+  same family
+  same size
+  same line-height
+  same weight
+  same color
+
+  Only × and underline communicate editability.
+*/
+
+.item-record
+.record-tags-field
+.tag-current-chip,
+
+.item-record
+.record-tags-field:not(.is-editing)
+.tag-current-chip,
+
+.item-record
+.record-tags-field.is-editing
+.tag-current-chip {
+  -webkit-appearance:
+    none !important;
+
+  appearance:
+    none !important;
+
+  color:
+    rgba(52, 46, 39, .84) !important;
+
+  font-family:
+    var(--font-meta) !important;
+
+  font-size:
+    .64rem !important;
+
+  line-height:
+    1.35 !important;
+
+  font-weight:
+    400 !important;
+
+  font-style:
+    normal !important;
+
+  letter-spacing:
+    0 !important;
+
+  font-variant-numeric:
+    normal !important;
+
+  text-transform:
+    none !important;
+}
+
+
+/*
+  Keep the chip's physical line box unchanged too.
+*/
+
+.item-record
+.record-tags-field
+.tag-current-chip {
+  min-height:
+    22px !important;
+
+  padding:
+    0 1px 2px !important;
+}
+
+
+/*
+  × is an editing mark, not part of the tag typography.
+*/
+
+.item-record
+.record-tags-field
+.tag-chip-remove {
+  font-family:
+    var(--font-meta) !important;
+
+  font-size:
+    .54rem !important;
+
+  line-height:
+    1 !important;
+
+  font-weight:
+    400 !important;
+}
+
+
+/*
+  Available terms use the same body size,
+  so the editor remains one typographic family.
+*/
+
+.item-record
+.record-tags-field
+.tag-available-chip,
+
+.item-record
+.record-tags-field
+.tag-manager-name {
+  font-family:
+    var(--font-meta) !important;
+
+  font-size:
+    .64rem !important;
+
+  line-height:
+    1.35 !important;
+
+  font-weight:
+    400 !important;
+
+  letter-spacing:
+    0 !important;
+}
+
+/* TAG TYPE FINAL V3 END */
+
+/* TRASH UI V1 BEGIN */
+
+/*
+  Legacy-only Trash presentation.
+
+  This is an isolated component layer,
+  not another override layer for Record /
+  Inspect / Notes. The React migration will
+  own the final art direction.
+*/
+
+.discard-tray {
+  position: relative;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+
+  align-items: center;
+
+  gap: 12px;
+
+  width:
+    min(82%, 340px);
+
+  min-height: 38px;
+
+  margin:
+    5px auto 1px;
+
+  padding:
+    8px 18px 7px;
+
+  appearance: none;
+
+  border:
+    1px solid
+    rgba(58, 40, 29, .26);
+
+  border-top-color:
+    rgba(244, 236, 221, .08);
+
+  border-radius: 1px;
+
+  background:
+    rgba(89, 61, 43, .92);
+
+  box-shadow:
+    inset 0 2px 3px
+    rgba(35, 23, 16, .16),
+    0 1px 1px
+    rgba(255, 248, 232, .08);
+
+  color:
+    rgba(244, 236, 221, .72);
+
+  font-family:
+    var(--font-meta);
+
+  cursor: pointer;
+
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.discard-tray.is-opening {
+  transform:
+    translateY(5px);
+
+  box-shadow:
+    inset 0 3px 5px
+    rgba(35, 23, 16, .2);
+}
+
+.discard-tray-label {
+  justify-self: start;
+
+  font-size: .58rem;
+
+  line-height: 1;
+
+  letter-spacing: .16em;
+
+  text-transform: uppercase;
+}
+
+.discard-tray-count {
+  min-width: 1.6em;
+
+  text-align: right;
+
+  font-size: .58rem;
+
+  line-height: 1;
+
+  letter-spacing: .08em;
+
+  font-variant-numeric:
+    tabular-nums;
+}
+
+.discard-tray-papers {
+  position: absolute;
+
+  top: -7px;
+  left: 18%;
+
+  width: 64%;
+  height: 9px;
+
+  opacity: 0;
+
+  pointer-events: none;
+
+  transition:
+    opacity 160ms ease;
+}
+
+.discard-tray.has-contents
+.discard-tray-papers {
+  opacity: 1;
+}
+
+.discard-tray-papers span {
+  position: absolute;
+
+  bottom: 0;
+
+  display: block;
+
+  height: 8px;
+
+  border:
+    1px solid
+    rgba(126, 104, 81, .14);
+
+  border-bottom: 0;
+
+  background:
+    #f0e7d7;
+
+  box-shadow:
+    0 1px 2px
+    rgba(53, 38, 29, .04);
+}
+
+.discard-tray-papers span:nth-child(1) {
+  left: 4%;
+  width: 54%;
+
+  transform:
+    rotate(-1.4deg);
+}
+
+.discard-tray-papers span:nth-child(2) {
+  right: 2%;
+  width: 48%;
+
+  transform:
+    rotate(1.1deg);
+}
+
+.discard-tray-papers span:nth-child(3) {
+  left: 30%;
+  width: 42%;
+  height: 6px;
+
+  background:
+    #e8decd;
+
+  transform:
+    rotate(-.4deg);
+}
+
+
+/* Normal archive → Trash */
+
+.item-secondary-actions {
+  grid-column:
+    1 / -1;
+
+  display: flex;
+
+  justify-content: flex-end;
+
+  width: 100%;
+
+  margin:
+    7px 0 1px;
+}
+
+.item-discard-action {
+  appearance: none;
+
+  padding:
+    3px 1px;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  color:
+    rgba(83, 96, 78, .66);
+
+  font-family:
+    var(--font-meta);
+
+  font-size: .62rem;
+
+  line-height: 1.25;
+
+  letter-spacing: .025em;
+
+  cursor: pointer;
+}
+
+.item-discard-action:hover {
+  color:
+    rgba(83, 96, 78, .92);
+}
+
+.item-discard-action:disabled {
+  opacity: .58;
+
+  cursor: default;
+}
+
+
+/* Trash interior */
+
+.trash-item-row {
+  display: block !important;
+
+  position: relative;
+
+  margin-bottom:
+    clamp(25px, 7vw, 42px);
+
+  opacity: .92;
+}
+
+.trash-paper {
+  width: 100%;
+
+  cursor: default !important;
+
+  filter:
+    saturate(.76)
+    contrast(.98);
+
+  transform:
+    rotate(-.24deg);
+
+  box-shadow:
+    1px 3px 9px
+    rgba(52, 40, 31, .055);
+}
+
+.trash-item-row:nth-child(3n + 2)
+.trash-paper {
+  transform:
+    rotate(.32deg);
+}
+
+.trash-item-row:nth-child(3n)
+.trash-paper {
+  transform:
+    rotate(-.11deg);
+}
+
+.trash-item-actions {
+  display: flex;
+
+  align-items: center;
+  justify-content: flex-end;
+
+  gap:
+    17px;
+
+  padding:
+    7px 4px 0;
+}
+
+.trash-action {
+  appearance: none;
+
+  padding:
+    4px 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  font-family:
+    var(--font-meta);
+
+  font-size: .64rem;
+
+  line-height: 1.25;
+
+  letter-spacing: .02em;
+
+  cursor: pointer;
+}
+
+.trash-restore {
+  color:
+    rgba(83, 96, 78, .9);
+}
+
+.trash-delete {
+  color:
+    rgba(112, 74, 62, .72);
+}
+
+.trash-action:disabled {
+  opacity: .52;
+
+  cursor: default;
+}
+
+
+/* Mobile stays quiet and tappable */
+
+@media (max-width: 520px) {
+  .discard-tray {
+    width: 84%;
+
+    min-height: 36px;
+
+    padding:
+      8px 15px 7px;
+  }
+
+  .trash-item-actions {
+    gap: 20px;
+
+    padding-top: 9px;
+  }
+
+  .trash-action,
+  .item-discard-action {
+    min-height: 30px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .discard-tray:focus,
+  .discard-tray:focus-visible,
+  .trash-action:focus,
+  .trash-action:focus-visible,
+  .item-discard-action:focus,
+  .item-discard-action:focus-visible {
+    outline:
+      none !important;
+  }
+}
+
+/* TRASH UI V1 END */
+
+/* TRASH ACTION POSITION FIX V1 BEGIN */
+
+.item-secondary-actions {
+  position: relative !important;
+  z-index: 30 !important;
+  clear: both !important;
+  isolation: isolate;
+}
+
+.item-discard-action {
+  position: relative !important;
+  z-index: 31 !important;
+}
+
+/* Trash restore / permanent-delete controls
+   must also sit above the discarded paper. */
+.trash-item-actions {
+  position: relative !important;
+  z-index: 30 !important;
+}
+
+/* TRASH ACTION POSITION FIX V1 END */
