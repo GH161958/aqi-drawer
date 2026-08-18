@@ -59,6 +59,9 @@ export function App() {
       {activeItemId ? (
         <InspectStage
           itemId={activeItemId}
+          originSlot={
+            activeSlot ?? 'all'
+          }
           onBack={returnToDrawer}
         />
       ) : activeSlot ? (

@@ -10,19 +10,41 @@ import {
   RecordPaper,
 } from '../record/RecordPaper'
 
+import {
+  FilingSlip,
+} from '../filing/FilingSlip'
+
+import type {
+  CabinetSlot,
+  PocketItemSummary,
+} from '../../types/pocket'
+
 import styles from './InspectStage.module.css'
 
 interface InspectStageProps {
   itemId: string
+  originSlot: CabinetSlot
   onBack: () => void
 }
 
 export function InspectStage({
   itemId,
+  originSlot,
   onBack,
 }: InspectStageProps) {
   const query =
     useInspectItem(itemId)
+
+  function handleFiled(
+    item: PocketItemSummary,
+  ) {
+    if (
+      originSlot !== 'all'
+      && originSlot !== item.status
+    ) {
+      onBack()
+    }
+  }
 
   return (
     <section
@@ -65,19 +87,36 @@ export function InspectStage({
       )}
 
       {query.data && (
-        <div className={styles.workspace}>
-          <div className={styles.recordLayer}>
-            <RecordPaper
-              item={query.data}
-            />
+        <>
+          <div className={styles.workspace}>
+            <div
+              className={
+                styles.recordLayer
+              }
+            >
+              <RecordPaper
+                item={query.data}
+              />
+            </div>
+
+            <div
+              className={
+                styles.originalLayer
+              }
+            >
+              <OriginalPaper
+                item={query.data}
+              />
+            </div>
           </div>
 
-          <div className={styles.originalLayer}>
-            <OriginalPaper
-              item={query.data}
-            />
-          </div>
-        </div>
+          <FilingSlip
+            item={query.data}
+            onFiled={
+              handleFiled
+            }
+          />
+        </>
       )}
     </section>
   )
