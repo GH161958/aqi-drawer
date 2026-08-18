@@ -1,14 +1,20 @@
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { canonicalizeUrl, inferSourceApp, isGenericSourceApp, normalizeIncomingShare } from './share-normalizer.js'
 
-const EMPTY_STORE = { schemaVersion: 1, updatedAt: null, items: [] }
+const EMPTY_STORE = {
+  schemaVersion: 1,
+  updatedAt: null,
+  items: [],
+  collections: [],
+  tags: [],
+}
 const STATUSES = new Set(['inbox', 'tonight', 'discussed', 'deferred', 'memory_candidate', 'archived'])
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000
 const MAX_XHS_IMAGES = 30
 const MAX_XHS_DOWNLOAD_BYTES = 80 * 1024 * 1024
-const ACTIVITY_TYPES = new Set(['received', 'seen_by_aqi', 'content_read', 'reply_added', 'status_changed', 'metadata_changed', 'source_refreshed'])
+const ACTIVITY_TYPES = new Set(['received', 'seen_by_aqi', 'content_read', 'reply_added', 'status_changed', 'metadata_changed', 'source_refreshed', 'trashed', 'restored'])
 
 export class PocketStore {
   constructor(dataDir) {
@@ -23,10 +29,47 @@ export class PocketStore {
     try {
       await readFile(this.filePath, 'utf8')
       const state = await this.#read()
+      let stateChanged = false
+
+      /*
+        Collection Registry V1 migration.
+
+        Existing Drawers used item.collection as the only
+        source of truth. Preserve all those names by folding
+        them into the new independent registry.
+      */
+      const migratedCollections = [
+        ...new Set([
+          ...(
+            Array.isArray(state.collections)
+              ? state.collections
+              : []
+          ),
+          ...state.items.map(
+            (item) => item.collection,
+          ),
+        ]
+          .map((value) => normalizeCollection(value))
+          .filter(Boolean)),
+      ].sort((a, b) => a.localeCompare(b))
+
+      if (
+        !Array.isArray(state.collections)
+        || JSON.stringify(state.collections)
+          !== JSON.stringify(migratedCollections)
+      ) {
+        state.collections = migratedCollections
+        stateChanged = true
+      }
+
       if (!state.attentionInitializedAt) {
         const now = new Date().toISOString()
         state.attentionInitializedAt = now
         for (const item of state.items) item.seenByCAt ||= now
+        stateChanged = true
+      }
+
+      if (stateChanged) {
         await this.#write(state)
       }
     } catch (error) {
@@ -49,6 +92,277 @@ export class PocketStore {
     const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
     return item ? publicItem(item) : null
   }
+
+  /* TRASH LIFECYCLE V1 BEGIN */
+
+  async listTrash({ limit = 100 } = {}) {
+    const state = await this.#read()
+
+    return state.items
+      .filter((item) => Boolean(item.deletedAt))
+      .sort((a, b) => (
+        b.deletedAt
+        || b.updatedAt
+        || b.createdAt
+      ).localeCompare(
+        a.deletedAt
+        || a.updatedAt
+        || a.createdAt
+      ))
+      .slice(
+        0,
+        Math.max(
+          1,
+          Math.min(
+            Number(limit) || 100,
+            500,
+          ),
+        ),
+      )
+      .map(publicItem)
+  }
+
+  async trash(
+    id,
+    { actor = 'system' } = {},
+  ) {
+    return this.#mutate((state) => {
+      const item = state.items.find(
+        (entry) => entry.id === id,
+      )
+
+      if (!item) {
+        throw httpError(
+          404,
+          'Pocket item not found.',
+        )
+      }
+
+      /*
+        Idempotent:
+        throwing the same paper away twice
+        must not create duplicate activity.
+      */
+      if (item.deletedAt) {
+        return {
+          item: publicItem(item),
+          changed: false,
+        }
+      }
+
+      const now =
+        new Date().toISOString()
+
+      item.deletedAt = now
+      item.updatedAt = now
+      item.syncState = 'synced'
+
+      appendActivity(
+        item,
+        'trashed',
+        normalizeActor(actor),
+        {},
+        now,
+      )
+
+      return {
+        item: publicItem(item),
+        changed: true,
+      }
+    })
+  }
+
+  async restore(
+    id,
+    { actor = 'system' } = {},
+  ) {
+    return this.#mutate((state) => {
+      const item = state.items.find(
+        (entry) => entry.id === id,
+      )
+
+      if (!item) {
+        throw httpError(
+          404,
+          'Pocket item not found.',
+        )
+      }
+
+      /*
+        Idempotent restore:
+        an already-active item remains active.
+      */
+      if (!item.deletedAt) {
+        return {
+          item: publicItem(item),
+          changed: false,
+        }
+      }
+
+      const now =
+        new Date().toISOString()
+
+      item.deletedAt = null
+      item.updatedAt = now
+      item.syncState = 'synced'
+
+      appendActivity(
+        item,
+        'restored',
+        normalizeActor(actor),
+        {},
+        now,
+      )
+
+      return {
+        item: publicItem(item),
+        changed: true,
+      }
+    })
+  }
+
+  async permanentlyDelete(id) {
+    /*
+      First commit the Store mutation.
+
+      Media cleanup happens only AFTER the JSON
+      store has been safely written, so a failed
+      store write can never leave a live item
+      pointing at files we already deleted.
+    */
+    const removal =
+      await this.#mutate((state) => {
+        const index =
+          state.items.findIndex(
+            (entry) => entry.id === id,
+          )
+
+        if (index < 0) {
+          throw httpError(
+            404,
+            'Pocket item not found.',
+          )
+        }
+
+        const item =
+          state.items[index]
+
+        /*
+          Safety boundary:
+          active items may never be permanently
+          deleted in one request.
+        */
+        if (!item.deletedAt) {
+          throw httpError(
+            409,
+            'Pocket item must be in Trash before permanent deletion.',
+          )
+        }
+
+        const candidateStorageNames =
+          new Set(
+            (
+              Array.isArray(item.attachments)
+                ? item.attachments
+                : []
+            )
+              .map(
+                (attachment) =>
+                  clean(
+                    attachment?.storageName,
+                  ),
+              )
+              .filter(Boolean)
+              .map((name) =>
+                path.basename(name),
+              ),
+          )
+
+        state.items.splice(index, 1)
+
+        /*
+          Defensive reference check:
+          never unlink a media file while another
+          item still references the same storageName.
+        */
+        const stillReferenced =
+          new Set(
+            state.items.flatMap((entry) =>
+              (
+                Array.isArray(entry.attachments)
+                  ? entry.attachments
+                  : []
+              )
+                .map(
+                  (attachment) =>
+                    clean(
+                      attachment?.storageName,
+                    ),
+                )
+                .filter(Boolean)
+                .map((name) =>
+                  path.basename(name),
+                ),
+            ),
+          )
+
+        const orphanedStorageNames =
+          [...candidateStorageNames]
+            .filter(
+              (name) =>
+                !stillReferenced.has(name),
+            )
+
+        return {
+          id: item.id,
+          orphanedStorageNames,
+        }
+      })
+
+    let mediaDeleted = 0
+    let mediaMissing = 0
+
+    const mediaCleanupFailed = []
+
+    for (
+      const storageName
+      of removal.orphanedStorageNames
+    ) {
+      const filePath =
+        path.join(
+          this.mediaDir,
+          path.basename(storageName),
+        )
+
+      try {
+        await unlink(filePath)
+        mediaDeleted += 1
+      } catch (error) {
+        if (error?.code === 'ENOENT') {
+          mediaMissing += 1
+          continue
+        }
+
+        mediaCleanupFailed.push({
+          storageName:
+            path.basename(storageName),
+          error:
+            error?.message
+            || 'Media cleanup failed.',
+        })
+      }
+    }
+
+    return {
+      id: removal.id,
+      deleted: true,
+      mediaDeleted,
+      mediaMissing,
+      mediaCleanupFailed,
+    }
+  }
+
+  /* TRASH LIFECYCLE V1 END */
 
   async getForContentRead(id) {
     const state = await this.#read()
@@ -330,12 +644,347 @@ export class PocketStore {
     })
   }
 
+  async listCollections() {
+    const state = await this.#read()
+
+    return [
+      ...new Set([
+        ...(
+          Array.isArray(state.collections)
+            ? state.collections
+            : []
+        ),
+        ...state.items
+          .filter((item) => !item.deletedAt)
+          .map((item) => item.collection),
+      ]
+        .map((value) => normalizeCollection(value))
+        .filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b))
+  }
+
+  async createCollection(value) {
+    const collection = normalizeCollection(value)
+
+    if (!collection) {
+      throw httpError(
+        422,
+        'Collection name is required.',
+      )
+    }
+
+    return this.#mutate((state) => {
+      state.collections = Array.isArray(
+        state.collections,
+      )
+        ? state.collections
+        : []
+
+      if (state.collections.includes(collection)) {
+        return {
+          collection,
+          changed: false,
+        }
+      }
+
+      state.collections = [
+        ...state.collections,
+        collection,
+      ].sort((a, b) => a.localeCompare(b))
+
+      return {
+        collection,
+        changed: true,
+      }
+    })
+  }
+
+  async deleteCollection(
+    value,
+    { actor = 'system' } = {},
+  ) {
+    const collection = normalizeCollection(value)
+
+    if (!collection) {
+      throw httpError(
+        422,
+        'Collection name is required.',
+      )
+    }
+
+    return this.#mutate((state) => {
+      state.collections = Array.isArray(
+        state.collections,
+      )
+        ? state.collections
+        : []
+
+      const existed =
+        state.collections.includes(collection)
+
+      state.collections =
+        state.collections.filter(
+          (entry) => entry !== collection,
+        )
+
+      const now = new Date().toISOString()
+      const clearedItemIds = []
+
+      for (const item of state.items) {
+        if (
+          item.deletedAt
+          || item.collection !== collection
+        ) {
+          continue
+        }
+
+        const collectionFrom =
+          item.collection
+
+        item.collection = null
+        item.updatedAt = now
+        item.syncState = 'synced'
+
+        appendActivity(
+          item,
+          'metadata_changed',
+          normalizeActor(actor),
+          {
+            collectionFrom,
+            collectionTo: null,
+            tagsAdded: [],
+            tagsRemoved: [],
+          },
+          now,
+        )
+
+        clearedItemIds.push(item.id)
+      }
+
+      return {
+        collection,
+        changed:
+          existed
+          || clearedItemIds.length > 0,
+        clearedItemIds,
+      }
+    })
+  }
+
+  async listTags() {
+    const state = await this.#read()
+
+    return [
+      ...new Set([
+        ...(
+          Array.isArray(state.tags)
+            ? state.tags
+            : []
+        ),
+        ...state.items
+          .filter((item) => !item.deletedAt)
+          .flatMap((item) =>
+            normalizeTags(item.tags),
+          ),
+      ]
+        .map((value) =>
+          normalizeTags([value])[0],
+        )
+        .filter(Boolean)),
+    ].sort((a, b) =>
+      a.localeCompare(b),
+    )
+  }
+
+  async createTag(value) {
+    const tag =
+      normalizeTags([value])[0]
+
+    if (!tag) {
+      throw httpError(
+        422,
+        'Tag name is required.',
+      )
+    }
+
+    return this.#mutate((state) => {
+      state.tags =
+        Array.isArray(state.tags)
+          ? state.tags
+          : []
+
+      if (state.tags.includes(tag)) {
+        return {
+          tag,
+          changed: false,
+        }
+      }
+
+      state.tags = [
+        ...state.tags,
+        tag,
+      ].sort((a, b) =>
+        a.localeCompare(b),
+      )
+
+      return {
+        tag,
+        changed: true,
+      }
+    })
+  }
+
+  async deleteTag(
+    value,
+    { actor = 'system' } = {},
+  ) {
+    const tag =
+      normalizeTags([value])[0]
+
+    if (!tag) {
+      throw httpError(
+        422,
+        'Tag name is required.',
+      )
+    }
+
+    return this.#mutate((state) => {
+      state.tags =
+        Array.isArray(state.tags)
+          ? state.tags
+          : []
+
+      /*
+        Repair old stores before deletion:
+        existing item tags belong to the registry,
+        even when state.tags did not exist yet.
+      */
+      state.tags = [
+        ...new Set([
+          ...state.tags,
+          ...state.items
+            .filter(
+              (item) =>
+                !item.deletedAt,
+            )
+            .flatMap(
+              (item) =>
+                normalizeTags(
+                  item.tags,
+                ),
+            ),
+        ]),
+      ].sort((a, b) =>
+        a.localeCompare(b),
+      )
+
+      const existed =
+        state.tags.includes(tag)
+
+      state.tags =
+        state.tags.filter(
+          (entry) =>
+            entry !== tag,
+        )
+
+      const now =
+        new Date().toISOString()
+
+      const changedItemIds = []
+
+      for (const item of state.items) {
+        if (item.deletedAt) {
+          continue
+        }
+
+        const before =
+          normalizeTags(item.tags)
+
+        if (!before.includes(tag)) {
+          continue
+        }
+
+        item.tags =
+          before.filter(
+            (entry) =>
+              entry !== tag,
+          )
+
+        item.updatedAt = now
+        item.syncState = 'synced'
+
+        appendActivity(
+          item,
+          'metadata_changed',
+          normalizeActor(actor),
+          {
+            collectionFrom:
+              item.collection || null,
+
+            collectionTo:
+              item.collection || null,
+
+            tagsAdded: [],
+
+            tagsRemoved:
+              [tag],
+          },
+          now,
+        )
+
+        changedItemIds.push(
+          item.id,
+        )
+      }
+
+      return {
+        tag,
+
+        changed:
+          existed
+          || changedItemIds.length > 0,
+
+        changedCount:
+          changedItemIds.length,
+
+        changedItemIds,
+      }
+    })
+  }
+
   async editMetadata(id, input, { actor = 'system' } = {}) {
     return this.#mutate((state) => {
       const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
       if (!item) throw httpError(404, 'Pocket item not found.')
       const collectionFrom = item.collection || null
       const tagsFrom = normalizeTags(item.tags)
+
+      /*
+        Tag Registry V1:
+        a tag remains part of the Drawer vocabulary
+        even when this item becomes its last user.
+
+        Fold both the existing item tags and requested
+        additions into the registry before applying
+        tagsRemove.
+      */
+      state.tags =
+        Array.isArray(state.tags)
+          ? state.tags
+          : []
+
+      state.tags = [
+        ...new Set([
+          ...state.tags,
+          ...tagsFrom,
+          ...normalizeTags(
+            input?.tagsAdd,
+          ),
+        ]),
+      ].sort((a, b) =>
+        a.localeCompare(b),
+      )
+
       let collectionTo = collectionFrom
       if (input?.clearCollection === true) collectionTo = null
       else if (Object.hasOwn(input || {}, 'collection')) collectionTo = normalizeCollection(input.collection)
@@ -344,8 +993,37 @@ export class PocketStore {
       const tagsTo = normalizeTags([...tagsAfterRemove, ...normalizeTags(input?.tagsAdd)])
       const tagsAdded = tagsTo.filter((tag) => !tagsFrom.includes(tag))
       const tagsRemoved = tagsFrom.filter((tag) => !tagsTo.includes(tag))
-      const changed = collectionFrom !== collectionTo || tagsAdded.length > 0 || tagsRemoved.length > 0
-      if (!changed) return { item: publicItem(item), changed: false }
+      state.collections = Array.isArray(
+        state.collections,
+      )
+        ? state.collections
+        : []
+
+      let collectionRegistered = false
+
+      if (
+        collectionTo
+        && !state.collections.includes(collectionTo)
+      ) {
+        state.collections = [
+          ...state.collections,
+          collectionTo,
+        ].sort((a, b) => a.localeCompare(b))
+
+        collectionRegistered = true
+      }
+
+      const changed =
+        collectionFrom !== collectionTo
+        || tagsAdded.length > 0
+        || tagsRemoved.length > 0
+
+      if (!changed) {
+        return {
+          item: publicItem(item),
+          changed: collectionRegistered,
+        }
+      }
       const now = new Date().toISOString()
       item.collection = collectionTo
       item.tags = tagsTo

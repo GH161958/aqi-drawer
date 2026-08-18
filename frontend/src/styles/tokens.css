@@ -1,0 +1,38 @@
+:root {
+  --drawer-paper: #f3eddf;
+  --drawer-paper-soft: #e8decd;
+
+  --drawer-ink: #342e27;
+
+  --drawer-quiet-ink:
+    rgba(52, 46, 39, .62);
+
+  --drawer-sage: #53604e;
+  --drawer-brass: #897049;
+
+  --drawer-walnut: #684a37;
+  --drawer-walnut-soft: #72513b;
+  --drawer-walnut-deep: #4d3528;
+
+  --drawer-rule:
+    rgba(126, 104, 81, .22);
+
+  --drawer-page-inline:
+    clamp(20px, 6vw, 48px);
+
+  --drawer-font-display:
+    Georgia,
+    "Times New Roman",
+    serif;
+
+  --drawer-font-body:
+    Georgia,
+    "Noto Serif SC",
+    serif;
+
+  --drawer-font-meta:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}

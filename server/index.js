@@ -71,6 +71,10 @@ export async function createBridgeApp(config = {}) {
   app.use(express.text({ type: ['text/plain', 'text/*'], limit: '2mb' }))
   app.get('/drawer', (_req, res) => res.sendFile(path.join(drawerRoot, 'index.html')))
   app.use('/drawer', express.static(drawerRoot, { index: false }))
+  app.use(
+  '/drawer/vendor/gsap',
+  express.static(path.join(root, '..', 'node_modules', 'gsap', 'dist'), { index: false }),
+)
   app.use((req, res, next) => {
     const origin = req.get('origin')
     if (origin && settings.allowedOrigins.includes(origin)) {
@@ -133,6 +137,174 @@ export async function createBridgeApp(config = {}) {
       error: settings.bridgeToken ? 'Unauthorized.' : 'C_POCKET_BRIDGE_TOKEN is required for non-loopback access.',
     })
   })
+
+  app.get(
+    '/api/pocket/collections',
+    async (req, res, next) => {
+      try {
+        res.json({
+          collections:
+            await store.listCollections(),
+        })
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.post(
+    '/api/pocket/collections',
+    async (req, res, next) => {
+      try {
+        res.json(
+          await store.createCollection(
+            req.body?.collection
+              ?? req.body?.name,
+          ),
+        )
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.delete(
+    '/api/pocket/collections/:collection',
+    async (req, res, next) => {
+      try {
+        res.json(
+          await store.deleteCollection(
+            req.params.collection,
+            { actor: 'EE' },
+          ),
+        )
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  /*
+    TAG REGISTRY API V1
+
+    Registry and item attachment are intentionally
+    separate concepts:
+      /tags                  = shared vocabulary
+      /items/:id/metadata    = attachment to one item
+  */
+
+  app.get(
+    '/api/pocket/tags',
+    async (req, res, next) => {
+      try {
+        res.json({
+          tags:
+            await store.listTags(),
+        })
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.post(
+    '/api/pocket/tags',
+    async (req, res, next) => {
+      try {
+        res.json(
+          await store.createTag(
+            req.body?.tag
+              ?? req.body?.name,
+          ),
+        )
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.delete(
+    '/api/pocket/tags/:tag',
+    async (req, res, next) => {
+      try {
+        res.json(
+          await store.deleteTag(
+            req.params.tag,
+            { actor: 'EE' },
+          ),
+        )
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  /* TRASH API V1 BEGIN */
+
+  app.get(
+    '/api/pocket/trash',
+    async (req, res, next) => {
+      try {
+        res.json({
+          items:
+            await store.listTrash({
+              limit: req.query.limit,
+            }),
+        })
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.post(
+    '/api/pocket/items/:id/trash',
+    async (req, res, next) => {
+      try {
+        res.json(
+          await store.trash(
+            req.params.id,
+            { actor: 'EE' },
+          ),
+        )
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.post(
+    '/api/pocket/items/:id/restore',
+    async (req, res, next) => {
+      try {
+        res.json(
+          await store.restore(
+            req.params.id,
+            { actor: 'EE' },
+          ),
+        )
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.delete(
+    '/api/pocket/items/:id',
+    async (req, res, next) => {
+      try {
+        res.json(
+          await store.permanentlyDelete(
+            req.params.id,
+          ),
+        )
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  /* TRASH API V1 END */
 
   app.get('/api/pocket/items', async (req, res, next) => {
     try {

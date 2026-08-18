@@ -132,6 +132,51 @@ try {
   assert.equal(metadataRest.item.collection, '记忆研究')
   assert.deepEqual(metadataRest.item.tags, ['Ombre', 'evidence'])
   const metadataActivityCount = metadataRest.item.activity.length
+  const collectionsAfterMetadata = await fetch(
+    `${baseUrl}/api/pocket/collections`,
+  ).then(checkJson)
+
+  assert.equal(
+    collectionsAfterMetadata.collections.includes('记忆研究'),
+    true,
+  )
+
+  const emptyCollection = await fetch(
+    `${baseUrl}/api/pocket/collections`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        collection: '空抽屉',
+      }),
+    },
+  ).then(checkJson)
+
+  assert.equal(emptyCollection.collection, '空抽屉')
+
+  const collectionsWithEmpty = await fetch(
+    `${baseUrl}/api/pocket/collections`,
+  ).then(checkJson)
+
+  assert.equal(
+    collectionsWithEmpty.collections.includes('空抽屉'),
+    true,
+  )
+
+  const removedEmptyCollection = await fetch(
+    `${baseUrl}/api/pocket/collections/${encodeURIComponent('空抽屉')}`,
+    {
+      method: 'DELETE',
+    },
+  ).then(checkJson)
+
+  assert.equal(
+    removedEmptyCollection.collection,
+    '空抽屉',
+  )
+
   const metadataNoop = await fetch(`${baseUrl}/api/pocket/items/${source.id}/metadata`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
@@ -393,6 +438,257 @@ try {
   const serializedActivity = JSON.stringify(clearedMetadata.item.activity)
   assert.equal(serializedActivity.includes(dropSecret), false)
   assert.equal(serializedActivity.includes('真正需要读到的正文'), false)
+
+  /* TRASH LIFECYCLE SMOKE V1 BEGIN */
+
+  const trashCreated =
+    await fetch(
+      `${baseUrl}/api/pocket/items`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type':
+            'application/json',
+        },
+        body: JSON.stringify({
+          text:
+            'Trash lifecycle smoke item',
+          sourceApp:
+            'Trash Smoke',
+        }),
+      },
+    ).then(checkJson)
+
+  const trashId =
+    trashCreated.item.id
+
+  const firstTrash =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${trashId}/trash`,
+      { method: 'POST' },
+    ).then(checkJson)
+
+  assert.equal(
+    firstTrash.changed,
+    true,
+  )
+
+  assert.ok(
+    firstTrash.item.deletedAt,
+  )
+
+  const secondTrash =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${trashId}/trash`,
+      { method: 'POST' },
+    ).then(checkJson)
+
+  assert.equal(
+    secondTrash.changed,
+    false,
+  )
+
+  const hiddenFromNormal =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${trashId}`,
+    )
+
+  assert.equal(
+    hiddenFromNormal.status,
+    404,
+  )
+
+  const trashListing =
+    await fetch(
+      `${baseUrl}/api/pocket/trash`,
+    ).then(checkJson)
+
+  assert.equal(
+    trashListing.items.some(
+      (item) => item.id === trashId,
+    ),
+    true,
+  )
+
+  const restored =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${trashId}/restore`,
+      { method: 'POST' },
+    ).then(checkJson)
+
+  assert.equal(
+    restored.changed,
+    true,
+  )
+
+  assert.equal(
+    restored.item.deletedAt,
+    null,
+  )
+
+  const restoredAgain =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${trashId}/restore`,
+      { method: 'POST' },
+    ).then(checkJson)
+
+  assert.equal(
+    restoredAgain.changed,
+    false,
+  )
+
+  const activePermanentDelete =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${trashId}`,
+      { method: 'DELETE' },
+    )
+
+  assert.equal(
+    activePermanentDelete.status,
+    409,
+  )
+
+  await fetch(
+    `${baseUrl}/api/pocket/items/${trashId}/trash`,
+    { method: 'POST' },
+  ).then(checkJson)
+
+  const permanentlyDeleted =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${trashId}`,
+      { method: 'DELETE' },
+    ).then(checkJson)
+
+  assert.equal(
+    permanentlyDeleted.deleted,
+    true,
+  )
+
+  const trashAfterPermanentDelete =
+    await fetch(
+      `${baseUrl}/api/pocket/trash`,
+    ).then(checkJson)
+
+  assert.equal(
+    trashAfterPermanentDelete.items.some(
+      (item) => item.id === trashId,
+    ),
+    false,
+  )
+
+  const restoreGone =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${trashId}/restore`,
+      { method: 'POST' },
+    )
+
+  assert.equal(
+    restoreGone.status,
+    404,
+  )
+
+
+  /*
+    Real media cleanup smoke test.
+
+    Inject one stored attachment into a dedicated
+    test item, then verify permanent deletion
+    removes the actual media file.
+  */
+
+  const mediaStorageName =
+    `trash-smoke-${Date.now()}.bin`
+
+  const mediaItem =
+    await bridge.store.upsert({
+      text:
+        'Trash media cleanup smoke item',
+      sourceApp:
+        'Trash Smoke',
+    })
+
+  const mediaPath =
+    path.join(
+      dataDir,
+      'media',
+      mediaStorageName,
+    )
+
+  await writeFile(
+    mediaPath,
+    Buffer.from(
+      'trash-media-smoke',
+      'utf8',
+    ),
+  )
+
+  const mediaState =
+    JSON.parse(
+      await readFile(
+        storePath,
+        'utf8',
+      ),
+    )
+
+  const mediaStoredItem =
+    mediaState.items.find(
+      (item) => item.id === mediaItem.id,
+    )
+
+  assert.ok(mediaStoredItem)
+
+  mediaStoredItem.attachments = [{
+    id:
+      `trash-attachment-${Date.now()}`,
+    name:
+      'trash-smoke.bin',
+    mimeType:
+      'application/octet-stream',
+    size:
+      Buffer.byteLength(
+        'trash-media-smoke',
+      ),
+    storageName:
+      mediaStorageName,
+  }]
+
+  await writeFile(
+    storePath,
+    JSON.stringify(
+      mediaState,
+      null,
+      2,
+    ),
+    'utf8',
+  )
+
+  await bridge.store.trash(
+    mediaItem.id,
+    { actor: 'EE' },
+  )
+
+  const mediaDeletion =
+    await bridge.store.permanentlyDelete(
+      mediaItem.id,
+    )
+
+  assert.equal(
+    mediaDeletion.mediaCleanupFailed.length,
+    0,
+  )
+
+  assert.equal(
+    mediaDeletion.mediaDeleted,
+    1,
+  )
+
+  await assert.rejects(
+    readFile(mediaPath),
+    (error) =>
+      error?.code === 'ENOENT',
+  )
+
+  /* TRASH LIFECYCLE SMOKE V1 END */
 
   await client.close()
 

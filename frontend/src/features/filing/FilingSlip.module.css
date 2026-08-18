@@ -1,0 +1,216 @@
+.slip {
+  width:
+    min(74%, 320px);
+
+  margin:
+    18px auto 0;
+
+  padding:
+    15px 14px 17px;
+
+  border:
+    1px solid
+    var(--drawer-rule);
+
+  background:
+    #e8deca;
+
+  color:
+    var(--drawer-ink);
+
+  box-shadow:
+    1px 3px 7px
+    rgba(55, 39, 29, .05);
+}
+
+.header {
+  margin-bottom: 13px;
+}
+
+.kicker {
+  margin:
+    0 0 5px;
+
+  color:
+    var(--drawer-brass);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .50rem;
+
+  letter-spacing: .11em;
+}
+
+.title {
+  margin: 0;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .92rem;
+
+  font-weight: 400;
+}
+
+.choices {
+  border-top:
+    1px dotted
+    var(--drawer-rule);
+}
+
+.choice {
+  display: grid;
+
+  grid-template-columns:
+    16px minmax(0, 1fr) auto;
+
+  align-items: center;
+
+  gap: 7px;
+
+  width: 100%;
+
+  min-height: 34px;
+
+  padding:
+    6px 2px;
+
+  appearance: none;
+
+  border: 0;
+
+  border-bottom:
+    1px dotted
+    var(--drawer-rule);
+
+  background: transparent;
+
+  color:
+    rgba(52, 46, 39, .76);
+
+  text-align: left;
+
+  font-size: .68rem;
+
+  cursor: pointer;
+}
+
+.choice[data-current="true"] {
+  color:
+    var(--drawer-sage);
+}
+
+.choice:disabled {
+  cursor: default;
+
+  opacity: .62;
+}
+
+.marker {
+  color:
+    var(--drawer-brass);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .52rem;
+}
+
+.aside {
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .48rem;
+
+  letter-spacing: .04em;
+}
+
+.confirmSlip {
+  margin-top: 14px;
+
+  padding:
+    12px;
+
+  border:
+    1px solid
+    rgba(126, 104, 81, .20);
+
+  background:
+    var(--drawer-paper);
+}
+
+.confirmTitle {
+  margin:
+    0 0 6px;
+
+  font-size: .72rem;
+}
+
+.confirmCopy {
+  margin:
+    0 0 11px;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-size: .62rem;
+
+  line-height: 1.55;
+}
+
+.confirmActions {
+  display: flex;
+
+  justify-content: flex-end;
+
+  gap: 13px;
+}
+
+.confirmActions button {
+  appearance: none;
+
+  padding:
+    3px 0;
+
+  border: 0;
+
+  border-bottom:
+    1px solid
+    rgba(83, 96, 78, .30);
+
+  background: transparent;
+
+  color:
+    var(--drawer-sage);
+
+  font-size: .61rem;
+
+  cursor: pointer;
+}
+
+.feedback {
+  min-height: 1.4em;
+
+  margin:
+    11px 0 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-size: .60rem;
+
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .slip {
+    width: 76%;
+
+    padding:
+      14px 12px 16px;
+  }
+}
