@@ -8,6 +8,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import { PocketStore, httpError } from './store.js'
 import { CMemoryClient } from './cmemory-client.js'
+import { GitHubVaultClient } from './vault-client.js'
 import { PocketContentReader } from './content-reader.js'
 import { createPocketMcpServer } from './mcp-server.js'
 import { normalizeIncomingShare } from './share-normalizer.js'
@@ -27,6 +28,9 @@ export async function createBridgeApp(config = {}) {
     allowedOrigins: config.allowedOrigins ?? splitOrigins(process.env.C_POCKET_ALLOWED_ORIGINS),
     cmemoryBaseUrl: config.cmemoryBaseUrl ?? process.env.CMEMORY_BASE_URL ?? 'http://127.0.0.1:4282',
     cmemoryToken: config.cmemoryToken ?? process.env.CMEMORY_TOKEN ?? '',
+    vaultRepo: config.vaultRepo ?? cleanEnvironmentValue(process.env.AQI_VAULT_REPO),
+    vaultBranch: config.vaultBranch ?? (cleanEnvironmentValue(process.env.AQI_VAULT_BRANCH) || 'main'),
+    vaultToken: config.vaultToken ?? cleanEnvironmentValue(process.env.AQI_VAULT_GITHUB_TOKEN),
     serverHost: config.host ?? (cleanEnvironmentValue(process.env.HOST) || '127.0.0.1'),
     mcpPath: normalizeMcpPath(config.mcpPath ?? (cleanEnvironmentValue(process.env.C_POCKET_MCP_PATH) || '/mcp')),
     temporaryPublicMcp: config.temporaryPublicMcp ?? process.argv.includes('--temporary-public-mcp'),
@@ -35,6 +39,11 @@ export async function createBridgeApp(config = {}) {
   const store = new PocketStore(settings.dataDir)
   await store.init()
   const cmemory = new CMemoryClient({ baseUrl: settings.cmemoryBaseUrl, token: settings.cmemoryToken })
+  const vault = config.vault ?? new GitHubVaultClient({
+    token: settings.vaultToken,
+    repo: settings.vaultRepo,
+    branch: settings.vaultBranch,
+  })
   const contentReader = new PocketContentReader({
     store,
     cacheTtlMs: numberSetting(config.contentReaderOptions?.cacheTtlMs, process.env.C_POCKET_READER_CACHE_TTL_MS, 24 * 60 * 60 * 1000),
@@ -300,7 +309,7 @@ export async function createBridgeApp(config = {}) {
         transport.onclose = () => {
           if (transport.sessionId) transports.delete(transport.sessionId)
         }
-        const server = createPocketMcpServer({ store, cmemory, contentReader })
+        const server = createPocketMcpServer({ store, cmemory, contentReader, vault })
         await server.connect(transport)
       }
       await transport.handleRequest(req, res, req.body)
@@ -331,6 +340,7 @@ export async function createBridgeApp(config = {}) {
     store,
     cmemory,
     contentReader,
+    vault,
     xhsAdapter,
     async close() {
       await Promise.allSettled([...transports.values()].map((transport) => transport.close()))
