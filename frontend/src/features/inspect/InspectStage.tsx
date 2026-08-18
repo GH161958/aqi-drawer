@@ -14,6 +14,10 @@ import {
   FilingSlip,
 } from '../filing/FilingSlip'
 
+import {
+  EeNotePaper,
+} from '../notes/EeNotePaper'
+
 import type {
   CabinetSlot,
   PocketItemSummary,
@@ -109,6 +113,10 @@ export function InspectStage({
               />
             </div>
           </div>
+
+          <EeNotePaper
+            item={query.data}
+          />
 
           <FilingSlip
             item={query.data}

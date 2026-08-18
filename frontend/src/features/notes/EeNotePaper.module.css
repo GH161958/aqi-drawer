@@ -1,0 +1,200 @@
+.paper {
+  width:
+    min(74%, 320px);
+
+  margin:
+    18px auto 0;
+
+  padding:
+    15px 14px 13px;
+
+  border:
+    1px solid
+    rgba(126, 104, 81, .22);
+
+  background:
+    #e9dfcc;
+
+  color:
+    var(--drawer-ink);
+
+  box-shadow:
+    1px 3px 7px
+    rgba(55, 39, 29, .045);
+}
+
+.kicker {
+  margin:
+    0 0 10px;
+
+  color:
+    var(--drawer-brass);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .51rem;
+
+  line-height: 1.3;
+
+  letter-spacing: .09em;
+}
+
+.form {
+  margin: 0;
+}
+
+.input {
+  display: block;
+
+  width: 100%;
+
+  min-height: 92px;
+
+  padding:
+    8px 2px;
+
+  resize: vertical;
+
+  border: 0;
+
+  border-top:
+    1px dotted
+    rgba(126, 104, 81, .20);
+
+  border-bottom:
+    1px dotted
+    rgba(126, 104, 81, .24);
+
+  border-radius: 0;
+
+  background:
+    transparent;
+
+  color:
+    rgba(52, 46, 39, .84);
+
+  font-family:
+    var(--drawer-font-body);
+
+  /*
+    Permanent iPhone Safari safety:
+    never lower form controls below 16px.
+  */
+  font-size: 16px;
+
+  line-height: 1.7;
+
+  outline: 0;
+}
+
+.input::placeholder {
+  color:
+    rgba(52, 46, 39, .30);
+}
+
+.input:focus {
+  border-bottom-color:
+    rgba(83, 96, 78, .34);
+}
+
+.actions {
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+    flex-end;
+
+  gap: 15px;
+
+  margin-top: 10px;
+}
+
+.saveAction,
+.removeAction {
+  appearance: none;
+
+  padding:
+    3px 0;
+
+  border: 0;
+
+  border-bottom:
+    1px solid
+    rgba(83, 96, 78, .28);
+
+  background:
+    transparent;
+
+  color:
+    var(--drawer-sage);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .59rem;
+
+  cursor: pointer;
+}
+
+.removeAction {
+  color:
+    rgba(110, 77, 64, .72);
+
+  border-bottom-color:
+    rgba(110, 77, 64, .20);
+}
+
+.saveAction:disabled,
+.removeAction:disabled {
+  cursor: default;
+
+  opacity: .52;
+}
+
+.feedback {
+  min-height: 1.4em;
+
+  margin:
+    8px 0 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-size: .56rem;
+
+  line-height: 1.5;
+}
+
+.visuallyHidden {
+  position: absolute;
+
+  width: 1px;
+  height: 1px;
+
+  padding: 0;
+  margin: -1px;
+
+  overflow: hidden;
+
+  clip:
+    rect(0 0 0 0);
+
+  white-space: nowrap;
+
+  border: 0;
+}
+
+@media (max-width: 520px) {
+  .paper {
+    width: 76%;
+
+    padding:
+      14px 12px 12px;
+  }
+
+  .input {
+    font-size: 16px;
+  }
+}
