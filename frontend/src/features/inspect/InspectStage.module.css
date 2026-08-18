@@ -1,0 +1,119 @@
+.stage {
+  width:
+    min(100%, 640px);
+
+  margin: 0 auto;
+}
+
+.toolbar {
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  margin-bottom: 17px;
+}
+
+.returnAction {
+  appearance: none;
+
+  padding: 0;
+
+  border: 0;
+
+  background: transparent;
+
+  color:
+    var(--drawer-sage);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .68rem;
+
+  letter-spacing: .025em;
+
+  cursor: pointer;
+}
+
+.kicker {
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .61rem;
+
+  letter-spacing: .08em;
+}
+
+.workspace {
+  position: relative;
+
+  width: 100%;
+}
+
+.recordLayer {
+  position: relative;
+  z-index: 1;
+
+  margin-bottom: -13px;
+}
+
+.originalLayer {
+  position: relative;
+  z-index: 2;
+
+  width:
+    calc(100% - 14px);
+
+  margin-left: auto;
+}
+
+.state {
+  padding:
+    42px 24px;
+
+  border:
+    1px solid
+    var(--drawer-rule);
+
+  background:
+    rgba(255, 251, 241, .38);
+
+  color:
+    var(--drawer-quiet-ink);
+
+  line-height: 1.7;
+}
+
+.state button {
+  margin-top: 10px;
+
+  appearance: none;
+
+  padding: 0;
+
+  border: 0;
+
+  background: transparent;
+
+  color:
+    var(--drawer-sage);
+
+  cursor: pointer;
+}
+
+@media (max-width: 520px) {
+  .recordLayer {
+    margin-bottom: -10px;
+  }
+
+  .originalLayer {
+    width:
+      calc(100% - 7px);
+  }
+}

@@ -1,0 +1,359 @@
+.home {
+  width: min(100%, 520px);
+  margin: 0 auto;
+}
+
+.cabinet {
+  position: relative;
+
+  padding: 18px 18px 15px;
+
+  border:
+    1px solid
+    var(--drawer-walnut-deep);
+
+  border-radius: 2px;
+
+  background:
+    var(--drawer-walnut);
+
+  box-shadow:
+    0 18px 40px
+    rgba(47, 32, 23, .14);
+}
+
+.plaque {
+  display: grid;
+
+  grid-template-columns:
+    1fr auto;
+
+  align-items: center;
+
+  width: 72%;
+
+  margin:
+    0 auto 18px;
+
+  padding:
+    8px 11px;
+
+  border:
+    1px solid
+    rgba(137, 112, 73, .52);
+
+  border-radius: 1px;
+
+  background:
+    var(--drawer-paper-soft);
+
+  color:
+    var(--drawer-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .72rem;
+
+  letter-spacing: .055em;
+
+  cursor: pointer;
+}
+
+.plaqueCount,
+.drawerCount,
+.discardCount {
+  font-variant-numeric:
+    tabular-nums;
+}
+
+.drawers {
+  display: grid;
+  gap: 7px;
+}
+
+.drawer {
+  position: relative;
+
+  display: grid;
+
+  grid-template-columns:
+    1fr 46px;
+
+  align-items: center;
+
+  min-height: 58px;
+
+  padding:
+    9px 14px;
+
+  border:
+    1px solid
+    rgba(43, 29, 21, .42);
+
+  border-radius: 1px;
+
+  background:
+    var(--drawer-walnut-soft);
+
+  color:
+    var(--drawer-paper);
+
+  box-shadow:
+    inset 0 1px 0
+    rgba(255, 246, 226, .06);
+
+  cursor: pointer;
+
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.drawer:hover,
+.drawer[aria-pressed="true"] {
+  transform:
+    translateY(-1px);
+
+  box-shadow:
+    0 5px 10px
+    rgba(39, 26, 19, .14);
+}
+
+.drawerLabel {
+  position: relative;
+  z-index: 2;
+
+  display: grid;
+
+  grid-template-columns:
+    1fr auto;
+
+  align-items: center;
+
+  width:
+    min(76%, 260px);
+
+  min-height: 29px;
+
+  margin: 0 auto;
+
+  padding:
+    6px 10px;
+
+  border:
+    1px solid
+    rgba(137, 112, 73, .35);
+
+  background:
+    var(--drawer-paper);
+
+  color:
+    var(--drawer-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .70rem;
+
+  letter-spacing: .035em;
+}
+
+.drawerCount {
+  min-width: 2ch;
+
+  color:
+    var(--drawer-sage);
+}
+
+.drawerPull {
+  width: 31px;
+  height: 13px;
+
+  justify-self: center;
+
+  border:
+    1px solid
+    rgba(51, 36, 25, .58);
+
+  border-radius:
+    10px 10px 5px 5px;
+
+  background:
+    var(--drawer-brass);
+
+  box-shadow:
+    inset 0 1px 0
+    rgba(255, 246, 220, .18);
+}
+
+.paperEdge {
+  position: absolute;
+
+  top: -6px;
+  left: 20%;
+
+  width: 55%;
+  height: 8px;
+
+  border:
+    1px solid
+    var(--drawer-rule);
+
+  border-bottom: 0;
+
+  background:
+    var(--drawer-paper);
+
+  transform:
+    rotate(-.25deg);
+
+  pointer-events: none;
+}
+
+.discardTray {
+  position: relative;
+
+  display: grid;
+
+  grid-template-columns:
+    1fr auto;
+
+  align-items: center;
+
+  width: 82%;
+
+  min-height: 37px;
+
+  margin:
+    11px auto 2px;
+
+  padding:
+    8px 16px;
+
+  border:
+    1px solid
+    rgba(43, 29, 21, .38);
+
+  border-radius: 1px;
+
+  background:
+    var(--drawer-walnut-deep);
+
+  color:
+    rgba(243, 237, 223, .70);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .58rem;
+
+  letter-spacing: .14em;
+
+  cursor: pointer;
+}
+
+.discardTray[aria-pressed="true"] {
+  outline:
+    1px solid
+    rgba(232, 222, 205, .35);
+
+  outline-offset: 2px;
+}
+
+.discardPapers {
+  position: absolute;
+
+  top: -7px;
+  left: 23%;
+
+  width: 54%;
+  height: 8px;
+
+  border:
+    1px solid
+    var(--drawer-rule);
+
+  border-bottom: 0;
+
+  background:
+    var(--drawer-paper-soft);
+
+  opacity: 0;
+
+  transform:
+    rotate(.7deg);
+}
+
+.discardTray[data-has-contents="true"]
+.discardPapers {
+  opacity: 1;
+}
+
+.base {
+  width: 94%;
+  height: 11px;
+
+  margin:
+    11px auto -5px;
+
+  border-top:
+    1px solid
+    rgba(43, 29, 21, .38);
+
+  background:
+    var(--drawer-walnut-deep);
+}
+
+.status {
+  min-height: 1.4em;
+
+  margin:
+    18px 0 0;
+
+  text-align: center;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .68rem;
+
+  letter-spacing: .025em;
+}
+
+@media (max-width: 520px) {
+  .cabinet {
+    padding:
+      15px 14px 13px;
+  }
+
+  .drawer {
+    min-height: 53px;
+
+    grid-template-columns:
+      1fr 40px;
+
+    padding:
+      8px 10px;
+  }
+
+  .drawerLabel {
+    width: 80%;
+  }
+
+  .discardTray {
+    width: 84%;
+  }
+}
+
+/*
+  Functional-migration phase:
+  closed Cabinet stays quiet.
+  Presence paper returns during the final visual system pass.
+*/
+.paperEdge {
+  display: none;
+}

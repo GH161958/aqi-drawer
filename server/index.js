@@ -175,6 +175,61 @@ export async function createBridgeApp(config = {}) {
     },
   )
 
+  /*
+    TAG REGISTRY API V1
+
+    Registry and item attachment are intentionally
+    separate concepts:
+      /tags                  = shared vocabulary
+      /items/:id/metadata    = attachment to one item
+  */
+
+  app.get(
+    '/api/pocket/tags',
+    async (req, res, next) => {
+      try {
+        res.json({
+          tags:
+            await store.listTags(),
+        })
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.post(
+    '/api/pocket/tags',
+    async (req, res, next) => {
+      try {
+        res.json(
+          await store.createTag(
+            req.body?.tag
+              ?? req.body?.name,
+          ),
+        )
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.delete(
+    '/api/pocket/tags/:tag',
+    async (req, res, next) => {
+      try {
+        res.json(
+          await store.deleteTag(
+            req.params.tag,
+            { actor: 'EE' },
+          ),
+        )
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
   /* TRASH API V1 BEGIN */
 
   app.get(

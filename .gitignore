@@ -8,3 +8,11 @@ data/
 coverage/
 .DS_Store
 design-fonts/
+
+# Local agent tooling
+.agents/
+skills-lock.json
+
+# Local surgery backups
+*.before-*
+*.motion-backup*

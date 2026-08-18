@@ -1,0 +1,116 @@
+.view {
+  width:
+    min(100%, 560px);
+
+  margin: 0 auto;
+}
+
+.toolbar {
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  margin-bottom: 28px;
+
+  padding-bottom: 10px;
+
+  border-bottom:
+    1px solid
+    var(--drawer-rule);
+}
+
+.back {
+  appearance: none;
+
+  padding: 0;
+
+  border: 0;
+
+  background: transparent;
+
+  color:
+    var(--drawer-sage);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .68rem;
+
+  cursor: pointer;
+}
+
+.label {
+  margin: 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .70rem;
+
+  letter-spacing: .05em;
+}
+
+.list {
+  display: grid;
+
+  gap:
+    clamp(25px, 6vw, 42px);
+
+  margin: 0;
+
+  padding: 0;
+
+  list-style: none;
+}
+
+.state,
+.emptyPaper {
+  padding:
+    36px 24px;
+
+  border:
+    1px solid
+    var(--drawer-rule);
+
+  background:
+    rgba(255, 251, 241, .34);
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-size: .9rem;
+
+  line-height: 1.7;
+}
+
+.emptyPaper p {
+  margin:
+    0 0 5px;
+}
+
+.inspectHint {
+  margin:
+    28px 0 0;
+
+  padding-top: 12px;
+
+  border-top:
+    1px dotted
+    var(--drawer-rule);
+
+  color:
+    var(--drawer-sage);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .68rem;
+
+  line-height: 1.6;
+}

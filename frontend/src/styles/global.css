@@ -1,0 +1,83 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+
+  background:
+    var(--drawer-paper);
+
+  color:
+    var(--drawer-ink);
+}
+
+body {
+  margin: 0;
+
+  min-width: 320px;
+  min-height: 100vh;
+
+  background:
+    var(--drawer-paper);
+
+  color:
+    var(--drawer-ink);
+
+  font-family:
+    var(--drawer-font-body);
+
+  -webkit-font-smoothing:
+    antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color:
+    transparent;
+}
+
+button:focus-visible {
+  outline:
+    2px solid
+    var(--drawer-sage);
+
+  outline-offset: 3px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+
+  width: 1px !important;
+  height: 1px !important;
+
+  padding: 0 !important;
+  margin: -1px !important;
+
+  overflow: hidden !important;
+
+  clip: rect(0, 0, 0, 0) !important;
+
+  white-space: nowrap !important;
+
+  border: 0 !important;
+}
+
+/*
+  Permanent iPhone Safari safety contract.
+*/
+@media (max-width: 700px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
