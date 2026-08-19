@@ -103,23 +103,69 @@ function parseAttachment(
 function parseReply(
   value: unknown,
 ): PocketReplySummary | null {
-  if (!isRecord(value)) return null
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const author =
+    value.author === 'EE'
+      ? 'EE'
+      : value.author === 'Aqi'
+        ? 'Aqi'
+        : undefined
 
   return {
-    ...(typeof value.id === 'string'
-      ? { id: value.id }
-      : {}),
+    ...(
+      typeof value.id === 'string'
+        ? {
+            id: value.id,
+          }
+        : {}
+    ),
 
-    ...(typeof value.text === 'string'
-      ? { text: value.text }
-      : {}),
+    ...(
+      author
+        ? {
+            author,
+          }
+        : {}
+    ),
 
-    ...(typeof value.content === 'string'
-      ? { content: value.content }
-      : {}),
+    ...(
+      typeof value.text === 'string'
+        ? {
+            text: value.text,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.content === 'string'
+        ? {
+            content: value.content,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.createdAt === 'string'
+        ? {
+            createdAt:
+              value.createdAt,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.source === 'string'
+        ? {
+            source:
+              value.source,
+          }
+        : {}
+    ),
   }
 }
-
 
 function parseActivityEntry(
   value: unknown,
@@ -1073,6 +1119,76 @@ export async function updatePocketItemNote(
   if (!item) {
     throw new Error(
       'Updated Drawer note could not be read.',
+    )
+  }
+
+  return item
+}
+
+export async function hidePocketReply(
+  itemId: string,
+  replyId: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await fetch(
+      `/api/pocket/items/${
+        encodeURIComponent(itemId)
+      }/replies/${
+        encodeURIComponent(replyId)
+      }`,
+      {
+        method: 'PATCH',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            hidden: true,
+          }),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error
+        === 'string'
+        ? payload.error
+        : `回条收起失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid reply item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      'Updated Drawer replies could not be read.',
     )
   }
 

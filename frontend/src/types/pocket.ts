@@ -26,8 +26,16 @@ export interface PocketAttachmentSummary {
 
 export interface PocketReplySummary {
   id?: string
+
+  author?:
+    | 'EE'
+    | 'Aqi'
+
   text?: string
   content?: string
+
+  createdAt?: string
+  source?: string
 }
 
 export interface PocketActivityEntry {

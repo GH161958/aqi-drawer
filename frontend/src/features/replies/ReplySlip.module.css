@@ -1,0 +1,188 @@
+.slip {
+  padding:
+    14px 13px 13px;
+
+  border:
+    1px solid
+    rgba(126, 104, 81, .20);
+
+  background:
+    #e9dfcc;
+
+  color:
+    var(--drawer-ink);
+
+  box-shadow:
+    1px 3px 7px
+    rgba(55, 39, 29, .04);
+}
+
+.slip[data-author="aqi"] {
+  border-left-color:
+    rgba(83, 96, 78, .32);
+}
+
+.header {
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 12px;
+}
+
+.kicker {
+  margin: 0;
+
+  color:
+    var(--drawer-brass);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .50rem;
+
+  letter-spacing: .08em;
+}
+
+.hideAction {
+  flex: none;
+
+  appearance: none;
+
+  padding:
+    2px 0;
+
+  border: 0;
+
+  border-bottom:
+    1px solid
+    rgba(110, 77, 64, .18);
+
+  background: transparent;
+
+  color:
+    rgba(110, 77, 64, .62);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .52rem;
+
+  cursor: pointer;
+}
+
+.hideAction:disabled {
+  cursor: default;
+
+  opacity: .48;
+}
+
+.text {
+  margin:
+    12px 0 0;
+
+  color:
+    rgba(52, 46, 39, .84);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .70rem;
+
+  line-height: 1.7;
+
+  white-space: pre-wrap;
+}
+
+.annotation {
+  margin:
+    11px 0 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .48rem;
+
+  line-height: 1.45;
+
+  letter-spacing: .045em;
+}
+
+.confirmation {
+  margin:
+    13px 0 0;
+
+  padding:
+    10px 0 0;
+
+  border-top:
+    1px solid
+    rgba(110, 77, 64, .14);
+}
+
+.confirmText {
+  margin: 0;
+
+  color:
+    rgba(72, 62, 52, .66);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .58rem;
+
+  line-height: 1.55;
+}
+
+.confirmActions {
+  display: flex;
+
+  gap: 12px;
+
+  margin:
+    9px 0 0;
+}
+
+.confirmHide,
+.cancelHide {
+  appearance: none;
+
+  padding:
+    3px 0;
+
+  border: 0;
+
+  background: transparent;
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .54rem;
+
+  cursor: pointer;
+}
+
+.confirmHide {
+  color:
+    rgba(112, 72, 58, .82);
+
+  border-bottom:
+    1px solid
+    rgba(112, 72, 58, .24);
+}
+
+.cancelHide {
+  color:
+    rgba(66, 81, 64, .72);
+}
+
+.confirmHide:disabled,
+.cancelHide:disabled {
+  cursor: default;
+
+  opacity: .45;
+}

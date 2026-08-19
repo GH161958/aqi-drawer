@@ -18,6 +18,10 @@ import {
   EeNotePaper,
 } from '../notes/EeNotePaper'
 
+import {
+  ReplyStack,
+} from '../replies/ReplyStack'
+
 import type {
   CabinetSlot,
   PocketItemSummary,
@@ -115,6 +119,10 @@ export function InspectStage({
           </div>
 
           <EeNotePaper
+            item={query.data}
+          />
+
+          <ReplyStack
             item={query.data}
           />
 

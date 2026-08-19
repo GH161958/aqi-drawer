@@ -1,0 +1,56 @@
+.stack {
+  width:
+    min(76%, 328px);
+
+  margin:
+    18px auto 0;
+}
+
+.stackHeader {
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  margin:
+    0 4px 8px;
+}
+
+.stackTitle,
+.count {
+  margin: 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .50rem;
+
+  letter-spacing: .09em;
+}
+
+.count {
+  opacity: .58;
+}
+
+.papers {
+  display: grid;
+
+  gap: 9px;
+}
+
+.feedback {
+  min-height: 1.3em;
+
+  margin:
+    7px 4px 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-size: .56rem;
+}
