@@ -14,6 +14,10 @@ import {
   InspectStage,
 } from '../features/inspect/InspectStage'
 
+import {
+  TypeCabinet,
+} from '../features/type-cabinet/TypeCabinet'
+
 import type {
   CabinetSlot,
 } from '../types/pocket'
@@ -95,6 +99,8 @@ export function App() {
         >
           Aqi Drawer
         </h1>
+
+        <TypeCabinet />
       </header>
 
       {activeItemId ? (
