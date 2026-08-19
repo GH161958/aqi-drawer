@@ -8,12 +8,16 @@ export const VAULT_ALLOWED_PATHS = Object.freeze([
   '20_VOICE/Aqi_Voice.md',
   '20_VOICE/Voice_Candidates.md',
   '40_WORK/Aqi_Engineering_Handoff.md',
+  '40_WORK/Aqi_Drawer/Architecture.md',
+  '40_WORK/Aqi_Drawer/Project_Plan.md',
 ])
 
 const HISTORY_DIRS = Object.freeze({
   '10_IDENTITY/Aqi_Seed.md': '10_IDENTITY/Seed_History',
   '20_VOICE/Aqi_Voice.md': '20_VOICE/Voice_History',
   '40_WORK/Aqi_Engineering_Handoff.md': '40_WORK/Handoff_History',
+  '40_WORK/Aqi_Drawer/Architecture.md': '40_WORK/Aqi_Drawer/History',
+  '40_WORK/Aqi_Drawer/Project_Plan.md': '40_WORK/Aqi_Drawer/History',
 })
 
 export class GitHubVaultClient {

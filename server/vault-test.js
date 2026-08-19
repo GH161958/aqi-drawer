@@ -5,6 +5,8 @@ import {
 } from './vault-client.js'
 
 const voicePath = '20_VOICE/Aqi_Voice.md'
+const drawerArchitecturePath = '40_WORK/Aqi_Drawer/Architecture.md'
+const drawerProjectPlanPath = '40_WORK/Aqi_Drawer/Project_Plan.md'
 const initialSha = 'a'.repeat(40)
 
 const files = new Map([
@@ -13,6 +15,13 @@ const files = new Map([
     {
       sha: initialSha,
       content: '# Aqi Voice\n\nbefore\n',
+    },
+  ],
+  [
+    drawerArchitecturePath,
+    {
+      sha: initialSha,
+      content: '# Drawer Architecture\n\nbefore\n',
     },
   ],
 ])
@@ -91,6 +100,8 @@ const description = client.describe()
 
 assert.equal(description.repository, 'GH161958/aqi-vault-canonical')
 assert.equal(description.paths.includes(voicePath), true)
+assert.equal(description.paths.includes(drawerArchitecturePath), true)
+assert.equal(description.paths.includes(drawerProjectPlanPath), true)
 assert.equal(description.paths.length, VAULT_ALLOWED_PATHS.length)
 assert.equal('token' in description, false)
 
@@ -135,6 +146,31 @@ const historyEntries = [...files.entries()]
 
 assert.equal(historyEntries.length, 1)
 assert.match(historyEntries[0][1].content, /before/)
+
+const drawerBefore = await client.read(drawerArchitecturePath)
+
+const drawerSaved = await client.update({
+  path: drawerArchitecturePath,
+  content: '# Drawer Architecture\n\nafter\n',
+  expectedSha: drawerBefore.sha,
+  commitMessage: 'Test Drawer Architecture update',
+})
+
+assert.equal(drawerSaved.path, drawerArchitecturePath)
+assert.match(
+  drawerSaved.historyPath,
+  /^40_WORK\/Aqi_Drawer\/History\/Architecture_/,
+)
+
+const drawerAfter = await client.read(drawerArchitecturePath)
+
+assert.match(drawerAfter.content, /after/)
+
+const drawerHistoryEntries = [...files.entries()]
+  .filter(([path]) => path.startsWith('40_WORK/Aqi_Drawer/History/'))
+
+assert.equal(drawerHistoryEntries.length, 1)
+assert.match(drawerHistoryEntries[0][1].content, /before/)
 
 const disabled = new GitHubVaultClient()
 
