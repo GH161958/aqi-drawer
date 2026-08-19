@@ -1,3 +1,4 @@
+import { TrashAction } from '../trash/TrashAction'
 import {
   OriginalPaper,
 } from './OriginalPaper'
@@ -131,6 +132,11 @@ export function InspectStage({
             onFiled={
               handleFiled
             }
+          />
+
+          <TrashAction
+            item={query.data}
+            onTrashed={onBack}
           />
         </>
       )}

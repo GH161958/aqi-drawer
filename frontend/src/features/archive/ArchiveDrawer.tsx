@@ -1,3 +1,4 @@
+import { TrashDrawer } from '../trash/TrashDrawer'
 import {
   cabinetSlotLabels,
   formatCabinetCount,
@@ -40,31 +41,9 @@ export function ArchiveDrawer({
 
   if (slot === 'trash') {
     return (
-      <section className={styles.view}>
-        <div className={styles.toolbar}>
-          <button
-            type="button"
-            className={styles.back}
-            onClick={onBack}
-          >
-            放回柜子
-          </button>
-
-          <p className={styles.label}>
-            DISCARDED
-          </p>
-        </div>
-
-        <div className={styles.emptyPaper}>
-          <p>
-            废纸已经在后端住好了。
-          </p>
-
-          <p>
-            Trash 的 React 房间稍后单独搬。
-          </p>
-        </div>
-      </section>
+      <TrashDrawer
+        onBack={onBack}
+      />
     )
   }
 

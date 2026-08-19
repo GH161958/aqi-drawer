@@ -1194,3 +1194,165 @@ export async function hidePocketReply(
 
   return item
 }
+
+
+export async function trashPocketItem(
+  id: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await fetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }/trash`,
+      {
+        method: 'POST',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          accept:
+            'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `放进废纸槽失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid trashed item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      '这张废纸暂时没有读回来。',
+    )
+  }
+
+  return item
+}
+
+export async function restorePocketItem(
+  id: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await fetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }/restore`,
+      {
+        method: 'POST',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          accept:
+            'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `恢复失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid restored item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      '恢复后的纸暂时没有读回来。',
+    )
+  }
+
+  return item
+}
+
+export async function permanentlyDeletePocketItem(
+  id: string,
+): Promise<void> {
+  const response =
+    await fetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }`,
+      {
+        method: 'DELETE',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          accept:
+            'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `永久删除失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || payload.deleted !== true
+  ) {
+    throw new Error(
+      'Drawer did not confirm permanent deletion.',
+    )
+  }
+}
