@@ -1,0 +1,41 @@
+name: Vault Bridge PR check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    if: github.head_ref == 'feat/vault-drawer-docs'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Drawer checks
+        run: npm run check
+
+      - name: Check diff whitespace
+        run: git diff --check origin/main...HEAD
+
+      - name: Remove temporary workflow after success
+        run: |
+          rm .github/workflows/vault-bridge-pr-check.yml
+          git add .github/workflows/vault-bridge-pr-check.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: remove temporary Vault Bridge PR check"
+          git push origin HEAD:${GITHUB_HEAD_REF}
