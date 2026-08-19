@@ -115,6 +115,20 @@
     rgba(36, 24, 18, .12),
     5px 6px 0
     #e8decb;
+
+  /*
+    Functional QA:
+    changing Type Cabinet changes the print,
+    not the physical fitting sheet.
+  */
+  height:
+    min(
+      680px,
+      calc(100dvh - 40px)
+    );
+
+  overflow-y: auto;
+
 }
 
 .close {
@@ -493,3 +507,5 @@
     gap: 5px;
   }
 }
+
+/* FUNCTIONAL QA · STABLE TYPE CABINET PAPER */
