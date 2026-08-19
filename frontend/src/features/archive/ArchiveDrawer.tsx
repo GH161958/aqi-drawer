@@ -1,4 +1,24 @@
-import { TrashDrawer } from '../trash/TrashDrawer'
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
+
+import {
+  TrashDrawer,
+} from '../trash/TrashDrawer'
+
+import {
+  deleteCollection,
+  deleteTagEverywhere,
+  listCollections,
+  listTagVocabulary,
+} from '../../api/pocket'
+
+import {
+  pocketQueryKeys,
+} from '../../api/queryKeys'
+
 import {
   cabinetSlotLabels,
   formatCabinetCount,
@@ -17,10 +37,33 @@ import {
   ItemPreview,
 } from './ItemPreview'
 
+import {
+  ArchiveIndex,
+} from './ArchiveIndex'
+
+import {
+  applyArchiveIndexFilters,
+  archiveIndexOptions,
+} from './archiveIndexLogic'
+
 import styles from './ArchiveDrawer.module.css'
 
 interface ArchiveDrawerProps {
   slot: CabinetSlot
+
+  collectionFilter: string
+  sourceFilter: string
+  tagFilter: string
+
+  onCollectionFilterChange:
+    (value: string) => void
+
+  onSourceFilterChange:
+    (value: string) => void
+
+  onTagFilterChange:
+    (value: string) => void
+
   onBack: () => void
 
   onInspect:
@@ -29,15 +72,115 @@ interface ArchiveDrawerProps {
 
 export function ArchiveDrawer({
   slot,
+  collectionFilter,
+  sourceFilter,
+  tagFilter,
+  onCollectionFilterChange,
+  onSourceFilterChange,
+  onTagFilterChange,
   onBack,
   onInspect,
 }: ArchiveDrawerProps) {
+  const queryClient =
+    useQueryClient()
 
   const {
-    items,
+    items: drawerItems,
     isPending,
     isError,
   } = useArchiveItems(slot)
+
+  const collectionsQuery =
+    useQuery({
+      queryKey: [
+        'pocket',
+        'collections',
+      ],
+
+      queryFn:
+        listCollections,
+    })
+
+  const tagsQuery =
+    useQuery({
+      queryKey: [
+        'pocket',
+        'tags',
+      ],
+
+      queryFn:
+        listTagVocabulary,
+    })
+
+  function refreshArchiveData() {
+    void queryClient.invalidateQueries({
+      queryKey:
+        pocketQueryKeys.all,
+    })
+
+    void queryClient.invalidateQueries({
+      queryKey: [
+        'pocket',
+        'collections',
+      ],
+    })
+
+    void queryClient.invalidateQueries({
+      queryKey: [
+        'pocket',
+        'tags',
+      ],
+    })
+  }
+
+  const collectionDelete =
+    useMutation({
+      mutationFn:
+        (collection: string) =>
+          deleteCollection(
+            collection,
+          ),
+
+      onSuccess:
+        (
+          _result,
+          collection,
+        ) => {
+          if (
+            collectionFilter
+            === collection
+          ) {
+            onCollectionFilterChange(
+              '',
+            )
+          }
+
+          refreshArchiveData()
+        },
+    })
+
+  const tagDelete =
+    useMutation({
+      mutationFn:
+        (tag: string) =>
+          deleteTagEverywhere(
+            tag,
+          ),
+
+      onSuccess:
+        (
+          _result,
+          tag,
+        ) => {
+          if (
+            tagFilter === tag
+          ) {
+            onTagFilterChange('')
+          }
+
+          refreshArchiveData()
+        },
+    })
 
   if (slot === 'trash') {
     return (
@@ -50,6 +193,52 @@ export function ArchiveDrawer({
   const label =
     cabinetSlotLabels[slot]
 
+  const showIndex =
+    slot === 'all'
+
+  const indexOptions =
+    archiveIndexOptions(
+      drawerItems,
+      collectionsQuery.data
+        ?? [],
+      tagsQuery.data
+        ?? [],
+    )
+
+  const effectiveCollection =
+    indexOptions.collections
+      .includes(
+        collectionFilter,
+      )
+      ? collectionFilter
+      : ''
+
+  const effectiveTag =
+    indexOptions.tags
+      .includes(
+        tagFilter,
+      )
+      ? tagFilter
+      : ''
+
+  const effectiveSource =
+    indexOptions.sources
+      .includes(
+        sourceFilter,
+      )
+      ? sourceFilter
+      : ''
+
+  const items =
+    showIndex
+      ? applyArchiveIndexFilters(
+          drawerItems,
+          effectiveCollection,
+          effectiveSource,
+          effectiveTag,
+        )
+      : drawerItems
+
   function openPreview(
     item: PocketItemSummary,
   ) {
@@ -61,7 +250,9 @@ export function ArchiveDrawer({
       className={styles.view}
       aria-labelledby="archive-title"
     >
-      <div className={styles.toolbar}>
+      <div
+        className={styles.toolbar}
+      >
         <button
           type="button"
           className={styles.back}
@@ -79,6 +270,7 @@ export function ArchiveDrawer({
           {!isPending && (
             <>
               {' · '}
+
               {formatCabinetCount(
                 items.length,
               )}
@@ -87,14 +279,80 @@ export function ArchiveDrawer({
         </p>
       </div>
 
+      {showIndex
+        && !isPending
+        && !isError && (
+          <ArchiveIndex
+            options={
+              indexOptions
+            }
+            collection={
+              effectiveCollection
+            }
+            tag={
+              effectiveTag
+            }
+            source={
+              effectiveSource
+            }
+            onCollectionChange={
+              onCollectionFilterChange
+            }
+            onTagChange={
+              onTagFilterChange
+            }
+            onSourceChange={
+              onSourceFilterChange
+            }
+            onDeleteCollection={
+              (collection) =>
+                collectionDelete
+                  .mutate(
+                    collection,
+                  )
+            }
+            onDeleteTag={
+              (tag) =>
+                tagDelete
+                  .mutate(tag)
+            }
+            deletingCollection={
+              collectionDelete
+                .isPending
+            }
+            deletingTag={
+              tagDelete.isPending
+            }
+            deleteCollectionError={
+              collectionDelete
+                .isError
+                ? collectionDelete
+                    .error
+                    .message
+                : ''
+            }
+            deleteTagError={
+              tagDelete.isError
+                ? tagDelete
+                    .error
+                    .message
+                : ''
+            }
+          />
+        )}
+
       {isPending && (
-        <div className={styles.state}>
+        <div
+          className={styles.state}
+        >
           正在轻轻拉开抽屉……
         </div>
       )}
 
       {isError && (
-        <div className={styles.state}>
+        <div
+          className={styles.state}
+        >
           抽屉暂时没有打开。
         </div>
       )}
@@ -107,24 +365,36 @@ export function ArchiveDrawer({
               styles.emptyPaper
             }
           >
-            这一格还是空的。
+            {showIndex
+              && (
+                effectiveCollection
+                || effectiveTag
+                || effectiveSource
+              )
+                ? '这个目录组合里暂时没有纸。'
+                : '这一格还是空的。'}
           </div>
         )}
 
       {!isPending
         && !isError
         && items.length > 0 && (
-          <ol className={styles.list}>
-            {items.map((item) => (
-              <ItemPreview
-                key={item.id}
-                item={item}
-                onOpen={openPreview}
-              />
-            ))}
+          <ol
+            className={styles.list}
+          >
+            {items.map(
+              (item) => (
+                <ItemPreview
+                  key={item.id}
+                  item={item}
+                  onOpen={
+                    openPreview
+                  }
+                />
+              ),
+            )}
           </ol>
         )}
-
     </section>
   )
 }

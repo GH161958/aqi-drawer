@@ -24,20 +24,55 @@ export function App() {
   const [
     activeSlot,
     setActiveSlot,
-  ] = useState<CabinetSlot | null>(
-    null,
-  )
+  ] =
+    useState<CabinetSlot | null>(
+      null,
+    )
 
   const [
     activeItemId,
     setActiveItemId,
-  ] = useState<string | null>(
-    null,
-  )
+  ] =
+    useState<string | null>(
+      null,
+    )
+
+  const [
+    archiveCollection,
+    setArchiveCollection,
+  ] =
+    useState('')
+
+  const [
+    archiveSource,
+    setArchiveSource,
+  ] =
+    useState('')
+
+  const [
+    archiveTag,
+    setArchiveTag,
+  ] =
+    useState('')
+
+  function resetArchiveIndex() {
+    setArchiveCollection('')
+    setArchiveSource('')
+    setArchiveTag('')
+  }
+
+  function openDrawer(
+    slot: CabinetSlot,
+  ) {
+    resetArchiveIndex()
+    setActiveSlot(slot)
+  }
 
   function returnToCabinet() {
     setActiveItemId(null)
     setActiveSlot(null)
+
+    resetArchiveIndex()
   }
 
   function returnToDrawer() {
@@ -46,12 +81,18 @@ export function App() {
 
   return (
     <main className={styles.shell}>
-      <header className={styles.header}>
-        <p className={styles.kicker}>
+      <header
+        className={styles.header}
+      >
+        <p
+          className={styles.kicker}
+        >
           things EE left for Aqi
         </p>
 
-        <h1 className={styles.title}>
+        <h1
+          className={styles.title}
+        >
           Aqi Drawer
         </h1>
       </header>
@@ -67,7 +108,27 @@ export function App() {
       ) : activeSlot ? (
         <ArchiveDrawer
           slot={activeSlot}
-          onBack={returnToCabinet}
+          collectionFilter={
+            archiveCollection
+          }
+          sourceFilter={
+            archiveSource
+          }
+          tagFilter={
+            archiveTag
+          }
+          onCollectionFilterChange={
+            setArchiveCollection
+          }
+          onSourceFilterChange={
+            setArchiveSource
+          }
+          onTagFilterChange={
+            setArchiveTag
+          }
+          onBack={
+            returnToCabinet
+          }
           onInspect={
             setActiveItemId
           }
@@ -75,7 +136,7 @@ export function App() {
       ) : (
         <CabinetHome
           activeSlot={null}
-          onOpen={setActiveSlot}
+          onOpen={openDrawer}
         />
       )}
     </main>
