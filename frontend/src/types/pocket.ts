@@ -38,6 +38,51 @@ export interface PocketReplySummary {
   source?: string
 }
 
+export interface PocketContentImage {
+  url: string
+  alt?: string
+}
+
+export interface PocketContentSnapshot {
+  siteName?: string
+  title?: string
+  author?: string
+  publishedAt?: string
+  description?: string
+  text?: string
+
+  detail?: 'compact' | 'full'
+
+  textTruncated?: boolean
+
+  finalUrl?: string
+  canonicalUrl?: string
+
+  images: PocketContentImage[]
+
+  browserCapturePlan?: {
+    needed?: boolean
+  }
+
+  video?: {
+    detected?: boolean
+    durationSeconds?: number
+  }
+
+  frameExtraction?: {
+    requested?: number
+    extracted?: number
+  }
+}
+
+export interface PocketContentReadResult {
+  snapshot: PocketContentSnapshot
+
+  cache: {
+    hit?: boolean
+  }
+}
+
 export interface PocketActivityEntry {
   type: string
   actor: string

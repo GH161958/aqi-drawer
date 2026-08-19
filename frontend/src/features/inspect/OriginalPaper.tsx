@@ -2,6 +2,10 @@ import type {
   PocketItemSummary,
 } from '../../types/pocket'
 
+import {
+  SourceReadPanel,
+} from '../source-reading/SourceReadPanel'
+
 import styles from './OriginalPaper.module.css'
 
 interface OriginalPaperProps {
@@ -130,6 +134,12 @@ export function OriginalPaper({
               ),
             )}
         </div>
+      )}
+
+      {item.sourceUrl && (
+        <SourceReadPanel
+          item={item}
+        />
       )}
 
       <footer className={styles.footer}>

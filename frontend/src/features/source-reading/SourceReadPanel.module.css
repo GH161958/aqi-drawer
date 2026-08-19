@@ -1,0 +1,188 @@
+.shell {
+  margin:
+    18px 0 0;
+
+  padding-top:
+    14px;
+
+  border-top:
+    1px solid
+    rgba(117, 94, 72, .14);
+}
+
+.readButton,
+.actions button,
+.actions a {
+  appearance: none;
+
+  padding:
+    3px 0;
+
+  border: 0;
+
+  border-bottom:
+    1px solid
+    rgba(102, 82, 62, .22);
+
+  background: transparent;
+
+  color:
+    rgba(69, 82, 65, .80);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .56rem;
+
+  text-decoration: none;
+
+  cursor: pointer;
+}
+
+.readButton:disabled,
+.actions button:disabled {
+  cursor: default;
+
+  opacity: .48;
+}
+
+.snapshot {
+  margin: 0;
+}
+
+.header {
+  margin: 0;
+}
+
+.site,
+.byline,
+.readMeta {
+  margin: 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .49rem;
+
+  letter-spacing: .055em;
+}
+
+.title {
+  margin:
+    7px 0 0;
+
+  color:
+    var(--drawer-ink);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .84rem;
+
+  font-weight: 500;
+
+  line-height: 1.35;
+}
+
+.byline {
+  margin-top: 6px;
+}
+
+.description {
+  margin:
+    13px 0 0;
+
+  color:
+    rgba(57, 50, 43, .72);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .64rem;
+
+  line-height: 1.65;
+}
+
+.text {
+  margin-top: 13px;
+
+  color:
+    rgba(48, 43, 37, .84);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .66rem;
+
+  line-height: 1.72;
+}
+
+.text p {
+  margin:
+    0 0 10px;
+}
+
+.text p:last-child {
+  margin-bottom: 0;
+}
+
+.images {
+  display: grid;
+
+  gap: 8px;
+
+  margin-top: 14px;
+}
+
+.images img {
+  display: block;
+
+  width: 100%;
+  height: auto;
+
+  border:
+    1px solid
+    rgba(105, 84, 64, .12);
+}
+
+.captureNote,
+.frameNote,
+.error {
+  margin:
+    11px 0 0;
+
+  color:
+    rgba(91, 70, 57, .72);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .57rem;
+
+  line-height: 1.55;
+}
+
+.actions {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap:
+    9px 14px;
+
+  margin-top: 14px;
+}
+
+.readMeta {
+  margin-top: 12px;
+
+  opacity: .64;
+}
+
+.error {
+  color:
+    rgba(116, 66, 57, .82);
+}

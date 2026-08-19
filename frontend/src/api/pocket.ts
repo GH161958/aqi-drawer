@@ -8,6 +8,8 @@ import {
 
 import type {
   PocketActivityEntry,
+  PocketContentReadResult,
+  PocketContentSnapshot,
   PocketAttachmentSummary,
   PocketItemSummary,
   PocketKind,
@@ -1354,5 +1356,320 @@ export async function permanentlyDeletePocketItem(
     throw new Error(
       'Drawer did not confirm permanent deletion.',
     )
+  }
+}
+
+
+function parseContentSnapshot(
+  value: unknown,
+): PocketContentSnapshot | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const images =
+    Array.isArray(value.images)
+      ? value.images
+          .filter(
+            (entry) =>
+              isRecord(entry)
+              && typeof entry.url
+                === 'string',
+          )
+          .map(
+            (entry) => ({
+              url:
+                String(entry.url),
+
+              ...(
+                typeof entry.alt === 'string'
+                  ? {
+                      alt:
+                        entry.alt,
+                    }
+                  : {}
+              ),
+            }),
+          )
+      : []
+
+  const browserCapturePlan =
+    isRecord(
+      value.browserCapturePlan,
+    )
+      ? {
+          needed:
+            value.browserCapturePlan
+              .needed === true,
+        }
+      : undefined
+
+  const video =
+    isRecord(value.video)
+      ? {
+          detected:
+            value.video.detected
+              === true,
+
+          ...(
+            typeof value.video
+              .durationSeconds
+              === 'number'
+              ? {
+                  durationSeconds:
+                    value.video
+                      .durationSeconds,
+                }
+              : {}
+          ),
+        }
+      : undefined
+
+  const frameExtraction =
+    isRecord(
+      value.frameExtraction,
+    )
+      ? {
+          ...(
+            typeof value.frameExtraction
+              .requested
+              === 'number'
+              ? {
+                  requested:
+                    value.frameExtraction
+                      .requested,
+                }
+              : {}
+          ),
+
+          ...(
+            typeof value.frameExtraction
+              .extracted
+              === 'number'
+              ? {
+                  extracted:
+                    value.frameExtraction
+                      .extracted,
+                }
+              : {}
+          ),
+        }
+      : undefined
+
+  return {
+    ...(
+      typeof value.siteName
+        === 'string'
+        ? {
+            siteName:
+              value.siteName,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.title
+        === 'string'
+        ? {
+            title:
+              value.title,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.author
+        === 'string'
+        ? {
+            author:
+              value.author,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.publishedAt
+        === 'string'
+        ? {
+            publishedAt:
+              value.publishedAt,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.description
+        === 'string'
+        ? {
+            description:
+              value.description,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.text
+        === 'string'
+        ? {
+            text:
+              value.text,
+          }
+        : {}
+    ),
+
+    ...(
+      value.detail === 'full'
+      || value.detail === 'compact'
+        ? {
+            detail:
+              value.detail,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.textTruncated
+        === 'boolean'
+        ? {
+            textTruncated:
+              value.textTruncated,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.finalUrl
+        === 'string'
+        ? {
+            finalUrl:
+              value.finalUrl,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.canonicalUrl
+        === 'string'
+        ? {
+            canonicalUrl:
+              value.canonicalUrl,
+          }
+        : {}
+    ),
+
+    images,
+
+    ...(
+      browserCapturePlan
+        ? {
+            browserCapturePlan,
+          }
+        : {}
+    ),
+
+    ...(
+      video
+        ? {
+            video,
+          }
+        : {}
+    ),
+
+    ...(
+      frameExtraction
+        ? {
+            frameExtraction,
+          }
+        : {}
+    ),
+  }
+}
+
+export async function readPocketItemContent(
+  id: string,
+  {
+    detail = 'compact',
+    maxImages = 2,
+    videoFrames = 0,
+  }: {
+    detail?: 'compact' | 'full'
+    maxImages?: number
+    videoFrames?: number
+  } = {},
+): Promise<PocketContentReadResult> {
+  const response =
+    await fetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }/read-content`,
+      {
+        method: 'POST',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            detail,
+            maxImages,
+            videoFrames,
+            refresh: false,
+          }),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `来源读取失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('snapshot' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid source snapshot.',
+    )
+  }
+
+  const snapshot =
+    parseContentSnapshot(
+      payload.snapshot,
+    )
+
+  if (!snapshot) {
+    throw new Error(
+      '这张剪报暂时没有成功展开。',
+    )
+  }
+
+  return {
+    snapshot,
+
+    cache:
+      isRecord(payload.cache)
+        ? {
+            hit:
+              payload.cache.hit
+                === true,
+          }
+        : {},
   }
 }
