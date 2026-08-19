@@ -1,3 +1,5 @@
+import { drawerFetch } from './http'
+
 import type {
   PocketItemsResponse,
 } from './contracts'
@@ -381,7 +383,7 @@ async function readItemList(
   path: string,
 ): Promise<PocketItemsResponse> {
   const response =
-    await fetch(path, {
+    await drawerFetch(path, {
       credentials: 'same-origin',
 
       headers: {
@@ -448,7 +450,7 @@ export async function getPocketItem(
   id: string,
 ): Promise<PocketItemSummary> {
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }`,
@@ -500,7 +502,7 @@ export async function updatePocketItemStatus(
   status: PocketStatus,
 ): Promise<PocketItemSummary> {
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }/review`,
@@ -573,7 +575,7 @@ export interface DeleteCollectionResult {
 export async function listCollections():
   Promise<string[]> {
   const response =
-    await fetch(
+    await drawerFetch(
       '/api/pocket/collections',
       {
         credentials: 'same-origin',
@@ -643,7 +645,7 @@ export async function createCollection(
   }
 
   const response =
-    await fetch(
+    await drawerFetch(
       '/api/pocket/collections',
       {
         method: 'POST',
@@ -712,7 +714,7 @@ export async function deleteCollection(
   }
 
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/collections/${
         encodeURIComponent(
           collection,
@@ -774,7 +776,7 @@ export async function updatePocketItemCollection(
     collection?.trim() || null
 
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }/metadata`,
@@ -884,7 +886,7 @@ export async function updatePocketItemTags(
     )
 
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }/metadata`,
@@ -950,7 +952,7 @@ export async function updatePocketItemTags(
 export async function listTagVocabulary():
   Promise<string[]> {
   const response =
-    await fetch(
+    await drawerFetch(
       '/api/pocket/tags',
       {
         credentials:
@@ -1014,7 +1016,7 @@ export async function deleteTagEverywhere(
   }
 
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/tags/${
         encodeURIComponent(tag)
       }`,
@@ -1065,7 +1067,7 @@ export async function updatePocketItemNote(
   note: string,
 ): Promise<PocketItemSummary> {
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }/note`,
@@ -1132,7 +1134,7 @@ export async function hidePocketReply(
   replyId: string,
 ): Promise<PocketItemSummary> {
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(itemId)
       }/replies/${
@@ -1202,7 +1204,7 @@ export async function trashPocketItem(
   id: string,
 ): Promise<PocketItemSummary> {
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }/trash`,
@@ -1260,7 +1262,7 @@ export async function restorePocketItem(
   id: string,
 ): Promise<PocketItemSummary> {
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }/restore`,
@@ -1318,7 +1320,7 @@ export async function permanentlyDeletePocketItem(
   id: string,
 ): Promise<void> {
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }`,
@@ -1598,7 +1600,7 @@ export async function readPocketItemContent(
   } = {},
 ): Promise<PocketContentReadResult> {
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }/read-content`,

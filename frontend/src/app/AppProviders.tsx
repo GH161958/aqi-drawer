@@ -7,13 +7,18 @@ import {
   QueryClientProvider,
 } from '@tanstack/react-query'
 
+import {
+  AuthGate,
+} from '../auth/AuthGate'
+
 const queryClient =
   new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 30_000,
         retry: 1,
-        refetchOnWindowFocus: false,
+        refetchOnWindowFocus:
+          false,
       },
     },
   })
@@ -25,7 +30,9 @@ export function AppProviders({
     <QueryClientProvider
       client={queryClient}
     >
-      {children}
+      <AuthGate>
+        {children}
+      </AuthGate>
     </QueryClientProvider>
   )
 }
