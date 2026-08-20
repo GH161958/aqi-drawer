@@ -98,18 +98,8 @@ try {
     'pocket_review',
     'pocket_start_context',
     'pocket_turn_open',
-    'vault_list',
-    'vault_read',
-    'vault_update',
   ].sort())
   assert.equal(names.some((name) => /ledger|training|health_room/.test(name)), false)
-
-  const vaultListed = await client.callTool({ name: 'vault_list', arguments: {} })
-  assert.equal(vaultListed.isError, undefined)
-  assert.equal(vaultListed.structuredContent.paths.includes('10_IDENTITY/Aqi_Seed.md'), true)
-  assert.equal(vaultListed.structuredContent.paths.includes('20_VOICE/Aqi_Voice.md'), true)
-  assert.equal(vaultListed.structuredContent.paths.includes('40_WORK/Aqi_Engineering_Handoff.md'), true)
-  assert.equal('token' in vaultListed.structuredContent, false)
 
   const listed = await client.callTool({ name: 'pocket_list', arguments: { limit: 10 } })
   assert.equal(listed.isError, undefined)
