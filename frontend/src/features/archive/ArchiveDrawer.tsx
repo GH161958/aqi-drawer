@@ -253,148 +253,160 @@ export function ArchiveDrawer({
       <div
         className={styles.toolbar}
       >
-        <button
-          type="button"
-          className={styles.back}
-          onClick={onBack}
-        >
-          放回柜子
-        </button>
-
         <p
           id="archive-title"
           className={styles.label}
+          aria-label={
+            !isPending
+              ? `${label} · ${formatCabinetCount(
+                  items.length,
+                )}`
+              : label
+          }
         >
           {label}
-
-          {!isPending && (
-            <>
-              {' · '}
-
-              {formatCabinetCount(
-                items.length,
-              )}
-            </>
-          )}
         </p>
       </div>
 
-      {showIndex
-        && !isPending
-        && !isError && (
-          <ArchiveIndex
-            options={
-              indexOptions
-            }
-            collection={
-              effectiveCollection
-            }
-            tag={
-              effectiveTag
-            }
-            source={
-              effectiveSource
-            }
-            onCollectionChange={
-              onCollectionFilterChange
-            }
-            onTagChange={
-              onTagFilterChange
-            }
-            onSourceChange={
-              onSourceFilterChange
-            }
-            onDeleteCollection={
-              (collection) =>
-                collectionDelete
-                  .mutate(
-                    collection,
-                  )
-            }
-            onDeleteTag={
-              (tag) =>
-                tagDelete
-                  .mutate(tag)
-            }
-            deletingCollection={
-              collectionDelete
-                .isPending
-            }
-            deletingTag={
-              tagDelete.isPending
-            }
-            deleteCollectionError={
-              collectionDelete
-                .isError
-                ? collectionDelete
-                    .error
-                    .message
-                : ''
-            }
-            deleteTagError={
-              tagDelete.isError
-                ? tagDelete
-                    .error
-                    .message
-                : ''
-            }
+      <section
+        className={styles.shell}
+        aria-live="polite"
+        aria-busy={isPending}
+      >
+        <button
+          type="button"
+          className={styles.handle}
+          aria-label="合上抽屉"
+          onClick={onBack}
+        >
+          <span
+            className={styles.handleGrip}
+            aria-hidden="true"
           />
-        )}
-
-      {isPending && (
-        <div
-          className={styles.state}
-        >
-          正在轻轻拉开抽屉……
-        </div>
-      )}
-
-      {isError && (
-        <div
-          className={styles.state}
-        >
-          抽屉暂时没有打开。
-        </div>
-      )}
-
-      {!isPending
-        && !isError
-        && items.length === 0 && (
-          <div
-            className={
-              styles.emptyPaper
-            }
+          <span
+            className="visually-hidden"
           >
-            {showIndex
-              && (
+            合上抽屉
+          </span>
+        </button>
+
+        {showIndex
+          && !isPending
+          && !isError && (
+            <ArchiveIndex
+              options={
+                indexOptions
+              }
+              collection={
                 effectiveCollection
-                || effectiveTag
-                || effectiveSource
-              )
-                ? '这个目录组合里暂时没有纸。'
-                : '这一格还是空的。'}
+              }
+              tag={
+                effectiveTag
+              }
+              source={
+                effectiveSource
+              }
+              onCollectionChange={
+                onCollectionFilterChange
+              }
+              onTagChange={
+                onTagFilterChange
+              }
+              onSourceChange={
+                onSourceFilterChange
+              }
+              onDeleteCollection={
+                (collection) =>
+                  collectionDelete
+                    .mutate(
+                      collection,
+                    )
+              }
+              onDeleteTag={
+                (tag) =>
+                  tagDelete
+                    .mutate(tag)
+              }
+              deletingCollection={
+                collectionDelete
+                  .isPending
+              }
+              deletingTag={
+                tagDelete.isPending
+              }
+              deleteCollectionError={
+                collectionDelete
+                  .isError
+                  ? collectionDelete
+                      .error
+                      .message
+                  : ''
+              }
+              deleteTagError={
+                tagDelete.isError
+                  ? tagDelete
+                      .error
+                      .message
+                  : ''
+              }
+            />
+          )}
+
+        {isPending && (
+          <div
+            className={styles.state}
+          >
+            正在轻轻拉开抽屉……
           </div>
         )}
 
-      {!isPending
-        && !isError
-        && items.length > 0 && (
-          <ol
-            className={styles.list}
+        {isError && (
+          <div
+            className={styles.state}
           >
-            {items.map(
-              (item) => (
-                <ItemPreview
-                  key={item.id}
-                  item={item}
-                  onOpen={
-                    openPreview
-                  }
-                />
-              ),
-            )}
-          </ol>
+            抽屉暂时没有打开。
+          </div>
         )}
+
+        {!isPending
+          && !isError
+          && items.length === 0 && (
+            <div
+              className={
+                styles.emptyPaper
+              }
+            >
+              {showIndex
+                && (
+                  effectiveCollection
+                  || effectiveTag
+                  || effectiveSource
+                )
+                ? '这个目录组合里暂时没有纸。'
+                : '这一格还是空的。'}
+            </div>
+          )}
+
+        {!isPending
+          && !isError
+          && items.length > 0 && (
+            <ol
+              className={styles.list}
+            >
+              {items.map(
+                (item) => (
+                  <ItemPreview
+                    key={item.id}
+                    item={item}
+                    onOpen={
+                      openPreview
+                    }
+                  />
+                ),
+              )}
+            </ol>
+          )}
+      </section>
     </section>
   )
 }
