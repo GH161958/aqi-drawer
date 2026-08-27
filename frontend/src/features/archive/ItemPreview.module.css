@@ -183,3 +183,430 @@
       20px 18px;
   }
 }
+
+/* ==========================================
+   DOCUMENT SPECIMEN V9
+
+   Ear returns.
+   Date stays put.
+
+   FILES belongs to the folder tab.
+   Date belongs to the folder body.
+
+   They are intentionally NOT one flex row.
+
+   Storage = stack.
+   Reading = spread.
+========================================== */
+
+.documentCarrier {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.documentFolder {
+  position: relative;
+
+  width: calc(100% - 38px);
+  max-width: 382px;
+  height: 212px;
+
+  margin:
+    26px 9px 15px auto;
+
+  text-align: left;
+
+  transform:
+    rotate(-.035deg);
+}
+
+/*
+  Integrated shallow folder ear.
+  No borders = no seam lines.
+*/
+
+.documentBack {
+  position: absolute;
+  z-index: 0;
+
+  top: -10px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  border: 0;
+
+  background:
+    #dacbad;
+
+  clip-path:
+    polygon(
+      0 10px,
+      7% 10px,
+      7% 0,
+      46% 0,
+      49% 10px,
+      100% 10px,
+      100% 100%,
+      0 100%
+    );
+
+  box-shadow:
+    1px 4px 8px
+    rgba(55, 39, 29, .038);
+}
+
+/*
+  Metadata wrapper is merely a positioning layer.
+
+  FILES lives on the raised ear.
+  Date lives on the flat folder shoulder.
+
+  No flex alignment.
+  No translateY.
+  No date wandering.
+*/
+
+.documentTab {
+  position: absolute;
+  z-index: 4;
+
+  top: -5px;
+  right: 0;
+  left: 0;
+
+  display: block;
+
+  width: auto;
+  height: 30px;
+
+  margin: 0;
+  padding: 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  box-shadow: none;
+
+  font-family:
+    var(--drawer-font-meta);
+
+  pointer-events: none;
+}
+
+.documentTab::after {
+  display: none;
+}
+
+.documentTab > span {
+  position: absolute;
+
+  top: 0;
+  left: 10%;
+
+  display: block;
+
+  margin: 0;
+  padding: 0;
+
+  color:
+    rgba(72, 62, 51, .45);
+
+  font-size: .44rem;
+  line-height: 1;
+
+  letter-spacing:
+    .15em;
+
+  transform: none;
+}
+
+.documentTab > time {
+  position: absolute;
+
+  top: 16px;
+  right: 17px;
+
+  display: block;
+
+  margin: 0;
+  padding: 0;
+
+  color:
+    rgba(72, 62, 51, .28);
+
+  font-size: .42rem;
+  line-height: 1;
+
+  letter-spacing:
+    .02em;
+
+  font-variant-numeric:
+    tabular-nums;
+
+  white-space: nowrap;
+
+  transform: none;
+}
+
+/*
+  Keep V8's quiet dossier page.
+*/
+
+.documentInnerSheet {
+  position: absolute;
+  z-index: 2;
+
+  top: 35px;
+  right: 18px;
+  left: 20px;
+
+  min-height: 137px;
+
+  padding:
+    15px 17px 39px 24px;
+
+  border: 0;
+
+  background:
+    #fbf6ea;
+
+  box-shadow:
+    1px 3px 6px
+    rgba(60, 43, 32, .030);
+
+  transform:
+    translateX(1px)
+    rotate(-.08deg);
+}
+
+.documentInnerSheet::after {
+  display: none;
+}
+
+.documentType {
+  margin:
+    0 0 16px;
+
+  color:
+    rgba(111, 91, 61, .48);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .43rem;
+
+  line-height: 1;
+
+  letter-spacing:
+    .18em;
+}
+
+.documentTitle {
+  max-width: 96%;
+
+  margin:
+    0 0 11px;
+
+  color:
+    #40382f;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .92rem;
+
+  font-weight: 500;
+
+  line-height: 1.4;
+
+  letter-spacing:
+    -.006em;
+}
+
+.documentPreview {
+  display: -webkit-box;
+
+  width: 100%;
+  max-width: none;
+
+  margin: 0;
+
+  overflow: hidden;
+
+  color:
+    rgba(64, 56, 47, .59);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .73rem;
+
+  line-height: 1.66;
+
+  letter-spacing:
+    -.006em;
+
+  overflow-wrap: normal;
+  word-break: normal;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp: 2;
+}
+
+/*
+  Keep the quiet front flap.
+*/
+
+.documentFront {
+  position: absolute;
+  z-index: 3;
+
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto;
+
+  align-items: end;
+
+  gap: 16px;
+
+  min-height: 45px;
+
+  padding:
+    13px 15px 10px;
+
+  border: 0;
+
+  background:
+    #d7c7a8;
+
+  box-shadow:
+    0 -2px 5px
+    rgba(73, 52, 36, .010);
+
+  color:
+    rgba(73, 63, 52, .41);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .44rem;
+
+  line-height: 1.3;
+
+  letter-spacing:
+    .025em;
+}
+
+.documentFront::before {
+  display: none;
+}
+
+.documentFilename {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+.documentSource {
+  color:
+    rgba(73, 63, 52, .26);
+
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .documentFolder {
+    width:
+      calc(100% - 26px);
+
+    height: 204px;
+
+    margin:
+      25px 6px 14px auto;
+  }
+
+  .documentBack {
+    top: -9px;
+
+    clip-path:
+      polygon(
+        0 9px,
+        7% 9px,
+        7% 0,
+        46% 0,
+        49% 9px,
+        100% 9px,
+        100% 100%,
+        0 100%
+      );
+  }
+
+  .documentTab {
+    top: -4px;
+
+    height: 28px;
+  }
+
+  .documentTab > span {
+    top: 0;
+    left: 10%;
+  }
+
+  .documentTab > time {
+    top: 14px;
+    right: 14px;
+  }
+
+  .documentInnerSheet {
+    top: 33px;
+    right: 15px;
+    left: 17px;
+
+    min-height: 132px;
+
+    padding:
+      14px 14px 37px 21px;
+  }
+
+  .documentType {
+    margin-bottom: 14px;
+  }
+
+  .documentTitle {
+    max-width: 100%;
+
+    font-size: .89rem;
+  }
+
+  .documentPreview {
+    font-size: .71rem;
+
+    line-height: 1.65;
+  }
+
+  .documentFront {
+    min-height: 43px;
+
+    padding:
+      12px 13px 9px;
+
+    gap: 14px;
+  }
+}
