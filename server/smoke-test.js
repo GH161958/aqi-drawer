@@ -401,9 +401,46 @@ try {
   }).then(checkJson)
   assert.equal(hiddenReply.changed, true)
   assert.deepEqual(hiddenReply.item.replies, [])
+
+  assert.equal(hiddenReply.item.hiddenReplies.length, 1)
+  assert.equal(hiddenReply.item.hiddenReplyCount, 1)
   const afterReplyHide = await bridge.store.get(source.id)
   assert.deepEqual(afterReplyHide.replies, [])
+
+  assert.equal(afterReplyHide.hiddenReplies.length, 1)
+  assert.equal(afterReplyHide.hiddenReplyCount, 1)
   assert.equal(afterReplyHide.activity.length, activityCountBeforeReplyHide)
+
+  const restoredReply = await fetch(
+    `${baseUrl}/api/pocket/items/${source.id}/replies/same-reply`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ hidden: false }),
+    },
+  ).then(checkJson)
+
+  assert.equal(restoredReply.changed, true)
+  assert.equal(restoredReply.item.replies.length, 1)
+  assert.deepEqual(restoredReply.item.hiddenReplies, [])
+  assert.equal(restoredReply.item.hiddenReplyCount, 0)
+
+  const restoredReplyAgain = await fetch(
+    `${baseUrl}/api/pocket/items/${source.id}/replies/same-reply`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ hidden: false }),
+    },
+  ).then(checkJson)
+
+  assert.equal(restoredReplyAgain.changed, false)
+  assert.equal(restoredReplyAgain.item.replies.length, 1)
+  assert.equal(
+    restoredReplyAgain.item.activity.length,
+    activityCountBeforeReplyHide,
+  )
+
 
   const staged = await client.callTool({
     name: 'pocket_review',

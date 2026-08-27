@@ -441,8 +441,16 @@ export async function createBridgeApp(config = {}) {
 
   app.patch('/api/pocket/items/:id/replies/:replyId', async (req, res, next) => {
     try {
-      if (req.body?.hidden !== true) return res.status(400).json({ error: 'Reply hidden must be true.' })
-      res.json(await store.hideReply(req.params.id, req.params.replyId))
+      if (typeof req.body?.hidden !== 'boolean') {
+        return res.status(400).json({ error: 'Reply hidden must be boolean.' })
+      }
+      res.json(
+        await store.setReplyHidden(
+          req.params.id,
+          req.params.replyId,
+          req.body.hidden,
+        ),
+      )
     } catch (error) { next(error) }
   })
 

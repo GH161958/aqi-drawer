@@ -113,6 +113,12 @@ export interface PocketItemSummary {
   replies:
     PocketReplySummary[]
 
+  hiddenReplies:
+    PocketReplySummary[]
+
+  hiddenReplyCount: number
+
+
   collection: string | null
 
   tags: string[]

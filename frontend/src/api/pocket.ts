@@ -307,6 +307,40 @@ function parsePocketItem(
           )
       : []
 
+  const hiddenReplies =
+
+
+    Array.isArray(value.hiddenReplies)
+
+
+      ? value.hiddenReplies
+
+
+          .map(parseReply)
+
+
+          .filter(
+
+
+            (
+
+
+              reply,
+
+
+            ): reply is PocketReplySummary =>
+
+
+              reply !== null,
+
+
+          )
+
+
+      : []
+
+
+
   const tags =
     Array.isArray(value.tags)
       ? value.tags.filter(
@@ -352,6 +386,17 @@ function parsePocketItem(
 
     attachments,
     replies,
+
+    hiddenReplies,
+
+    hiddenReplyCount:
+
+      typeof value.hiddenReplyCount === 'number'
+
+        ? value.hiddenReplyCount
+
+        : hiddenReplies.length,
+
 
     collection:
       typeof value.collection === 'string'
@@ -1193,6 +1238,78 @@ export async function hidePocketReply(
   if (!item) {
     throw new Error(
       'Updated Drawer replies could not be read.',
+    )
+  }
+
+  return item
+}
+
+
+
+export async function restorePocketReply(
+  itemId: string,
+  replyId: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await drawerFetch(
+      `/api/pocket/items/${
+        encodeURIComponent(itemId)
+      }/replies/${
+        encodeURIComponent(replyId)
+      }`,
+      {
+        method: 'PATCH',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            hidden: false,
+          }),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error
+        === 'string'
+        ? payload.error
+        : `回条放回失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid restored reply item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      'Restored Drawer reply could not be read.',
     )
   }
 
