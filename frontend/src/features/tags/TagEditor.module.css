@@ -1,6 +1,7 @@
 .field {
   display: grid;
 
+
   grid-template-columns:
     minmax(86px, .65fr)
     minmax(0, 1fr);
@@ -119,6 +120,9 @@
   color:
     var(--drawer-sage);
 
+  font-family:
+    var(--drawer-font-meta);
+  line-height: 1.4;
   font-size: .57rem;
 
   cursor: pointer;
@@ -221,6 +225,10 @@
   color:
     var(--drawer-ink);
 
+    font-family:
+    var(--drawer-font-body);
+  line-height: 1.5;
+
   font-size: 16px;
 
   outline: 0;
@@ -229,6 +237,12 @@
 .newInput:focus {
   border-bottom-color:
     var(--drawer-sage);
+}
+
+.newInput::placeholder {
+  color:
+    var(--drawer-quiet-ink);
+  opacity: .55;
 }
 
 .hint,
@@ -342,4 +356,22 @@ button:disabled {
   .newInput {
     font-size: 16px;
   }
+}
+
+
+/*
+  Mutation feedback owns a permanent line.
+  Text may change; surrounding paper must not jump.
+*/
+.feedback {
+  min-height: 1.5em;
+}
+
+/*
+  Pending mutations still disable controls,
+  but must not visually flash the whole editor.
+*/
+.field[data-busy='true'] button:disabled,
+.field[data-busy='true'] input:disabled {
+  opacity: 1;
 }

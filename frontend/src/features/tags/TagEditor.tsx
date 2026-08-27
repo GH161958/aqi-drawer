@@ -147,7 +147,14 @@ export function TagEditor({
   }
 
   return (
-    <div className={styles.field}>
+    <div
+      className={styles.field}
+      data-busy={
+        busy
+          ? 'true'
+          : undefined
+      }
+    >
       <div className={styles.label}>
         TAGS
       </div>
@@ -415,49 +422,22 @@ export function TagEditor({
                 </section>
               )}
 
-            {update.isPending && (
-              <p
-                className={
-                  styles.feedback
-                }
-              >
-                正在记下标签……
-              </p>
-            )}
-
-            {removeEverywhere.isPending && (
-              <p
-                className={
-                  styles.feedback
-                }
-              >
-                正在从整个 Drawer
-                移除标签……
-              </p>
-            )}
-
-            {update.isError && (
-              <p
-                className={
-                  styles.feedback
-                }
-              >
-                {update.error.message}
-              </p>
-            )}
-
-            {removeEverywhere.isError && (
-              <p
-                className={
-                  styles.feedback
-                }
-              >
-                {
-                  removeEverywhere
-                    .error.message
-                }
-              </p>
-            )}
+            <p
+              className={
+                styles.feedback
+              }
+              aria-live="polite"
+            >
+              {update.isPending
+                ? '正在记下标签……'
+                : removeEverywhere.isPending
+                  ? '正在从整个 Drawer 移除标签……'
+                  : update.isError
+                    ? update.error.message
+                    : removeEverywhere.isError
+                      ? removeEverywhere.error.message
+                      : '\u00A0'}
+            </p>
           </div>
         )}
 
