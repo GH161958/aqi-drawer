@@ -610,3 +610,479 @@
     gap: 14px;
   }
 }
+
+/* ==========================================
+   ARTICLE / LINK CLIPPING SPECIMEN V6
+
+   Physical accent pass.
+
+   One real fastening gesture:
+   a quiet brass paperclip binding
+   clipping + backing sheet.
+
+   No tape.
+   No fake stamps.
+   No scrapbook costume.
+
+   Real content is the decoration.
+========================================== */
+
+.articleCarrier {
+  padding: 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  box-shadow: none;
+}
+
+.articleObject {
+  position: relative;
+
+  width:
+    calc(100% - 72px);
+
+  max-width: 328px;
+
+  margin:
+    22px auto 23px 24px;
+
+  padding:
+    0 0 14px 14px;
+
+  text-align: left;
+
+  transform:
+    rotate(.12deg);
+}
+
+/*
+  Backing sheet is clearly independent
+  from the clipping, but remains quiet.
+*/
+
+
+/*
+  Archival keeper strip.
+
+  Inspired by the folded bond-paper strip used
+  beneath archival fasteners.
+
+  It gives the paperclip a physical reason
+  to exist while introducing only a whisper
+  of the Drawer sage accent.
+*/
+
+
+
+.articleMount {
+  position: absolute;
+  z-index: 0;
+
+  top: 13px;
+  right: -7px;
+  bottom: 2px;
+  left: 9px;
+
+  background:
+    #dfd4bd;
+
+  clip-path:
+    polygon(
+      .4% .6%,
+      99.4% 0,
+      100% 99.1%,
+      .7% 100%
+    );
+
+  box-shadow:
+    1px 4px 8px
+    rgba(57, 40, 30, .032);
+
+  transform:
+    rotate(-.38deg);
+
+  pointer-events: none;
+}
+
+/*
+  One actual fastening object.
+
+  Warm muted brass rather than shiny metal.
+  It physically crosses the top edge,
+  so it reads as a clip, not an icon.
+*/
+
+.articleTape {
+  position: absolute;
+  z-index: 5;
+
+  /*
+    One quiet collage gesture.
+
+    Slightly off mathematical center,
+    so it feels placed by hand rather
+    than auto-aligned by UI.
+  */
+
+  top: -7px;
+  left: 48%;
+
+  width: 54px;
+  height: 17px;
+
+  background:
+    rgba(190, 196, 171, .52);
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, .18);
+
+  border-bottom:
+    1px solid
+    rgba(99, 103, 83, .055);
+
+  box-shadow:
+    0 1px 2px
+    rgba(64, 54, 40, .025);
+
+  transform:
+    translateX(-50%)
+    rotate(-1deg);
+
+  pointer-events: none;
+}
+
+
+
+/*
+  The clipping remains the main object.
+*/
+
+.articleClipping {
+  position: relative;
+  z-index: 2;
+
+  min-height: 214px;
+
+  padding:
+    18px 20px 20px;
+
+  border: 0;
+
+  background:
+    #faf4e7;
+
+  color:
+    #40382f;
+
+  clip-path:
+    polygon(
+      .35% 0,
+      99.75% .35%,
+      100% 99.1%,
+      .20% 100%
+    );
+
+  box-shadow:
+    2px 5px 11px
+    rgba(57, 40, 30, .052);
+
+  transform:
+    translateX(2px)
+    rotate(-.18deg);
+}
+
+.articleClipping::before {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  bottom: 0;
+  left: 0;
+
+  width: 3px;
+
+  background:
+    linear-gradient(
+      to right,
+      rgba(117, 97, 68, .065),
+      rgba(117, 97, 68, 0)
+    );
+
+  pointer-events: none;
+}
+
+/*
+  Masthead is printed matter,
+  not application chrome.
+*/
+
+.articleMasthead {
+  position: relative;
+
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 18px;
+
+  margin:
+    0 0 23px;
+
+  padding:
+    0 0 10px;
+
+  border: 0;
+
+  font-family:
+    var(--drawer-font-meta);
+}
+
+.articleMasthead::after {
+  display: none;
+}
+
+.articleSource {
+  min-width: 0;
+
+  overflow: hidden;
+
+  color:
+    rgba(73, 86, 68, .70);
+
+  font-size: .47rem;
+
+  line-height: 1;
+
+  letter-spacing:
+    .14em;
+
+  text-overflow:
+    ellipsis;
+
+  white-space:
+    nowrap;
+}
+
+.articleDate {
+  flex: 0 0 auto;
+
+  color:
+    rgba(78, 68, 57, .30);
+
+  font-size: .42rem;
+
+  line-height: 1;
+
+  letter-spacing:
+    .015em;
+
+  font-variant-numeric:
+    tabular-nums;
+
+  white-space:
+    nowrap;
+}
+
+.articleTitle {
+  max-width: 93%;
+
+  margin:
+    0 0 18px;
+
+  color:
+    #3d352e;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    1.10rem;
+
+  font-weight: 500;
+
+  line-height: 1.38;
+
+  letter-spacing:
+    -.012em;
+
+  text-wrap:
+    balance;
+}
+
+.articleExcerpt {
+  display: -webkit-box;
+
+  max-width: 91%;
+
+  margin: 0;
+
+  overflow: hidden;
+
+  color:
+    rgba(61, 54, 47, .65);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .72rem;
+
+  line-height: 1.82;
+
+  letter-spacing:
+    -.004em;
+
+  text-wrap:
+    pretty;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp: 5;
+}
+
+.articleExcerpt::first-letter {
+  color:
+    rgba(55, 48, 41, .82);
+
+  font-size:
+    1.38em;
+
+  line-height:
+    .9;
+}
+
+.articleFooter {
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  margin-top: 22px;
+
+  padding: 0;
+
+  border: 0;
+
+  color:
+    rgba(81, 72, 62, .30);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .41rem;
+
+  line-height: 1.2;
+
+  letter-spacing:
+    .025em;
+}
+
+.articleFooter span {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow:
+    ellipsis;
+
+  white-space:
+    nowrap;
+}
+
+.articleFooter span:first-child {
+  max-width: 72%;
+}
+
+.articleFooter span:last-child {
+  color:
+    rgba(73, 86, 68, .34);
+}
+
+/*
+  Tiny paper-edge echo only.
+*/
+
+.articleObject::after {
+  display: none;
+}
+
+@media (max-width: 520px) {
+  .articleObject {
+    width:
+      calc(100% - 54px);
+
+    margin:
+      20px auto 21px 17px;
+
+    padding:
+      0 0 12px 12px;
+  }
+
+  .articleTape {
+    top: -6px;
+    left: 48%;
+
+    width: 49px;
+    height: 16px;
+  }
+
+  .articleMount {
+    top: 10px;
+    right: -8px;
+  }
+
+  .articleClipping {
+    min-height: 204px;
+
+    padding:
+      17px 18px 19px;
+
+    transform:
+      translateX(2px)
+      rotate(-.16deg);
+  }
+
+  .articleMasthead {
+    margin-bottom: 21px;
+
+    padding-bottom: 9px;
+  }
+
+  .articleMasthead::after {
+    width: 35%;
+  }
+
+  .articleTitle {
+    max-width: 96%;
+
+    margin-bottom: 16px;
+
+    font-size:
+      1.05rem;
+
+    line-height:
+      1.40;
+  }
+
+  .articleExcerpt {
+    max-width: 94%;
+
+    font-size: .71rem;
+
+    line-height: 1.78;
+
+    -webkit-line-clamp: 5;
+  }
+
+  .articleFooter {
+    margin-top: 20px;
+  }
+}

@@ -69,6 +69,22 @@ function formatDate(
   ).format(date)
 }
 
+function sourceDomain(
+  value: string,
+): string {
+  if (!value) {
+    return ''
+  }
+
+  try {
+    return new URL(value)
+      .hostname
+      .replace(/^www\./u, '')
+  } catch {
+    return ''
+  }
+}
+
 function documentType(
   mimeType: string,
 ): string {
@@ -126,6 +142,9 @@ export function ItemPreview({
   const isDocument =
     presentation.kind === 'document'
 
+  const isArticle =
+    presentation.kind === 'article'
+
   const attachment =
     item.attachments[0]
 
@@ -141,7 +160,9 @@ export function ItemPreview({
         className={
           isDocument
             ? `${styles.paper} ${styles.documentCarrier}`
-            : styles.paper
+            : isArticle
+              ? `${styles.paper} ${styles.articleCarrier}`
+              : styles.paper
         }
         data-kind={item.kind}
         data-presentation-kind={
@@ -246,6 +267,97 @@ export function ItemPreview({
                   || 'Aqi Drawer'}
               </span>
             </div>
+          </div>
+        ) : isArticle ? (
+          <div
+            className={
+              styles.articleObject
+            }
+          >
+            <span
+              className={
+                styles.articleTape
+              }
+              aria-hidden="true"
+            />
+
+            <div
+              className={
+                styles.articleMount
+              }
+              aria-hidden="true"
+            />
+
+            <article
+              className={
+                styles.articleClipping
+              }
+            >
+              <header
+                className={
+                  styles.articleMasthead
+                }
+              >
+                <span
+                  className={
+                    styles.articleSource
+                  }
+                >
+                  {item.sourceApp
+                    || sourceDomain(
+                      item.sourceUrl,
+                    )
+                    || 'WEB'}
+                </span>
+
+                {date && (
+                  <time
+                    className={
+                      styles.articleDate
+                    }
+                  >
+                    {date}
+                  </time>
+                )}
+              </header>
+
+              <h2
+                className={
+                  styles.articleTitle
+                }
+              >
+                {item.title
+                  || '收进来的一页网页'}
+              </h2>
+
+              {item.text.trim() && (
+                <p
+                  className={
+                    styles.articleExcerpt
+                  }
+                >
+                  {previewText(item)}
+                </p>
+              )}
+
+              <footer
+                className={
+                  styles.articleFooter
+                }
+              >
+                <span>
+                  {sourceDomain(
+                    item.sourceUrl,
+                  )}
+                </span>
+
+                {item.collection && (
+                  <span>
+                    {item.collection}
+                  </span>
+                )}
+              </footer>
+            </article>
           </div>
         ) : (
           <>
