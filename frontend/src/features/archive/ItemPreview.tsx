@@ -1,3 +1,8 @@
+import {
+  classifyPresentation,
+  presentationKindLabels,
+} from '../../presentation/classifyPresentation'
+
 import type {
   PocketItemSummary,
 } from '../../types/pocket'
@@ -51,6 +56,9 @@ export function ItemPreview({
   const image =
     firstPreviewImage(item)
 
+
+  const presentation =
+    classifyPresentation(item)
   const hasEeNote =
     Boolean(item.note.trim())
 
@@ -62,6 +70,13 @@ export function ItemPreview({
       <button
         className={styles.paper}
         data-kind={item.kind}
+
+        data-presentation-kind={
+          presentation.kind
+        }
+        data-source-flavor={
+          presentation.sourceFlavor
+        }
         type="button"
         onClick={() =>
           onOpen(item)
@@ -87,7 +102,11 @@ export function ItemPreview({
           </span>
 
           <span>
-            {item.kind.toUpperCase()}
+            {
+              presentationKindLabels[
+                presentation.kind
+              ]
+            }
           </span>
         </div>
 

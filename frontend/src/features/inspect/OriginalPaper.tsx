@@ -1,3 +1,8 @@
+import {
+  classifyPresentation,
+  presentationKindLabels,
+} from '../../presentation/classifyPresentation'
+
 import type {
   PocketItemSummary,
 } from '../../types/pocket'
@@ -49,8 +54,19 @@ export function OriginalPaper({
           .startsWith('image/'),
     )
 
+  const presentation =
+    classifyPresentation(item)
+
   return (
-    <article className={styles.paper}>
+    <article
+      className={styles.paper}
+      data-presentation-kind={
+        presentation.kind
+      }
+      data-source-flavor={
+        presentation.sourceFlavor
+      }
+    >
       <header className={styles.header}>
         <div className={styles.meta}>
           <span>
@@ -144,7 +160,11 @@ export function OriginalPaper({
 
       <footer className={styles.footer}>
         <span>
-          {item.kind.toUpperCase()}
+          {
+            presentationKindLabels[
+              presentation.kind
+            ]
+          }
         </span>
 
         {item.collection && (
