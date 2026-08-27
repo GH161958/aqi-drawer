@@ -21,6 +21,7 @@ const DRAWER_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 export async function createBridgeApp(config = {}) {
   const root = path.dirname(fileURLToPath(import.meta.url))
   const drawerRoot = path.join(root, '..', 'public')
+  const reactDrawerRoot = path.join(root, '..', 'react-dist')
   const settings = {
     dataDir: config.dataDir ?? process.env.C_POCKET_DATA_DIR ?? path.join(root, '..', 'data'),
     bridgeToken: config.bridgeToken ?? cleanEnvironmentValue(process.env.C_POCKET_BRIDGE_TOKEN),
@@ -79,6 +80,47 @@ export async function createBridgeApp(config = {}) {
   app.use(express.json({ limit: '2mb' }))
   app.use(express.urlencoded({ extended: false, limit: '2mb' }))
   app.use(express.text({ type: ['text/plain', 'text/*'], limit: '2mb' }))
+  /*
+    React production candidate.
+
+    /drawer remains the currently deployed legacy frontend.
+    /drawer-next serves the React QA build against the same
+    backend and the same persistent PocketStore.
+
+    No data migration occurs here.
+  */
+  app.get(
+    '/drawer-next',
+    (_req, res) =>
+      res.sendFile(
+        path.join(
+          reactDrawerRoot,
+          'index.html',
+        ),
+      ),
+  )
+
+  app.get(
+    '/drawer-next/',
+    (_req, res) =>
+      res.sendFile(
+        path.join(
+          reactDrawerRoot,
+          'index.html',
+        ),
+      ),
+  )
+
+  app.use(
+    '/drawer-next',
+    express.static(
+      reactDrawerRoot,
+      {
+        index: false,
+      },
+    ),
+  )
+
   app.get('/drawer', (_req, res) => res.sendFile(path.join(drawerRoot, 'index.html')))
   app.use('/drawer', express.static(drawerRoot, { index: false }))
   app.use(

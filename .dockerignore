@@ -5,3 +5,11 @@ data
 .env.*
 *.log
 
+
+# Aqi Drawer construction / local backup artifacts
+**/*.before-*
+**/*.motion-backup-*
+.agents
+skills-lock.json
+frontend/dist
+react-dist
