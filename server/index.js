@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import os from 'node:os'
 import express from 'express'
 import multer from 'multer'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
@@ -53,7 +54,25 @@ export async function createBridgeApp(config = {}) {
     }),
     limits: { files: 5, fileSize: 25 * 1024 * 1024 },
   })
-  const app = createMcpExpressApp({ host: settings.temporaryPublicMcp ? '0.0.0.0' : settings.serverHost })
+  const mcpHost =
+    settings.temporaryPublicMcp
+      ? '0.0.0.0'
+      : settings.serverHost
+
+  const mcpAppOptions = {
+    host: mcpHost,
+    ...(isLoopbackHost(mcpHost)
+      ? {
+          allowedHosts:
+            localDevelopmentHosts(),
+        }
+      : {}),
+  }
+
+  const app =
+    createMcpExpressApp(
+      mcpAppOptions,
+    )
   const transports = new Map()
 
   app.disable('x-powered-by')
@@ -603,6 +622,74 @@ function safeSecretEqual(value, expected) {
   const left = Buffer.from(String(value || ''))
   const right = Buffer.from(String(expected || ''))
   return left.length === right.length && timingSafeEqual(left, right)
+}
+
+function isLoopbackHost(value) {
+  return [
+    '127.0.0.1',
+    'localhost',
+    '::1',
+  ].includes(
+    cleanEnvironmentValue(value),
+  )
+}
+
+function localDevelopmentHosts() {
+  const hosts =
+    new Set([
+      '127.0.0.1',
+      'localhost',
+      '[::1]',
+    ])
+
+  const hostname =
+    cleanEnvironmentValue(
+      os.hostname(),
+    )
+
+  if (hostname) {
+    const lowerHostname =
+      hostname.toLowerCase()
+
+    hosts.add(hostname)
+    hosts.add(lowerHostname)
+
+    if (
+      !lowerHostname
+        .endsWith('.local')
+    ) {
+      hosts.add(
+        `${hostname}.local`,
+      )
+      hosts.add(
+        `${lowerHostname}.local`,
+      )
+    }
+  }
+
+  for (
+    const addresses
+    of Object.values(
+      os.networkInterfaces(),
+    )
+  ) {
+    for (
+      const address
+      of addresses || []
+    ) {
+      if (
+        address
+        && !address.internal
+        && address.family === 'IPv4'
+      ) {
+        hosts.add(
+          address.address,
+        )
+      }
+    }
+  }
+
+  return [...hosts]
 }
 
 function isSameOriginRequest(req) {

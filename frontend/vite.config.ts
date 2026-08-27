@@ -1,8 +1,31 @@
+import os from 'node:os'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const backend =
   'http://127.0.0.1:8787'
+
+const localHostname =
+  os.hostname()
+
+const lowerLocalHostname =
+  localHostname.toLowerCase()
+
+const localDevelopmentHosts =
+  Array.from(
+    new Set([
+      localHostname,
+      lowerLocalHostname,
+      lowerLocalHostname
+        .endsWith('.local')
+        ? localHostname
+        : `${localHostname}.local`,
+      lowerLocalHostname
+        .endsWith('.local')
+        ? lowerLocalHostname
+        : `${lowerLocalHostname}.local`,
+    ]),
+  )
 
 export default defineConfig({
   plugins: [
@@ -10,6 +33,8 @@ export default defineConfig({
   ],
 
   server: {
+    allowedHosts:
+      localDevelopmentHosts,
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
