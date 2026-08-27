@@ -1,126 +1,481 @@
 .home {
-  width: min(100%, 520px);
-  margin: 0 auto;
+  display: grid;
+
+  width: 100%;
+  min-height:
+    calc(100svh - 116px);
+
+  margin: 0;
+
+  padding:
+    clamp(28px, 6vh, 54px)
+    0
+    clamp(76px, 12vh, 122px);
+
+  align-content: center;
 }
+
+/*
+  LOCKED LEGACY CABINET
+
+  DOM relationship:
+  cabinet
+    plaque
+    drawers
+      drawer
+        paper edge
+        label
+        pull
+    discard
+    base
+*/
 
 .cabinet {
   position: relative;
 
-  padding: 18px 18px 15px;
+  width: min(74%, 390px);
+
+  margin:
+    0 auto;
+
+  padding:
+    43px 10px 15px;
 
   border:
     1px solid
-    var(--drawer-walnut-deep);
+    rgba(70, 52, 42, .24);
 
-  border-radius: 2px;
+  border-radius: 0;
 
   background:
-    var(--drawer-walnut);
+    #7b6252;
 
   box-shadow:
-    0 18px 40px
-    rgba(47, 32, 23, .14);
+    inset 3px 0
+      rgba(255, 255, 255, .025),
+    inset -3px 0
+      rgba(47, 33, 26, .08),
+    0 15px 24px
+      rgba(55, 39, 29, .085);
+}
+
+.cabinet::before {
+  position: absolute;
+
+  top: 7px;
+  right: 7px;
+  bottom: 7px;
+  left: 7px;
+
+  border:
+    1px solid
+    rgba(225, 205, 167, .075);
+
+  content: "";
+
+  pointer-events: none;
+}
+
+.cabinet::after {
+  position: absolute;
+
+  top: -6px;
+  right: -6px;
+  left: -6px;
+
+  height: 7px;
+
+  border-bottom:
+    1px solid
+    rgba(63, 43, 32, .22);
+
+  background:
+    #806656;
+
+  box-shadow:
+    0 5px 8px
+    rgba(47, 33, 26, .11);
+
+  content: "";
 }
 
 .plaque {
-  display: grid;
+  position: absolute;
+  z-index: 3;
 
-  grid-template-columns:
-    1fr auto;
+  top: 13px;
+  left: 19px;
+
+  display: flex;
 
   align-items: center;
 
-  width: 72%;
+  gap: 11px;
 
-  margin:
-    0 auto 18px;
+  width: auto;
+  min-height: 17px;
+
+  margin: 0;
 
   padding:
-    8px 11px;
+    3px 10px 3px 11px;
+
+  appearance: none;
 
   border:
     1px solid
-    rgba(137, 112, 73, .52);
+    rgba(151, 123, 77, .56);
 
   border-radius: 1px;
 
-  background:
-    var(--drawer-paper-soft);
-
   color:
-    var(--drawer-ink);
+    #e7dcc7;
+
+  background:
+    #634e40;
+
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(216, 188, 134, .075);
+
+  cursor: pointer;
 
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .72rem;
+  font-size:
+    .54rem;
 
-  letter-spacing: .055em;
+  line-height: 1.2;
 
-  cursor: pointer;
+  letter-spacing:
+    .075em;
+
+  white-space: nowrap;
 }
 
-.plaqueCount,
-.drawerCount,
-.discardCount {
+.plaqueCount {
+  color:
+    rgba(199, 170, 111, .46);
+
+  opacity: .48;
+
   font-variant-numeric:
     tabular-nums;
+
+  letter-spacing:
+    .1em;
 }
 
 .drawers {
   display: grid;
-  gap: 7px;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+
+  gap: 2px;
+
+  padding: 5px;
+
+  border:
+    1px solid
+    rgba(45, 31, 24, .24);
+
+  background:
+    #5d493e;
+
+  box-shadow:
+    inset 0 3px 5px
+    rgba(31, 21, 16, .12);
 }
 
 .drawer {
   position: relative;
 
-  display: grid;
-
-  grid-template-columns:
-    1fr 46px;
-
-  align-items: center;
-
-  min-height: 58px;
+  min-width: 0;
+  min-height: 82px;
 
   padding:
-    9px 14px;
+    13px 8px 22px;
 
-  border:
+  appearance: none;
+
+  border: 0;
+
+  border-top:
     1px solid
-    rgba(43, 29, 21, .42);
+    rgba(255, 255, 255, .42);
+
+  border-right:
+    1px solid
+    rgba(76, 50, 37, .16);
+
+  border-bottom:
+    2px solid
+    rgba(76, 50, 37, .26);
+
+  border-left:
+    1px solid
+    rgba(255, 255, 255, .20);
 
   border-radius: 1px;
 
-  background:
-    var(--drawer-walnut-soft);
-
   color:
-    var(--drawer-paper);
+    var(--drawer-ink);
+
+  background:
+    #e8decd;
 
   box-shadow:
-    inset 0 1px 0
-    rgba(255, 246, 226, .06);
+    inset 0 -4px 7px
+      rgba(76, 50, 37, .025),
+    0 1px
+      rgba(25, 16, 12, .14);
 
   cursor: pointer;
 
+  transform:
+    translateY(1px);
+
   transition:
-    transform 160ms ease,
-    box-shadow 160ms ease;
+    transform 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.drawer:nth-child(3n + 2) {
+  background:
+    #ebe1d1;
+}
+
+.drawer:nth-child(even) {
+  transform:
+    translateY(1.5px);
 }
 
 .drawer:hover,
-.drawer[aria-pressed="true"] {
-  transform:
-    translateY(-1px);
+.drawer:focus-visible {
+  background:
+    #e1d6c5;
 
   box-shadow:
-    0 5px 10px
-    rgba(39, 26, 19, .14);
+    inset 0 4px 7px
+      rgba(76, 50, 37, .06);
+
+  transform:
+    translateY(2px);
+}
+
+.drawer:active {
+  background:
+    #ded2c0;
+
+  box-shadow:
+    inset 0 5px 8px
+      rgba(76, 50, 37, .075);
+
+  transform:
+    translateY(4px);
+}
+
+.drawer:focus-visible {
+  outline:
+    1px solid
+    rgba(101, 112, 91, .78);
+
+  outline-offset:
+    -5px;
 }
 
 .drawerLabel {
+  position: relative;
+  z-index: 2;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 12px;
+
+  width: max-content;
+
+  min-width: 0;
+  max-width:
+    calc(100% - 14px);
+
+  min-height: 19px;
+
+  margin:
+    0 auto;
+
+  padding:
+    4px 11px 4px 12px;
+
+  border:
+    1px solid
+    rgba(137, 109, 69, .46);
+
+  border-radius: 0;
+
+  color:
+    #51493d;
+
+  background:
+    #f1e9da;
+
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(255, 255, 255, .28);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .52rem;
+
+  line-height: 1.2;
+
+  letter-spacing:
+    .025em;
+
+  white-space: nowrap;
+}
+
+.drawerLabel > span:first-child {
+  white-space: nowrap;
+
+  word-break:
+    keep-all;
+}
+
+.drawerCount {
+  min-width: 0;
+
+  margin-left: 0;
+
+  color:
+    rgba(105, 88, 62, .43);
+
+  opacity: .58;
+
+  font-size:
+    .48rem;
+
+  font-variant-numeric:
+    tabular-nums;
+
+  letter-spacing:
+    .12em;
+}
+
+.drawerPull {
+  position: absolute;
+  z-index: 2;
+
+  bottom: 10px;
+  left: 50%;
+
+  width: 27px;
+  height: 7px;
+
+  border:
+    1px solid
+    #806536;
+
+  border-radius:
+    1px 1px 6px 6px;
+
+  background:
+    #897049;
+
+  box-shadow:
+    inset 0 1px
+      rgba(213, 185, 126, .42),
+    0 1px 1px
+      rgba(47, 33, 26, .24);
+
+  transform:
+    translateX(-50%);
+
+  pointer-events: none;
+}
+
+.drawerPull::after {
+  display: block;
+
+  width: 16px;
+  height: 2px;
+
+  margin:
+    2px auto 0;
+
+  border-radius:
+    0 0 3px 3px;
+
+  background:
+    rgba(47, 33, 26, .68);
+
+  content: "";
+}
+
+/*
+  Current React paperEdge represents the final
+  legacy cabinet-presence-edge.
+
+  The old drawer-peek was explicitly hidden in
+  the locked legacy cascade.
+*/
+
+.paperEdge {
+  position: absolute;
+  z-index: 1;
+
+  top: -8px;
+  left: 18%;
+
+  display: block;
+
+  width: 62%;
+  height: 10px;
+
+  border:
+    1px solid
+    rgba(126, 104, 81, .14);
+
+  border-bottom: 0;
+
+  background:
+    #f4ecdd;
+
+  box-shadow:
+    0 1px 2px
+    rgba(53, 38, 29, .045);
+
+  transform: none;
+
+  pointer-events: none;
+}
+
+.drawer:nth-child(even)
+.paperEdge {
+  left: 21%;
+
+  width: 58%;
+}
+
+/*
+  DISCARDED is already a later feature.
+  Keep it visually subordinate to the cabinet;
+  we will restore its own exact legacy pass
+  separately instead of letting it redesign
+  the cabinet body.
+*/
+
+.discardTray {
   position: relative;
   z-index: 2;
 
@@ -131,98 +486,7 @@
 
   align-items: center;
 
-  width:
-    min(76%, 260px);
-
-  min-height: 29px;
-
-  margin: 0 auto;
-
-  padding:
-    6px 10px;
-
-  border:
-    1px solid
-    rgba(137, 112, 73, .35);
-
-  background:
-    var(--drawer-paper);
-
-  color:
-    var(--drawer-ink);
-
-  font-family:
-    var(--drawer-font-meta);
-
-  font-size: .70rem;
-
-  letter-spacing: .035em;
-}
-
-.drawerCount {
-  min-width: 2ch;
-
-  color:
-    var(--drawer-sage);
-}
-
-.drawerPull {
-  width: 31px;
-  height: 13px;
-
-  justify-self: center;
-
-  border:
-    1px solid
-    rgba(51, 36, 25, .58);
-
-  border-radius:
-    10px 10px 5px 5px;
-
-  background:
-    var(--drawer-brass);
-
-  box-shadow:
-    inset 0 1px 0
-    rgba(255, 246, 220, .18);
-}
-
-.paperEdge {
-  position: absolute;
-
-  top: -6px;
-  left: 20%;
-
-  width: 55%;
-  height: 8px;
-
-  border:
-    1px solid
-    var(--drawer-rule);
-
-  border-bottom: 0;
-
-  background:
-    var(--drawer-paper);
-
-  transform:
-    rotate(-.25deg);
-
-  pointer-events: none;
-}
-
-.discardTray {
-  position: relative;
-
-  display: grid;
-
-  grid-template-columns:
-    1fr auto;
-
-  align-items: center;
-
   width: 82%;
-
   min-height: 37px;
 
   margin:
@@ -231,6 +495,8 @@
   padding:
     8px 16px;
 
+  appearance: none;
+
   border:
     1px solid
     rgba(43, 29, 21, .38);
@@ -238,19 +504,20 @@
   border-radius: 1px;
 
   background:
-    var(--drawer-walnut-deep);
+    #59463b;
 
   color:
     rgba(243, 237, 223, .70);
+
+  cursor: pointer;
 
   font-family:
     var(--drawer-font-meta);
 
   font-size: .58rem;
 
-  letter-spacing: .14em;
-
-  cursor: pointer;
+  letter-spacing:
+    .14em;
 }
 
 .discardTray[aria-pressed="true"] {
@@ -283,6 +550,8 @@
 
   transform:
     rotate(.7deg);
+
+  pointer-events: none;
 }
 
 .discardTray[data-has-contents="true"]
@@ -290,70 +559,192 @@
   opacity: 1;
 }
 
+.discardCount {
+  font-variant-numeric:
+    tabular-nums;
+}
+
 .base {
-  width: 94%;
-  height: 11px;
+  width:
+    calc(100% + 12px);
+
+  height: 8px;
 
   margin:
-    11px auto -5px;
+    11px 0 -21px -6px;
 
   border-top:
     1px solid
-    rgba(43, 29, 21, .38);
+    rgba(214, 192, 148, .12);
 
   background:
-    var(--drawer-walnut-deep);
+    #705749;
+
+  box-shadow:
+    0 7px 9px -5px
+    rgba(47, 33, 26, .18);
 }
 
 .status {
   min-height: 1.4em;
 
   margin:
-    18px 0 0;
-
-  text-align: center;
+    25px auto 0;
 
   color:
     var(--drawer-quiet-ink);
 
+  text-align: center;
+
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .68rem;
+  font-size: .72rem;
 
-  letter-spacing: .025em;
-}
+  line-height: 1.5;
 
-@media (max-width: 520px) {
-  .cabinet {
-    padding:
-      15px 14px 13px;
-  }
-
-  .drawer {
-    min-height: 53px;
-
-    grid-template-columns:
-      1fr 40px;
-
-    padding:
-      8px 10px;
-  }
-
-  .drawerLabel {
-    width: 80%;
-  }
-
-  .discardTray {
-    width: 84%;
-  }
+  letter-spacing:
+    .04em;
 }
 
 /*
-  Functional-migration phase:
-  closed Cabinet stays quiet.
-  Presence paper returns during the final visual system pass.
+  The final legacy room CSS loaded after drawer.css.
+  These mobile values therefore win.
 */
-.paperEdge {
-  display: none;
+
+@media (max-width: 430px) {
+  .home {
+    min-height:
+      calc(100dvh - 76px);
+
+    padding:
+      clamp(
+        22px,
+        3.5dvh,
+        31px
+      )
+      0
+      clamp(
+        38px,
+        6dvh,
+        54px
+      );
+
+    align-content: center;
+  }
+
+  .cabinet {
+    width:
+      min(94vw, 364px);
+
+    padding-top:
+      42px;
+  }
+
+  .drawer {
+    min-height:
+      clamp(
+        136px,
+        18dvh,
+        156px
+      );
+
+    padding-inline:
+      5px;
+  }
+
+  .drawerLabel {
+    padding-inline:
+      11px;
+
+    font-size:
+      .5rem;
+  }
+}
+
+@media (max-width: 370px) {
+  .home {
+    padding-top:
+      18px;
+
+    padding-bottom:
+      34px;
+  }
+
+  .drawer {
+    min-height:
+      clamp(
+        128px,
+        17.5dvh,
+        142px
+      );
+  }
+}
+
+@media (min-width: 720px) {
+  .cabinet {
+    width: 420px;
+
+    padding:
+      46px 12px 17px;
+  }
+
+  .drawers {
+    gap: 4px;
+
+    padding: 6px;
+  }
+
+  .drawer {
+    min-height: 92px;
+
+    padding-top:
+      16px;
+  }
+}
+
+@media (min-width: 900px) {
+  .home {
+    padding-top:
+      clamp(
+        78px,
+        9vh,
+        104px
+      );
+
+    align-content: start;
+  }
+
+  .cabinet {
+    width: 470px;
+
+    margin-right: auto;
+
+    margin-left:
+      clamp(
+        120px,
+        14vw,
+        190px
+      );
+
+    padding:
+      47px 13px 18px;
+  }
+
+  .drawer {
+    min-height: 101px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer {
+    transition: none;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .drawer:focus,
+  .drawer:focus-visible {
+    outline: none;
+  }
 }
