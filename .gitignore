@@ -16,3 +16,6 @@ skills-lock.json
 # Local surgery backups
 *.before-*
 *.motion-backup*
+
+# Local presentation-design staging Store
+/data-presentation-staging/
