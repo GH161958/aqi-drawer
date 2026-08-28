@@ -2253,3 +2253,85 @@
       .33rem;
   }
 }
+
+/* ==========================================
+   TEXT LOOSE PAPER · V2
+
+   Text remains simply paper.
+
+   The second sheet is represented by
+   a crisp offset shadow-layer rather than
+   a pseudo-element.
+
+   This guarantees:
+   right / bottom exposure only.
+
+   No tape.
+   No clip.
+   No tab.
+   No typography redesign.
+========================================== */
+
+.paper[data-presentation-kind='text'] {
+  width:
+    calc(100% - 10px);
+
+  margin:
+    0 10px 8px 0;
+
+  overflow:
+    visible;
+
+  transform:
+    rotate(-.12deg);
+
+  /*
+    Layer 1:
+    an opaque quiet backing sheet,
+    shifted only right + down.
+
+    Layer 2:
+    the original soft paper shadow.
+  */
+
+  box-shadow:
+    6px 4px 0
+    #eee4d4,
+
+    2px 7px 18px
+    rgba(52, 39, 30, .07);
+}
+
+
+/*
+  V1 pseudo sheet deliberately removed.
+*/
+
+.paper[data-presentation-kind='text']::before {
+  content:
+    none;
+
+  display:
+    none;
+}
+
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='text'] {
+    width:
+      calc(100% - 8px);
+
+    margin:
+      0 8px 6px 0;
+
+    transform:
+      rotate(-.09deg);
+
+    box-shadow:
+      4px 3px 0
+      #eee4d4,
+
+      2px 7px 18px
+      rgba(52, 39, 30, .07);
+  }
+}
