@@ -645,14 +645,23 @@ export function ItemPreview({
               className={styles.meta}
             >
               <span>
-                {item.sourceApp}
+                {
+                  presentation.kind === 'video'
+                    ? `SCREENING · ${
+                      item.sourceApp
+                      || 'VIDEO'
+                    }`
+                    : item.sourceApp
+                }
               </span>
 
               <span>
                 {
-                  presentationKindLabels[
-                    presentation.kind
-                  ]
+                  presentation.kind === 'video'
+                    ? date
+                    : presentationKindLabels[
+                      presentation.kind
+                    ]
                 }
               </span>
             </div>

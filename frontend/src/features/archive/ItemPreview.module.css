@@ -2335,3 +2335,345 @@
       rgba(52, 39, 30, .07);
   }
 }
+
+
+/* ==========================================
+   VIDEO SCREENING SLIP · V1 SAFE
+
+   Archive has not watched the video.
+
+   Therefore:
+   no fake still,
+   no fake poster,
+   no play button,
+   no platform UI.
+
+   Existing generic DOM becomes:
+
+   title -> screening matte
+   meta  -> archival screening record
+
+   Real poster / keyframes belong to
+   future Inspect / Source Reading.
+
+   Storage = screening record.
+   Reading = moving-image evidence.
+========================================== */
+
+.paper[data-presentation-kind='video'] {
+  display:
+    grid;
+
+  width:
+    calc(100% - 24px);
+
+  max-width:
+    408px;
+
+  margin:
+    12px auto 18px;
+
+  padding:
+    9px;
+
+  border:
+    1px solid
+    rgba(116, 93, 71, .065);
+
+  background:
+    #f3ecdf;
+
+  box-shadow:
+    2px 6px 13px
+    rgba(50, 35, 27, .07);
+
+  transform:
+    rotate(-.08deg);
+
+  overflow:
+    visible;
+}
+
+
+/* ------------------------------------------
+   Film title-card / screening matte
+
+   This is NOT an image.
+   The saved title itself is the content.
+------------------------------------------ */
+
+.paper[data-presentation-kind='video']
+.title {
+  order:
+    1;
+
+  display:
+    grid;
+
+  width:
+    100%;
+
+  min-height:
+    164px;
+
+  aspect-ratio:
+    16 / 8.8;
+
+  margin:
+    0;
+
+  padding:
+    26px 30px;
+
+  overflow:
+    hidden;
+
+  background:
+    #777866;
+
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(242, 235, 222, .075);
+
+  color:
+    #f3ecdf;
+
+  font-family:
+    var(--drawer-font-display);
+
+  font-size:
+    clamp(
+      1.06rem,
+      4vw,
+      1.42rem
+    );
+
+  font-weight:
+    400;
+
+  line-height:
+    1.30;
+
+  letter-spacing:
+    -.012em;
+
+  text-align:
+    center;
+
+  place-items:
+    center;
+}
+
+
+/*
+  Keep long titles under control.
+*/
+
+.paper[data-presentation-kind='video']
+.title {
+  display:
+    -webkit-box;
+
+  align-content:
+    center;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+
+/* ------------------------------------------
+   Existing source/kind meta becomes
+   the screening record printed below.
+------------------------------------------ */
+
+.paper[data-presentation-kind='video']
+.meta {
+  order:
+    2;
+
+  display:
+    flex;
+
+  align-items:
+    baseline;
+
+  justify-content:
+    space-between;
+
+  gap:
+    16px;
+
+  margin:
+    0;
+
+  padding:
+    10px 4px 3px;
+
+  border:
+    0;
+
+  color:
+    rgba(75, 68, 59, .36);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .43rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .075em;
+}
+
+
+.paper[data-presentation-kind='video']
+.meta span:first-child {
+  color:
+    rgba(76, 91, 72, .66);
+
+  letter-spacing:
+    .09em;
+}
+
+
+.paper[data-presentation-kind='video']
+.meta span:last-child {
+  color:
+    rgba(75, 68, 59, .28);
+
+  letter-spacing:
+    .06em;
+
+  text-transform:
+    uppercase;
+}
+
+
+/* ------------------------------------------
+   Archive does not pretend to have
+   read/watched the moving content.
+
+   Full text remains available elsewhere.
+------------------------------------------ */
+
+.paper[data-presentation-kind='video']
+.preview {
+  display:
+    none;
+}
+
+
+/*
+  If a collection label exists,
+  keep it quiet underneath the record.
+*/
+
+.paper[data-presentation-kind='video']
+.collection {
+  order:
+    3;
+
+  margin:
+    5px 4px 0;
+
+  color:
+    rgba(75, 68, 59, .26);
+
+  font-size:
+    .38rem;
+}
+
+
+/* ------------------------------------------
+   Mobile
+------------------------------------------ */
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='video'] {
+    width:
+      calc(100% - 14px);
+
+    margin:
+      10px auto 16px;
+
+    padding:
+      8px;
+
+    transform:
+      rotate(-.06deg);
+  }
+
+  .paper[data-presentation-kind='video']
+  .title {
+    min-height:
+      142px;
+
+    aspect-ratio:
+      16 / 9;
+
+    padding:
+      23px 22px;
+
+    font-size:
+      1.02rem;
+  }
+
+  .paper[data-presentation-kind='video']
+  .meta {
+    gap:
+      12px;
+
+    padding:
+      9px 3px 2px;
+
+    font-size:
+      .39rem;
+  }
+}
+
+
+/* ==========================================
+   VIDEO SCREENING DATE · V1.1
+
+   Left  = screening source
+   Right = real saved date
+
+   No new decoration.
+========================================== */
+
+.paper[data-presentation-kind='video']
+.meta span:first-child {
+  color:
+    rgba(76, 91, 72, .66);
+
+  letter-spacing:
+    .095em;
+
+  white-space:
+    nowrap;
+}
+
+.paper[data-presentation-kind='video']
+.meta span:last-child {
+  color:
+    rgba(75, 68, 59, .28);
+
+  font-variant-numeric:
+    tabular-nums;
+
+  letter-spacing:
+    .015em;
+
+  text-transform:
+    none;
+
+  white-space:
+    nowrap;
+}
