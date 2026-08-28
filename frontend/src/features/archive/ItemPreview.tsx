@@ -429,23 +429,21 @@ export function ItemPreview({
               </div>
             )}
 
-            <div
+            <section
               className={
-                styles.xhsCaptionSlip
+                styles.xhsSocialBand
               }
             >
-              <h2
+              <span
                 className={
-                  styles.xhsCaptionTitle
+                  styles.xhsBandTape
                 }
-              >
-                {item.title
-                  || '收进来的一页'}
-              </h2>
+                aria-hidden="true"
+              />
 
               <div
                 className={
-                  styles.xhsPreviewRecord
+                  styles.xhsBandMeta
                 }
               >
                 <span>
@@ -457,17 +455,32 @@ export function ItemPreview({
                   <span>
                     {photoAttachments.length}
                     {' '}
-                    photos
+                    张
                   </span>
                 )}
+              </div>
 
+              <h2
+                className={
+                  styles.xhsBandTitle
+                }
+              >
+                {item.title
+                  || '收进来的一页'}
+              </h2>
+
+              <footer
+                className={
+                  styles.xhsBandFooter
+                }
+              >
                 {date && (
                   <time>
                     {date}
                   </time>
                 )}
-              </div>
-            </div>
+              </footer>
+            </section>
           </div>
         ) : isPhoto ? (
           <div

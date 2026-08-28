@@ -1902,3 +1902,354 @@
   opacity: .95;
 }
 /* AQI PAPERCLIP PHOTO V2 END */
+
+/* ==========================================
+   XHS SINGLE COVER SOCIAL SHEET · V5
+
+   Archive preview = cover.
+
+   One hero image only.
+   Remaining images are implied by the
+   source record ("3 张"), not shown here.
+
+   Inspect later becomes the spread.
+
+   Generic Photo remains:
+   sleeve + loose prints + brass paperclip.
+
+   XHS becomes:
+   one quiet editorial social sheet.
+
+   Storage = cover.
+   Reading = spread.
+========================================== */
+
+
+/* ------------------------------------------
+   One complete editorial sheet
+------------------------------------------ */
+
+.xhsStorageObject {
+  position: relative;
+
+  width:
+    calc(100% - 58px);
+
+  max-width:
+    282px;
+
+  margin:
+    22px auto 30px;
+
+  padding:
+    10px 10px 13px;
+
+  border:
+    1px solid
+    rgba(117, 101, 80, .06);
+
+  background:
+    #f3ecdf;
+
+  box-shadow:
+    1px 5px 10px
+    rgba(55, 39, 29, .07);
+
+  text-align:
+    left;
+
+  transform:
+    rotate(-.08deg);
+}
+
+
+/* ------------------------------------------
+   ONE cover image.
+
+   The DOM may still contain multiple images,
+   but Archive intentionally shows only #1.
+------------------------------------------ */
+
+.xhsPhotoStack {
+  position: relative;
+
+  display: block;
+
+  width: 100%;
+
+  aspect-ratio:
+    4 / 5;
+
+  margin: 0;
+
+  overflow: hidden;
+
+  background:
+    #ddd5c5;
+}
+
+.xhsPhotoStack img {
+  display: none;
+
+  position: static;
+
+  width: 100%;
+  height: 100%;
+
+  border: 0;
+
+  background:
+    var(--drawer-paper-soft);
+
+  object-fit:
+    cover;
+
+  object-position:
+    center 18%;
+
+  box-shadow: none;
+
+  transform: none;
+}
+
+.xhsPhotoStack img:first-child {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit:
+    cover;
+
+  object-position:
+    center 18%;
+}
+
+
+/* ------------------------------------------
+   Integrated social record.
+
+   Not a separate card.
+   Typography is printed into the same sheet.
+------------------------------------------ */
+
+.xhsSocialBand {
+  position: relative;
+
+  width: auto;
+
+  margin: 0;
+
+  padding:
+    10px 3px 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  box-shadow: none;
+
+  transform: none;
+}
+
+
+/*
+  No tape.
+  The sheet itself is already one object.
+*/
+
+.xhsBandTape {
+  display: none;
+}
+
+
+/* source + image count */
+
+.xhsBandMeta {
+  display: flex;
+
+  align-items:
+    baseline;
+
+  justify-content:
+    space-between;
+
+  gap:
+    12px;
+
+  margin:
+    0 0 7px;
+
+  color:
+    rgba(82, 75, 65, .33);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .39rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .055em;
+}
+
+
+/*
+  Tiny sage rule = source accent.
+  No red app chrome.
+*/
+
+.xhsBandMeta span:first-child {
+  padding-left:
+    6px;
+
+  border-left:
+    2px solid
+    rgba(111, 126, 103, .42);
+
+  color:
+    rgba(76, 91, 72, .65);
+
+  letter-spacing:
+    .10em;
+}
+
+.xhsBandMeta span:last-child {
+  white-space:
+    nowrap;
+}
+
+
+/* title */
+
+.xhsBandTitle {
+  display: -webkit-box;
+
+  margin: 0;
+
+  overflow:
+    hidden;
+
+  color:
+    #40382f;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .79rem;
+
+  font-weight:
+    500;
+
+  line-height:
+    1.35;
+
+  letter-spacing:
+    -.004em;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+
+/* date */
+
+.xhsBandFooter {
+  display: flex;
+
+  justify-content:
+    flex-end;
+
+  margin:
+    8px 0 0;
+
+  padding-top:
+    6px;
+
+  border-top:
+    1px solid
+    rgba(116, 93, 71, .055);
+
+  color:
+    rgba(83, 76, 67, .23);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .34rem;
+
+  line-height:
+    1;
+}
+
+.xhsBandFooter time {
+  font-variant-numeric:
+    tabular-nums;
+
+  white-space:
+    nowrap;
+}
+
+
+/* ------------------------------------------
+   Mobile
+------------------------------------------ */
+
+@media (max-width: 520px) {
+  .xhsStorageObject {
+    width:
+      calc(100% - 46px);
+
+    max-width:
+      270px;
+
+    margin:
+      20px auto 27px;
+
+    padding:
+      9px 9px 12px;
+  }
+
+  .xhsPhotoStack {
+    aspect-ratio:
+      4 / 5;
+  }
+
+  .xhsSocialBand {
+    padding:
+      9px 2px 0;
+  }
+
+  .xhsBandMeta {
+    margin-bottom:
+      6px;
+
+    font-size:
+      .37rem;
+  }
+
+  .xhsBandTitle {
+    font-size:
+      .75rem;
+  }
+
+  .xhsBandFooter {
+    margin-top:
+      7px;
+
+    padding-top:
+      5px;
+
+    font-size:
+      .33rem;
+  }
+}
