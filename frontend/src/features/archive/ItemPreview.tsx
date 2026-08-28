@@ -15,6 +15,19 @@ interface ItemPreviewProps {
     (item: PocketItemSummary) => void
 }
 
+function previewPhotoAttachments(
+  item: PocketItemSummary,
+) {
+  return item.attachments
+    .filter(
+      (attachment) =>
+        attachment.url
+        && attachment.mimeType
+          .startsWith('image/'),
+    )
+    .slice(0, 3)
+}
+
 function firstPreviewImage(
   item: PocketItemSummary,
 ): string | null {
@@ -145,6 +158,17 @@ export function ItemPreview({
   const isArticle =
     presentation.kind === 'article'
 
+  const isXhsPhoto =
+    presentation.kind === 'photo'
+    && presentation.sourceFlavor === 'xiaohongshu'
+
+  const isPhoto =
+    presentation.kind === 'photo'
+    && !isXhsPhoto
+
+  const photoAttachments =
+    previewPhotoAttachments(item)
+
   const attachment =
     item.attachments[0]
 
@@ -162,7 +186,11 @@ export function ItemPreview({
             ? `${styles.paper} ${styles.documentCarrier}`
             : isArticle
               ? `${styles.paper} ${styles.articleCarrier}`
-              : styles.paper
+              : isXhsPhoto
+                ? `${styles.paper} ${styles.xhsCarrier}`
+                : isPhoto
+                  ? `${styles.paper} ${styles.photoCarrier}`
+                  : styles.paper
         }
         data-kind={item.kind}
         data-presentation-kind={
@@ -358,6 +386,231 @@ export function ItemPreview({
                 )}
               </footer>
             </article>
+          </div>
+        ) : isXhsPhoto ? (
+          <div
+            className={
+              styles.xhsStorageObject
+            }
+          >
+            {photoAttachments.length > 0 && (
+              <div
+                className={
+                  styles.xhsPhotoStack
+                }
+                data-photo-count={
+                  photoAttachments.length
+                }
+              >
+                {photoAttachments.map(
+                  (
+                    photo,
+                    index,
+                  ) => (
+                    <img
+                      key={
+                        photo.id
+                        || `${photo.name}-${index}`
+                      }
+                      src={photo.url}
+                      alt={
+                        index === 0
+                          ? (
+                            item.title
+                            || photo.name
+                            || '小红书收藏图片'
+                          )
+                          : ''
+                      }
+                      loading="lazy"
+                    />
+                  ),
+                )}
+              </div>
+            )}
+
+            <div
+              className={
+                styles.xhsCaptionSlip
+              }
+            >
+              <h2
+                className={
+                  styles.xhsCaptionTitle
+                }
+              >
+                {item.title
+                  || '收进来的一页'}
+              </h2>
+
+              <div
+                className={
+                  styles.xhsPreviewRecord
+                }
+              >
+                <span>
+                  {item.sourceApp
+                    || '小红书'}
+                </span>
+
+                {photoAttachments.length > 0 && (
+                  <span>
+                    {photoAttachments.length}
+                    {' '}
+                    photos
+                  </span>
+                )}
+
+                {date && (
+                  <time>
+                    {date}
+                  </time>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : isPhoto ? (
+          <div
+            className={
+              styles.photoArchiveObject
+            }
+            data-photo-count={
+              photoAttachments.length
+            }
+          >
+            {photoAttachments.length === 1 ? (
+              <div
+                className={
+                  styles.photoSleeve
+                }
+              >
+
+
+                <div
+                  className={
+                    styles.photoSinglePrint
+                  }
+                >
+                  <img
+                    src={
+                      photoAttachments[0].url
+                    }
+                    alt={
+                      item.title
+                      || photoAttachments[0].name
+                      || '收藏照片'
+                    }
+                    loading="lazy"
+                  />
+                </div>
+
+                <div
+                  className={
+                    styles.photoSleeveRecord
+                  }
+                >
+                  <span>
+                    PHOTO · 01
+                  </span>
+
+                  {date && (
+                    <time>
+                      {date}
+                    </time>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div
+                className={
+                  styles.photoSetSleeve
+                }
+              >
+
+
+                <div
+                  className={
+                    styles.photoSetStack
+                  }
+                  data-photo-count={
+                    photoAttachments.length
+                  }
+                >
+                  {photoAttachments.map(
+                    (
+                      photo,
+                      index,
+                    ) => (
+                      <img
+                        key={
+                          photo.id
+                          || `${photo.name}-${index}`
+                        }
+                        src={photo.url}
+                        alt={
+                          index === 0
+                            ? (
+                              item.title
+                              || photo.name
+                              || '收藏照片'
+                            )
+                            : ''
+                        }
+                        loading="lazy"
+                      />
+                    ),
+                  )}
+                </div>
+
+                <div
+                  className={
+                    styles.photoSetRecord
+                  }
+                >
+                  <span>
+                    PHOTO SET
+                  </span>
+
+                  <span>
+                    {
+                      photoAttachments.length
+                    }
+                    {' '}
+                    PRINTS
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div
+              className={
+                styles.photoArchiveLabel
+              }
+            >
+              <h2>
+                {item.title
+                  || (
+                    photoAttachments.length > 1
+                      ? '收进来的一组照片'
+                      : '收进来的一张照片'
+                  )}
+              </h2>
+
+              <div>
+                <span>
+                  {item.sourceApp
+                    || '照片'}
+                </span>
+
+                {photoAttachments.length > 1 && (
+                  <span>
+                    {photoAttachments.length}
+                    {' '}
+                    frames
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           <>

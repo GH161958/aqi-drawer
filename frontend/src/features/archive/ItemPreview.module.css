@@ -1086,3 +1086,819 @@
     margin-top: 20px;
   }
 }
+
+/* ==========================================
+   PHOTO PREVIEW SPECIMEN V7
+
+   Source split restored.
+
+   XHS:
+   → legacy stacked-photo social packet
+   → caption slip overlaps photo stack
+
+   Generic single photo:
+   → one print in translucent sleeve
+
+   Generic photo set:
+   → stacked prints inside translucent sleeve
+   → NOT a contact sheet
+
+   Shared photo body,
+   different source accent.
+========================================== */
+
+
+/* ------------------------------------------
+   XHS · restore legacy storage object
+------------------------------------------ */
+
+.xhsCarrier {
+  padding: 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  box-shadow: none;
+}
+
+.xhsStorageObject {
+  position: relative;
+
+  width:
+    calc(100% - 18px);
+
+  max-width:
+    340px;
+
+  margin:
+    17px auto 25px;
+
+  padding:
+    3px 2px 8px;
+
+  text-align:
+    left;
+}
+
+.xhsPhotoStack {
+  position: relative;
+
+  width:
+    min(88%, 250px);
+
+  aspect-ratio:
+    4 / 5;
+
+  margin:
+    0 auto;
+}
+
+.xhsPhotoStack img {
+  position: absolute;
+
+  width:
+    calc(100% - 13px);
+
+  height:
+    calc(100% - 12px);
+
+  border:
+    5px solid
+    #f7f1e6;
+
+  background:
+    var(--drawer-paper-soft);
+
+  object-fit:
+    cover;
+
+  object-position:
+    center 18%;
+
+  box-shadow:
+    1px 5px 9px
+    rgba(50, 35, 27, .12);
+}
+
+.xhsPhotoStack img:nth-child(1) {
+  z-index: 3;
+
+  top: 0;
+  left: 0;
+
+  transform:
+    rotate(-.42deg);
+}
+
+.xhsPhotoStack img:nth-child(2) {
+  z-index: 2;
+
+  top: 5px;
+  left: 6px;
+
+  transform:
+    rotate(0deg);
+}
+
+.xhsPhotoStack img:nth-child(3) {
+  z-index: 1;
+
+  top: 10px;
+  left: 12px;
+
+  transform:
+    rotate(.42deg);
+}
+
+.xhsPhotoStack[
+  data-photo-count="1"
+] img {
+  width: 100%;
+  height: 100%;
+
+  top: 0;
+  left: 0;
+
+  transform:
+    rotate(-.22deg);
+}
+
+.xhsCaptionSlip {
+  position: relative;
+  z-index: 6;
+
+  width:
+    min(84%, 245px);
+
+  margin:
+    -31px 1px 0 auto;
+
+  padding:
+    14px 15px 12px;
+
+  border:
+    1px solid
+    rgba(116, 93, 71, .08);
+
+  background:
+    var(--drawer-paper, #f7f1e6);
+
+  box-shadow:
+    1px 3px 6px
+    rgba(66, 44, 29, .07);
+
+  transform:
+    rotate(.22deg);
+}
+
+.xhsCaptionTitle {
+  display: -webkit-box;
+
+  margin:
+    0 0 8px;
+
+  overflow:
+    hidden;
+
+  color:
+    #40382f;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    1rem;
+
+  font-weight:
+    500;
+
+  line-height:
+    1.32;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+.xhsPreviewRecord {
+  display: flex;
+
+  flex-wrap:
+    wrap;
+
+  align-items:
+    baseline;
+
+  gap:
+    5px 8px;
+
+  margin: 0;
+
+  padding-top:
+    8px;
+
+  border-top:
+    1px solid
+    rgba(116, 93, 71, .10);
+
+  color:
+    rgba(83, 76, 67, .45);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .57rem;
+
+  line-height:
+    1.35;
+}
+
+.xhsPreviewRecord time {
+  margin-left:
+    auto;
+
+  color:
+    rgba(83, 76, 67, .29);
+
+  font-variant-numeric:
+    tabular-nums;
+}
+
+
+/* ------------------------------------------
+   Generic Photo
+------------------------------------------ */
+
+.photoCarrier {
+  padding: 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  box-shadow: none;
+}
+
+.photoArchiveObject {
+  position: relative;
+
+  width:
+    calc(100% - 48px);
+
+  max-width:
+    352px;
+
+  margin:
+    19px auto 24px;
+
+  padding-bottom:
+    34px;
+
+  text-align:
+    left;
+}
+
+
+/*
+  Generic Photo paperclip.
+
+  V6:
+  replace the hand-drawn border clip with a cleaner
+  inline SVG brass clip so the silhouette reads more
+  like a real stationery paperclip.
+*/
+
+
+
+
+
+
+/* Single */
+
+.photoSleeve {
+  position: relative;
+
+  width:
+    min(84%, 286px);
+
+  margin:
+    0 auto;
+
+  padding:
+    13px 13px 31px;
+
+  background:
+    rgba(223, 226, 211, .50);
+
+  border:
+    1px solid
+    rgba(104, 105, 87, .075);
+
+  box-shadow:
+    1px 4px 8px
+    rgba(55, 39, 29, .035);
+
+  transform:
+    rotate(-.18deg);
+}
+
+.photoSleeve::after,
+.photoSetSleeve::after {
+  content: "";
+
+  position: absolute;
+
+  z-index: 4;
+
+  inset:
+    4px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, .19);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, .07),
+      rgba(255, 255, 255, 0) 42%
+    );
+
+  pointer-events:
+    none;
+}
+
+.photoSinglePrint {
+  position: relative;
+
+  z-index: 1;
+
+  aspect-ratio:
+    4 / 5;
+
+  padding:
+    5px;
+
+  background:
+    #f8f1e4;
+
+  box-shadow:
+    1px 4px 8px
+    rgba(50, 35, 27, .10);
+
+  transform:
+    translateY(2px)
+    rotate(.10deg);
+}
+
+.photoSinglePrint img {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit:
+    cover;
+
+  background:
+    var(--drawer-paper-soft);
+}
+
+.photoSleeveRecord {
+  position: absolute;
+
+  z-index: 5;
+
+  right: 12px;
+  bottom: 10px;
+  left: 12px;
+
+  display: flex;
+
+  justify-content:
+    space-between;
+
+  align-items:
+    baseline;
+
+  gap: 12px;
+
+  color:
+    rgba(76, 78, 65, .44);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .44rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .10em;
+}
+
+.photoSleeveRecord time {
+  color:
+    rgba(76, 78, 65, .29);
+
+  letter-spacing:
+    .015em;
+
+  font-variant-numeric:
+    tabular-nums;
+}
+
+
+/* Generic multi-photo:
+   stacked prints INSIDE one sleeve.
+*/
+
+.photoSetSleeve {
+  position: relative;
+
+  width:
+    min(88%, 300px);
+
+  margin:
+    0 auto;
+
+  padding:
+    13px 13px 34px;
+
+  background:
+    rgba(223, 226, 211, .46);
+
+  border:
+    1px solid
+    rgba(104, 105, 87, .07);
+
+  box-shadow:
+    1px 4px 8px
+    rgba(55, 39, 29, .032);
+
+  transform:
+    rotate(.12deg);
+}
+
+.photoSetStack {
+  position: relative;
+
+  z-index: 1;
+
+  width:
+    min(88%, 250px);
+
+  aspect-ratio:
+    4 / 5;
+
+  margin:
+    0 auto 7px;
+
+  overflow:
+    visible;
+}
+
+.photoSetStack img {
+  position: absolute;
+
+  width:
+    calc(100% - 18px);
+
+  height:
+    calc(100% - 18px);
+
+  border:
+    5px solid
+    #f7f1e6;
+
+  background:
+    var(--drawer-paper-soft);
+
+  object-fit:
+    cover;
+
+  box-shadow:
+    1px 4px 8px
+    rgba(50, 35, 27, .10);
+}
+
+.photoSetStack img:nth-child(1) {
+  z-index: 3;
+
+  top: 0;
+  left: 0;
+
+  transform:
+    rotate(-.42deg);
+}
+
+.photoSetStack img:nth-child(2) {
+  z-index: 2;
+
+  top: 7px;
+  left: 8px;
+
+  transform:
+    rotate(.08deg);
+}
+
+.photoSetStack img:nth-child(3) {
+  z-index: 1;
+
+  top: 14px;
+  left: 16px;
+
+  transform:
+    rotate(.48deg);
+}
+
+.photoSetRecord {
+  position: absolute;
+
+  z-index: 5;
+
+  right: 12px;
+  bottom: 10px;
+  left: 12px;
+
+  display: flex;
+
+  justify-content:
+    space-between;
+
+  gap: 12px;
+
+  color:
+    rgba(76, 78, 65, .43);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .43rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .10em;
+}
+
+
+/* Generic filing label */
+
+.photoArchiveLabel {
+  position: relative;
+
+  z-index: 6;
+
+  width:
+    72%;
+
+  margin:
+    -13px 4px 0 auto;
+
+  padding:
+    10px 12px 9px;
+
+  background:
+    #f2ebdd;
+
+  box-shadow:
+    1px 2px 4px
+    rgba(66, 44, 29, .045);
+
+  transform:
+    rotate(.10deg);
+}
+
+.photoArchiveLabel h2 {
+  display: -webkit-box;
+
+  margin:
+    0 0 8px;
+
+  overflow:
+    hidden;
+
+  color:
+    #423a31;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .84rem;
+
+  font-weight:
+    500;
+
+  line-height:
+    1.38;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+.photoArchiveLabel > div {
+  display: flex;
+
+  align-items:
+    baseline;
+
+  gap:
+    8px;
+
+  padding-top:
+    6px;
+
+  border-top:
+    1px solid
+    rgba(116, 93, 71, .075);
+
+  color:
+    rgba(82, 75, 65, .40);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .44rem;
+
+  line-height:
+    1.25;
+}
+
+
+/* ------------------------------------------
+   Mobile
+------------------------------------------ */
+
+@media (max-width: 520px) {
+  .xhsStorageObject {
+    width:
+      calc(100% - 10px);
+
+    margin:
+      15px auto 22px;
+  }
+
+  .xhsPhotoStack {
+    width:
+      min(86%, 236px);
+  }
+
+  .xhsPhotoStack img {
+    border-width:
+      4px;
+  }
+
+  .xhsCaptionSlip {
+    width:
+      min(82%, 228px);
+
+    margin-top:
+      -27px;
+
+    padding:
+      12px 13px 11px;
+  }
+
+  .xhsCaptionTitle {
+    font-size:
+      .92rem;
+  }
+
+  .xhsPreviewRecord {
+    font-size:
+      .54rem;
+  }
+
+  .photoArchiveObject {
+    width:
+      calc(100% - 32px);
+
+    margin:
+      17px auto 22px;
+
+    padding-bottom:
+      31px;
+  }
+
+  .photoSleeve {
+    width:
+      min(85%, 260px);
+
+    padding:
+      11px 11px 29px;
+  }
+
+  .photoSinglePrint {
+    padding:
+      4px;
+  }
+
+
+
+  .photoSetSleeve {
+    width:
+      min(88%, 274px);
+
+    padding:
+      11px 11px 31px;
+  }
+
+  .photoSetStack {
+    width:
+      min(87%, 232px);
+  }
+
+  .photoSetStack img {
+    border-width:
+      4px;
+  }
+
+  .photoSetStack img:nth-child(2) {
+    top: 6px;
+    left: 7px;
+  }
+
+  .photoSetStack img:nth-child(3) {
+    top: 12px;
+    left: 14px;
+  }
+
+  .photoArchiveLabel {
+    width:
+      74%;
+
+    padding:
+      9px 11px 8px;
+  }
+
+  .photoArchiveLabel h2 {
+    font-size:
+      .81rem;
+  }
+
+  .photoArchiveLabel > div {
+    font-size:
+      .42rem;
+  }
+}
+
+/* AQI PAPERCLIP PHOTO V2 BEGIN */
+/*
+  Bring back a quiet paperclip feeling for generic photos only.
+  Do NOT affect Xiaohongshu cards.
+  Override previous top hardware / corner experiments.
+*/
+.paper[data-presentation-kind='photo'][data-source-flavor='generic'],
+.paper[data-presentation-kind='photo-set'][data-source-flavor='generic'] {
+  position: relative;
+  overflow: visible;
+}
+
+/* disable previous extra hardware / corners */
+.paper[data-presentation-kind='photo'][data-source-flavor='generic']::after,
+.paper[data-presentation-kind='photo-set'][data-source-flavor='generic']::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  clip-path: none !important;
+}
+
+/* refined light paperclip */
+.paper[data-presentation-kind='photo'][data-source-flavor='generic']::before,
+.paper[data-presentation-kind='photo-set'][data-source-flavor='generic']::before {
+  content: '';
+  position: absolute;
+  left: 73px;
+  top: 8px;
+  width: 22px;
+  height: 46px;
+  z-index: 8;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 48'%3E%3Cg fill='none' stroke='%23b89b6d' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke-width='1.9' d='M15.8 5.5c3.2 0 5.2 2.7 4.8 6l-2.4 21.7c-.4 4.3-3.5 7.1-7.2 7.1-3.9 0-6.9-3.1-6.4-7.6L7.1 11c.4-3.5 2.8-5.7 5.6-5.7 2.9 0 4.9 2.2 4.6 5.3l-2.3 20c-.2 2-1.5 3.2-3 3.2-1.7 0-2.8-1.3-2.6-3.2l2-18'/%3E%3C/g%3E%3C/svg%3E");
+  filter: drop-shadow(0 1px 1px rgba(116, 90, 54, .16));
+  transform: rotate(-11deg);
+  transform-origin: center;
+  opacity: .95;
+}
+/* AQI PAPERCLIP PHOTO V2 END */
