@@ -625,7 +625,57 @@ export function ItemPreview({
               </div>
             </div>
           </div>
-        ) : (
+        ) : presentation.kind === 'product' ? (
+            <div
+              className={
+                styles.productObject
+              }
+            >
+              <div
+                className={
+                  styles.productMeta
+                }
+              >
+                <span
+                  className={
+                    styles.productCatalog
+                  }
+                >
+                  CATALOG
+                </span>
+
+                <span
+                  className={
+                    styles.productSource
+                  }
+                >
+                  {item.sourceApp
+                    || 'PRODUCT'}
+                </span>
+
+                <span
+                  className={
+                    styles.productKind
+                  }
+                >
+                  {
+                    presentationKindLabels[
+                      presentation.kind
+                    ]
+                  }
+                </span>
+              </div>
+
+              <h2
+                className={
+                  styles.productTitle
+                }
+              >
+                {item.title
+                  || '收进来的商品'}
+              </h2>
+            </div>
+          ) : (
           <>
             {image && (
               <div

@@ -3164,3 +3164,419 @@
       .34rem;
   }
 }
+
+/* ==========================================
+   PRODUCT · TEXT CATALOG INDEX · V2
+
+   ONE ACTIVE PRODUCT CONTRACT.
+
+   STRUCTURAL SAFARI TEST:
+
+   .paper = BUTTON interaction carrier.
+   .productObject = physical layout object.
+
+   Complex Product layout no longer depends
+   on flex/grid behavior of <button> itself.
+
+   Archive:
+   - catalog identity
+   - source
+   - product title
+
+   Inspect later:
+   - product image
+   - price
+   - variants
+   - merchant detail
+
+   Storage = index.
+   Reading = product spread.
+========================================== */
+
+
+/* ------------------------------------------
+   Button = interaction carrier only
+------------------------------------------ */
+
+.paper[data-presentation-kind='product'] {
+  position:
+    relative;
+
+  display:
+    block;
+
+  width:
+    calc(100% - 22px);
+
+  max-width:
+    368px;
+
+  margin:
+    19px auto 26px;
+
+  padding:
+    0;
+
+  overflow:
+    hidden;
+
+  appearance:
+    none;
+
+  -webkit-appearance:
+    none;
+
+  border:
+    1px solid
+    rgba(109, 92, 71, .060);
+
+  background:
+    transparent;
+
+  box-shadow:
+    2px 5px 11px
+    rgba(53, 40, 30, .042);
+
+  transform:
+    rotate(-.035deg);
+
+  text-align:
+    left;
+}
+
+
+/* ------------------------------------------
+   Actual physical object
+------------------------------------------ */
+
+.productObject {
+  display:
+    block;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  min-height:
+    178px;
+
+  box-sizing:
+    border-box;
+
+  margin:
+    0;
+
+  padding:
+    0;
+
+  background:
+    #f7f0e6;
+}
+
+
+/* ------------------------------------------
+   Catalogue band
+------------------------------------------ */
+
+.productMeta {
+  display:
+    grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto;
+
+  grid-template-rows:
+    auto
+    auto;
+
+  align-items:
+    baseline;
+
+  gap:
+    8px 18px;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  box-sizing:
+    border-box;
+
+  margin:
+    0;
+
+  padding:
+    13px 19px 12px;
+
+  border-bottom:
+    1px solid
+    rgba(109, 92, 71, .055);
+
+  background:
+    #eee7dc;
+
+  font-family:
+    var(--drawer-font-meta);
+
+  line-height:
+    1;
+
+  text-transform:
+    uppercase;
+}
+
+
+.productCatalog {
+  grid-column:
+    1 / -1;
+
+  grid-row:
+    1;
+
+  color:
+    rgba(103, 96, 81, .58);
+
+  font-size:
+    .32rem;
+
+  letter-spacing:
+    .15em;
+}
+
+
+.productSource {
+  grid-column:
+    1;
+
+  grid-row:
+    2;
+
+  min-width:
+    0;
+
+  color:
+    rgba(83, 88, 73, .66);
+
+  font-size:
+    .40rem;
+
+  letter-spacing:
+    .065em;
+
+  white-space:
+    normal;
+}
+
+
+.productKind {
+  grid-column:
+    2;
+
+  grid-row:
+    2;
+
+  color:
+    rgba(77, 69, 59, .28);
+
+  font-size:
+    .35rem;
+
+  letter-spacing:
+    .06em;
+
+  text-align:
+    right;
+
+  white-space:
+    nowrap;
+}
+
+
+/* ------------------------------------------
+   Product name
+------------------------------------------ */
+
+.productTitle {
+  display:
+    -webkit-box;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  box-sizing:
+    border-box;
+
+  margin:
+    0;
+
+  padding:
+    27px 26px 29px;
+
+  overflow:
+    hidden;
+
+  color:
+    #4b4439;
+
+  font-family:
+    var(--drawer-font-display);
+
+  font-size:
+    1.06rem;
+
+  font-weight:
+    400;
+
+  line-height:
+    1.43;
+
+  letter-spacing:
+    -.009em;
+
+  text-align:
+    left;
+
+  word-break:
+    normal;
+
+  overflow-wrap:
+    break-word;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    3;
+}
+
+
+/* ------------------------------------------
+   Generic Product nodes are not used
+------------------------------------------ */
+
+.paper[data-presentation-kind='product']
+.imageFrame,
+
+.paper[data-presentation-kind='product']
+.meta,
+
+.paper[data-presentation-kind='product']
+.title,
+
+.paper[data-presentation-kind='product']
+.preview,
+
+.paper[data-presentation-kind='product']
+.collection {
+  display:
+    none;
+}
+
+
+/* ------------------------------------------
+   No Product hardware
+------------------------------------------ */
+
+.paper[data-presentation-kind='product']::before,
+.paper[data-presentation-kind='product']::after {
+  content:
+    none;
+
+  display:
+    none;
+}
+
+
+/* ==========================================
+   MOBILE
+
+   Same physical DOM.
+   No alternate Product geometry.
+========================================== */
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='product'] {
+    display:
+      block;
+
+    width:
+      calc(100% - 18px);
+
+    max-width:
+      326px;
+
+    margin:
+      17px auto 24px;
+
+    padding:
+      0;
+
+    transform:
+      rotate(-.025deg);
+  }
+
+
+  .productObject {
+    width:
+      100%;
+
+    min-height:
+      0;
+  }
+
+
+  .productMeta {
+    width:
+      100%;
+
+    gap:
+      7px 15px;
+
+    padding:
+      12px 17px 11px;
+  }
+
+
+  .productCatalog {
+    font-size:
+      .30rem;
+  }
+
+
+  .productSource {
+    font-size:
+      .38rem;
+  }
+
+
+  .productKind {
+    font-size:
+      .34rem;
+  }
+
+
+  .productTitle {
+    width:
+      100%;
+
+    padding:
+      23px 21px 25px;
+
+    font-size:
+      1rem;
+
+    line-height:
+      1.44;
+
+    -webkit-line-clamp:
+      3;
+  }
+}
