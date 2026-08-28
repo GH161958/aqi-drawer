@@ -2677,3 +2677,490 @@
   white-space:
     nowrap;
 }
+
+/* ==========================================
+   AUDIO · SAVED ALBUM SHARE CARD · V3
+
+   New body:
+
+   saved listening / album share card
+
+   The track TITLE itself becomes
+   the square album-jacket field.
+
+   No vinyl.
+   No player controls.
+   No progress bar.
+   No fake album artwork.
+   No platform UI clone.
+
+   Source = quiet attribution.
+   Content = the body.
+
+   Archive = saved listening card.
+========================================== */
+
+
+/* ------------------------------------------
+   One coherent music-share sheet
+------------------------------------------ */
+
+.paper[data-presentation-kind='audio'] {
+  position:
+    relative;
+
+  isolation:
+    isolate;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  width:
+    min(
+      calc(100% - 58px),
+      286px
+    );
+
+  margin:
+    25px auto 34px;
+
+  padding:
+    10px 10px 13px;
+
+  overflow:
+    hidden;
+
+  border:
+    1px solid
+    rgba(113, 95, 72, .065);
+
+  background:
+    #f4ecdf;
+
+  box-shadow:
+    2px 6px 12px
+    rgba(53, 40, 30, .055);
+
+  transform:
+    rotate(-.05deg);
+}
+
+
+/*
+  Kill ALL old vinyl hardware.
+*/
+
+.paper[data-presentation-kind='audio']::before,
+.paper[data-presentation-kind='audio']::after {
+  content:
+    none;
+
+  display:
+    none;
+}
+
+
+/*
+  We do not pretend an arbitrary attachment
+  is stable album artwork.
+
+  Real artwork can replace this cover field
+  later when its contract exists.
+*/
+
+.paper[data-presentation-kind='audio']
+.imageFrame {
+  display:
+    none;
+}
+
+
+/* ------------------------------------------
+   Album-jacket field
+
+   The REAL SAVED TITLE becomes the cover.
+
+   This gives us an album-cover silhouette
+   without inventing an image.
+------------------------------------------ */
+
+.paper[data-presentation-kind='audio']
+.title {
+  order:
+    1;
+
+  position:
+    relative;
+
+  display:
+    grid;
+
+  align-content:
+    end;
+
+  width:
+    100%;
+
+  aspect-ratio:
+    1 / 1;
+
+  margin:
+    0;
+
+  padding:
+    26px 24px 24px;
+
+  overflow:
+    hidden;
+
+  border:
+    1px solid
+    rgba(247, 241, 230, .20);
+
+  background:
+    linear-gradient(
+      145deg,
+      #a6ad98 0%,
+      #98a08a 54%,
+      #8a917d 100%
+    );
+
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(59, 63, 52, .035);
+
+  color:
+    #f8f1e6;
+
+  font-family:
+    var(--drawer-font-display);
+
+  font-size:
+    clamp(
+      1.20rem,
+      4.8vw,
+      1.58rem
+    );
+
+  font-weight:
+    400;
+
+  line-height:
+    1.30;
+
+  letter-spacing:
+    -.014em;
+
+  text-align:
+    left;
+}
+
+
+/*
+  Tiny cover inscription.
+
+  Presentation grammar only;
+  not fake music metadata.
+*/
+
+.paper[data-presentation-kind='audio']
+.title::before {
+  content:
+    "LISTENING";
+
+  position:
+    absolute;
+
+  top:
+    15px;
+
+  left:
+    16px;
+
+  color:
+    rgba(247, 241, 231, .58);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .38rem;
+
+  font-weight:
+    400;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .16em;
+}
+
+
+/*
+  Tiny quiet mark in opposite corner
+  gives the square the rhythm of
+  a printed album jacket.
+
+  No logo.
+*/
+
+.paper[data-presentation-kind='audio']
+.title::after {
+  content:
+    "AUDIO";
+
+  position:
+    absolute;
+
+  top:
+    15px;
+
+  right:
+    16px;
+
+  color:
+    rgba(247, 241, 231, .42);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .35rem;
+
+  font-weight:
+    400;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .12em;
+}
+
+
+/* ------------------------------------------
+   Saved note / subtitle
+
+   This sits BELOW the square cover,
+   like a music-share metadata area.
+------------------------------------------ */
+
+.paper[data-presentation-kind='audio']
+.preview {
+  order:
+    2;
+
+  display:
+    -webkit-box;
+
+  max-width:
+    94%;
+
+  margin:
+    12px 5px 0;
+
+  overflow:
+    hidden;
+
+  color:
+    rgba(86, 77, 67, .60);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .68rem;
+
+  line-height:
+    1.48;
+
+  letter-spacing:
+    -.002em;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+
+/* ------------------------------------------
+   Spotify / source footer
+
+   Existing real source data stays intact.
+------------------------------------------ */
+
+.paper[data-presentation-kind='audio']
+.meta {
+  order:
+    3;
+
+  display:
+    flex;
+
+  align-items:
+    baseline;
+
+  justify-content:
+    space-between;
+
+  gap:
+    14px;
+
+  width:
+    auto;
+
+  margin:
+    11px 5px 0;
+
+  padding:
+    9px 0 1px;
+
+  border-top:
+    1px solid
+    rgba(113, 95, 72, .075);
+
+  color:
+    rgba(91, 82, 71, .30);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .36rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .085em;
+
+  text-transform:
+    uppercase;
+}
+
+
+.paper[data-presentation-kind='audio']
+.meta span:first-child {
+  color:
+    rgba(85, 100, 79, .70);
+
+  white-space:
+    nowrap;
+}
+
+
+.paper[data-presentation-kind='audio']
+.meta span:last-child {
+  color:
+    rgba(91, 82, 71, .26);
+
+  white-space:
+    nowrap;
+}
+
+
+/* ------------------------------------------
+   Collection remains almost invisible
+------------------------------------------ */
+
+.paper[data-presentation-kind='audio']
+.collection {
+  order:
+    4;
+
+  margin:
+    6px 5px 0;
+
+  color:
+    rgba(75, 68, 58, .18);
+
+  font-size:
+    .34rem;
+
+  letter-spacing:
+    .05em;
+}
+
+
+/* ------------------------------------------
+   Mobile
+------------------------------------------ */
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='audio'] {
+    width:
+      min(
+        calc(100% - 44px),
+        270px
+      );
+
+    margin:
+      22px auto 31px;
+
+    padding:
+      9px 9px 12px;
+
+    transform:
+      rotate(-.04deg);
+  }
+
+  .paper[data-presentation-kind='audio']
+  .title {
+    padding:
+      23px 21px 21px;
+
+    font-size:
+      1.18rem;
+  }
+
+  .paper[data-presentation-kind='audio']
+  .title::before {
+    top:
+      13px;
+
+    left:
+      14px;
+
+    font-size:
+      .35rem;
+  }
+
+  .paper[data-presentation-kind='audio']
+  .title::after {
+    top:
+      13px;
+
+    right:
+      14px;
+
+    font-size:
+      .33rem;
+  }
+
+  .paper[data-presentation-kind='audio']
+  .preview {
+    margin-top:
+      10px;
+
+    font-size:
+      .63rem;
+  }
+
+  .paper[data-presentation-kind='audio']
+  .meta {
+    margin-top:
+      10px;
+
+    padding-top:
+      8px;
+
+    font-size:
+      .34rem;
+  }
+}
