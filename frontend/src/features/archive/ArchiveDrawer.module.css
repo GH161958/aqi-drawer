@@ -340,7 +340,7 @@
   line-height: 1.65;
 }
 
-@media (max-width: 430px) {
+@media (max-width: 520px) {
   .view {
     width:
       min(94vw, 370px);

@@ -1,8 +1,10 @@
 .trigger {
   position: absolute;
 
-  top: 50%;
-  right: 0;
+  z-index: 9;
+
+  top: 0px;
+  right: 8px;
 
   display: grid;
 
@@ -19,8 +21,7 @@
 
   place-items: center;
 
-  transform:
-    translateY(-50%);
+  transform: none;
 }
 
 .triggerDot {

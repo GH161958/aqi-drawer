@@ -95,3 +95,24 @@
 }
 
 /* TYPE CABINET ENTRY V1 END */
+
+
+/* ==========================================
+   CABINET HOME · MOBILE HEADER RHYTHM
+
+   Home only.
+   Archive / Inspect retain their spacing.
+
+   Physical Cabinet geometry is untouched.
+========================================== */
+
+@media (max-width: 520px) {
+  .header[data-cabinet-home='true'] {
+    margin-bottom:
+      clamp(
+        16px,
+        4vw,
+        20px
+      );
+  }
+}

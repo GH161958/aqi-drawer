@@ -14,9 +14,6 @@ import {
   InspectStage,
 } from '../features/inspect/InspectStage'
 
-import {
-  TypeCabinet,
-} from '../features/type-cabinet/TypeCabinet'
 
 import type {
   CabinetSlot,
@@ -87,6 +84,12 @@ export function App() {
     <main className={styles.shell}>
       <header
         className={styles.header}
+        data-cabinet-home={
+          !activeItemId
+          && !activeSlot
+            ? 'true'
+            : undefined
+        }
       >
         <p
           className={styles.kicker}
@@ -100,7 +103,6 @@ export function App() {
           Aqi Drawer
         </h1>
 
-        <TypeCabinet />
       </header>
 
       {activeItemId ? (

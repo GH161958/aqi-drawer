@@ -11,6 +11,10 @@ import {
   useCabinetData,
 } from './useCabinetData'
 
+import {
+  TypeCabinet,
+} from '../type-cabinet/TypeCabinet'
+
 import styles from './CabinetHome.module.css'
 
 interface CabinetHomeProps {
@@ -43,6 +47,7 @@ export function CabinetHome({
       </h2>
 
       <div className={styles.cabinet}>
+        <TypeCabinet />
         <button
           className={styles.plaque}
           type="button"

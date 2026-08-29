@@ -316,7 +316,7 @@
   color:
     rgba(72, 62, 51, .45);
 
-  font-size: .44rem;
+  font-size: .625rem;
   line-height: 1;
 
   letter-spacing:
@@ -339,7 +339,7 @@
   color:
     rgba(72, 62, 51, .28);
 
-  font-size: .42rem;
+  font-size: .60rem;
   line-height: 1;
 
   letter-spacing:
@@ -398,7 +398,7 @@
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .43rem;
+  font-size: .625rem;
 
   line-height: 1;
 
@@ -502,7 +502,7 @@
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .44rem;
+  font-size: .625rem;
 
   line-height: 1.3;
 
@@ -855,7 +855,7 @@
   color:
     rgba(73, 86, 68, .70);
 
-  font-size: .47rem;
+  font-size: .66rem;
 
   line-height: 1;
 
@@ -875,7 +875,7 @@
   color:
     rgba(78, 68, 57, .30);
 
-  font-size: .42rem;
+  font-size: .60rem;
 
   line-height: 1;
 
@@ -977,7 +977,7 @@
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .41rem;
+  font-size: .60rem;
 
   line-height: 1.2;
 
@@ -1312,7 +1312,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .57rem;
+    .625rem;
 
   line-height:
     1.35;
@@ -1496,7 +1496,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .44rem;
+    .625rem;
 
   line-height:
     1;
@@ -1643,7 +1643,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .43rem;
+    .625rem;
 
   line-height:
     1;
@@ -1734,7 +1734,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .44rem;
+    .625rem;
 
   line-height:
     1.25;
@@ -1782,7 +1782,7 @@
 
   .xhsPreviewRecord {
     font-size:
-      .54rem;
+      .60rem;
   }
 
   .photoArchiveObject {
@@ -1854,7 +1854,7 @@
 
   .photoArchiveLabel > div {
     font-size:
-      .42rem;
+      .60rem;
   }
 }
 
@@ -2088,7 +2088,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .39rem;
+    .625rem;
 
   line-height:
     1;
@@ -2185,7 +2185,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .34rem;
+    .60rem;
 
   line-height:
     1;
@@ -2234,7 +2234,7 @@
       6px;
 
     font-size:
-      .37rem;
+      .60rem;
   }
 
   .xhsBandTitle {
@@ -2250,7 +2250,7 @@
       5px;
 
     font-size:
-      .33rem;
+      .60rem;
   }
 }
 
@@ -2523,7 +2523,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .43rem;
+    .625rem;
 
   line-height:
     1;
@@ -2587,7 +2587,7 @@
     rgba(75, 68, 59, .26);
 
   font-size:
-    .38rem;
+    .60rem;
 }
 
 
@@ -2634,7 +2634,7 @@
       9px 3px 2px;
 
     font-size:
-      .39rem;
+      .60rem;
   }
 }
 
@@ -2887,7 +2887,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .38rem;
+    .625rem;
 
   font-weight:
     400;
@@ -2929,7 +2929,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .35rem;
+    .60rem;
 
   font-weight:
     400;
@@ -3032,7 +3032,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .36rem;
+    .625rem;
 
   line-height:
     1;
@@ -3081,7 +3081,7 @@
     rgba(75, 68, 58, .18);
 
   font-size:
-    .34rem;
+    .60rem;
 
   letter-spacing:
     .05em;
@@ -3128,7 +3128,7 @@
       14px;
 
     font-size:
-      .35rem;
+      .60rem;
   }
 
   .paper[data-presentation-kind='audio']
@@ -3140,7 +3140,7 @@
       14px;
 
     font-size:
-      .33rem;
+      .60rem;
   }
 
   .paper[data-presentation-kind='audio']
@@ -3149,7 +3149,7 @@
       10px;
 
     font-size:
-      .63rem;
+      .66rem;
   }
 
   .paper[data-presentation-kind='audio']
@@ -3161,7 +3161,7 @@
       8px;
 
     font-size:
-      .34rem;
+      .60rem;
   }
 }
 
@@ -3342,7 +3342,7 @@
     rgba(103, 96, 81, .58);
 
   font-size:
-    .32rem;
+    .60rem;
 
   letter-spacing:
     .15em;
@@ -3363,7 +3363,7 @@
     rgba(83, 88, 73, .66);
 
   font-size:
-    .40rem;
+    .66rem;
 
   letter-spacing:
     .065em;
@@ -3384,7 +3384,7 @@
     rgba(77, 69, 59, .28);
 
   font-size:
-    .35rem;
+    .625rem;
 
   letter-spacing:
     .06em;
@@ -3547,19 +3547,19 @@
 
   .productCatalog {
     font-size:
-      .30rem;
+      .60rem;
   }
 
 
   .productSource {
     font-size:
-      .38rem;
+      .625rem;
   }
 
 
   .productKind {
     font-size:
-      .34rem;
+      .60rem;
   }
 
 
@@ -3777,7 +3777,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .24rem;
+    .625rem;
 
   line-height:
     1;
@@ -3826,7 +3826,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .44rem;
+    .625rem;
 
   line-height:
     1.25;
@@ -3908,7 +3908,7 @@
     var(--drawer-font-body);
 
   font-size:
-    .55rem;
+    .70rem;
 
   font-weight:
     400;
@@ -3964,7 +3964,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .21rem;
+    .60rem;
 
   line-height:
     1.2;
@@ -4058,12 +4058,12 @@
       16px;
 
     font-size:
-      .22rem;
+      .60rem;
   }
 
   .repositoryOwner {
     font-size:
-      .41rem;
+      .60rem;
   }
 
   .repositoryName {
@@ -4079,7 +4079,7 @@
       15px;
 
     font-size:
-      .52rem;
+      .68rem;
 
     line-height:
       1.48;
@@ -4093,7 +4093,7 @@
       auto 18px 11px;
 
     font-size:
-      .19rem;
+      .60rem;
   }
 
   .repositoryFooter span + span::before,
@@ -4332,7 +4332,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .42rem;
+    .60rem;
 
   line-height:
     1;
@@ -4361,7 +4361,7 @@
     var(--drawer-font-body);
 
   font-size:
-    .51rem;
+    .625rem;
 
   font-weight:
     500;
@@ -4451,7 +4451,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .46rem;
+    .625rem;
 
   line-height:
     1;
@@ -4541,7 +4541,7 @@
     var(--drawer-font-body);
 
   font-size:
-    .51rem;
+    .68rem;
 
   font-weight:
     400;
@@ -4591,7 +4591,7 @@
     var(--drawer-font-meta);
 
   font-size:
-    .42rem;
+    .60rem;
 
   line-height:
     1.2;
@@ -4688,12 +4688,12 @@
 
   .mixedDocumentType {
     font-size:
-      .40rem;
+      .60rem;
   }
 
   .mixedDocumentName {
     font-size:
-      .47rem;
+      .60rem;
   }
 
   .mixedPocket {
@@ -4706,7 +4706,7 @@
 
   .mixedPocketMeta {
     font-size:
-      .44rem;
+      .60rem;
   }
 
   .mixedTitle {
@@ -4728,7 +4728,7 @@
       9px;
 
     font-size:
-      .49rem;
+      .66rem;
 
     line-height:
       1.46;
@@ -4739,6 +4739,6 @@
       16px;
 
     font-size:
-      .40rem;
+      .60rem;
   }
 }
