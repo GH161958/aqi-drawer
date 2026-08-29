@@ -179,6 +179,28 @@ export function ItemPreview({
     )
 
 
+  const mixedPhotoAttachment =
+    presentation.kind === 'mixed'
+      ? item.attachments.find(
+          (candidate) =>
+            candidate.mimeType
+              .trim()
+              .toLowerCase()
+              .startsWith('image/'),
+        )
+      : undefined
+
+  const mixedDocumentAttachment =
+    presentation.kind === 'mixed'
+      ? item.attachments.find(
+          (candidate) =>
+            !candidate.mimeType
+              .trim()
+              .toLowerCase()
+              .startsWith('image/'),
+        )
+      : undefined
+
   const repositoryIdentity = (() => {
     if (
       presentation.kind
@@ -686,7 +708,138 @@ export function ItemPreview({
               </div>
             </div>
           </div>
-        ) : presentation.kind === 'repository' ? (
+        ) : presentation.kind === 'mixed' ? (
+            <div
+              className={
+                styles.mixedObject
+              }
+            >
+              <div
+                className={
+                  styles.mixedInsertStack
+                }
+              >
+                {image
+                  && mixedPhotoAttachment
+                  && (
+                  <figure
+                    className={
+                      styles.mixedPhotoInsert
+                    }
+                  >
+                    <img
+                      src={image}
+                      alt={
+                        mixedPhotoAttachment
+                          .name
+                        || item.title
+                        || '一起收进来的照片'
+                      }
+                      loading="lazy"
+                    />
+                  </figure>
+                )}
+
+                {mixedDocumentAttachment && (
+                  <div
+                    className={
+                      styles.mixedDocumentInsert
+                    }
+                  >
+                    <span
+                      className={
+                        styles.mixedDocumentType
+                      }
+                    >
+                      {
+                        mixedDocumentAttachment
+                          .mimeType
+                          .trim()
+                          .toLowerCase()
+                        === 'application/pdf'
+                          ? 'PDF'
+                          : 'FILE'
+                      }
+                    </span>
+
+                    <span
+                      className={
+                        styles.mixedDocumentName
+                      }
+                    >
+                      {
+                        mixedDocumentAttachment
+                          .name
+                        || 'Attached file'
+                      }
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <section
+                className={
+                  styles.mixedPocket
+                }
+              >
+                <div
+                  className={
+                    styles.mixedPocketMeta
+                  }
+                >
+                  <span>
+                    {item.sourceApp
+                      || 'Mixed'}
+                  </span>
+
+                  <span>
+                    {item.attachments.length}
+                    {' '}
+                    ITEMS
+                  </span>
+                </div>
+
+                <h2
+                  className={
+                    styles.mixedTitle
+                  }
+                >
+                  {item.title
+                    || '一起收进来的东西'}
+                </h2>
+
+                {item.text.trim() && (
+                  <p
+                    className={
+                      styles.mixedDescription
+                    }
+                  >
+                    {previewText(item)}
+                  </p>
+                )}
+
+                <footer
+                  className={
+                    styles.mixedFooter
+                  }
+                >
+                  <span>
+                    {
+                      presentationKindLabels[
+                        presentation.kind
+                      ]
+                    }
+                  </span>
+
+                  {date && (
+                    <time>
+                      {date}
+                    </time>
+                  )}
+                </footer>
+              </section>
+            </div>
+          ) : presentation.kind === 'repository' ? (
             <div
               className={
                 styles.repositoryObject
