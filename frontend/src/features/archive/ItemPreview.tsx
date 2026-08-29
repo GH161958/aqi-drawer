@@ -178,6 +178,67 @@ export function ItemPreview({
       || item.createdAt,
     )
 
+
+  const repositoryIdentity = (() => {
+    if (
+      presentation.kind
+      !== 'repository'
+    ) {
+      return null
+    }
+
+    const rawUrl =
+      item.sourceUrl || ''
+
+    const githubMatch =
+      rawUrl.match(
+        /https?:\/\/(?:www\.)?github\.com\/([^/\s?#)\]]+)\/([^/\s?#)\]]+)/i,
+      )
+
+    if (githubMatch) {
+      return {
+        owner:
+          githubMatch[1],
+        name:
+          githubMatch[2]
+            .replace(
+              /\.git$/i,
+              '',
+            ),
+      }
+    }
+
+    const titleParts =
+      (item.title || '')
+        .split('/')
+        .map(
+          (part) =>
+            part.trim(),
+        )
+        .filter(Boolean)
+
+    if (
+      titleParts.length
+      >= 2
+    ) {
+      return {
+        owner:
+          titleParts[0],
+        name:
+          titleParts
+            .slice(1)
+            .join('/'),
+      }
+    }
+
+    return {
+      owner: '',
+      name:
+        item.title
+        || 'Repository',
+    }
+  })()
+
   return (
     <li className={styles.row}>
       <button
@@ -625,7 +686,111 @@ export function ItemPreview({
               </div>
             </div>
           </div>
-        ) : presentation.kind === 'product' ? (
+        ) : presentation.kind === 'repository' ? (
+            <div
+              className={
+                styles.repositoryObject
+              }
+            >
+              <div
+                className={
+                  styles.repositoryBackCard
+                }
+                aria-hidden="true"
+              />
+
+              <article
+                className={
+                  styles.repositoryCard
+                }
+              >
+                <div
+                  className={
+                    styles.repositoryMain
+                  }
+                >
+                  <div
+                    className={
+                      styles.repositorySource
+                    }
+                  >
+                    {item.sourceApp
+                      || 'GitHub'}
+                  </div>
+
+                  <div
+                    className={
+                      styles.repositoryIdentity
+                    }
+                  >
+                    {repositoryIdentity
+                      ?.owner && (
+                      <span
+                        className={
+                          styles.repositoryOwner
+                        }
+                      >
+                        {
+                          repositoryIdentity
+                            .owner
+                        }
+                        {' /'}
+                      </span>
+                    )}
+
+                    <h2
+                      className={
+                        styles.repositoryName
+                      }
+                    >
+                      {repositoryIdentity
+                        ?.name
+                        || item.title
+                        || 'Repository'}
+                    </h2>
+                  </div>
+
+                  {item.text.trim() && (
+                    <p
+                      className={
+                        styles.repositoryDescription
+                      }
+                    >
+                      {previewText(item)}
+                    </p>
+                  )}
+                </div>
+
+                <footer
+                  className={
+                    styles.repositoryFooter
+                  }
+                >
+                  <span>
+                    {sourceDomain(
+                      item.sourceUrl,
+                    )
+                      || item.sourceApp
+                      || 'github.com'}
+                  </span>
+
+                  <span>
+                    {
+                      presentationKindLabels[
+                        presentation.kind
+                      ]
+                    }
+                  </span>
+
+                  {date && (
+                    <time>
+                      {date}
+                    </time>
+                  )}
+                </footer>
+              </article>
+            </div>
+          ) : presentation.kind === 'product' ? (
             <div
               className={
                 styles.productObject

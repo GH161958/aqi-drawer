@@ -3580,3 +3580,525 @@
       3;
   }
 }
+
+/* ==========================================
+   REPOSITORY · SOFT TECH SHEET · V4.2
+
+   ONE ACTIVE REPOSITORY CONTRACT.
+
+   V4.2 removes the horizontal data strip
+   and shifts the card into a cooler,
+   quieter tech-leaning paper tone.
+
+   REAL DATA ONLY.
+   No fake code.
+   No fake stats.
+   No fake screenshot.
+========================================== */
+
+.paper[data-presentation-kind='repository'] {
+  position:
+    relative;
+
+  display:
+    block;
+
+  width:
+    calc(100% - 50px);
+
+  max-width:
+    350px;
+
+  margin:
+    26px auto 33px;
+
+  padding:
+    0;
+
+  overflow:
+    visible;
+
+  appearance:
+    none;
+
+  -webkit-appearance:
+    none;
+
+  border:
+    0;
+
+  background:
+    transparent;
+
+  box-shadow:
+    none;
+
+  transform:
+    rotate(-.016deg);
+
+  text-align:
+    left;
+}
+
+.repositoryObject {
+  position:
+    relative;
+
+  display:
+    block;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  box-sizing:
+    border-box;
+
+  padding:
+    0 6px 6px 0;
+}
+
+.repositoryBackCard {
+  position:
+    absolute;
+
+  z-index:
+    0;
+
+  left:
+    6px;
+
+  right:
+    0;
+
+  top:
+    6px;
+
+  bottom:
+    0;
+
+  box-sizing:
+    border-box;
+
+  border:
+    1px solid
+    rgba(82, 88, 84, .07);
+
+  background:
+    #dddcd3;
+
+  box-shadow:
+    1px 4px 8px
+    rgba(43, 48, 45, .025);
+
+  transform:
+    rotate(.10deg);
+
+  pointer-events:
+    none;
+}
+
+.repositoryCard {
+  position:
+    relative;
+
+  z-index:
+    1;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  min-height:
+    152px;
+
+  box-sizing:
+    border-box;
+
+  overflow:
+    hidden;
+
+  border:
+    1px solid
+    rgba(77, 83, 79, .09);
+
+  background:
+    #ecebe4;
+
+  box-shadow:
+    2px 6px 13px
+    rgba(43, 48, 45, .04);
+
+  clip-path:
+    polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - 9px),
+      calc(100% - 9px) 100%,
+      0 100%
+    );
+
+  color:
+    #474840;
+}
+
+.repositoryMain {
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  box-sizing:
+    border-box;
+
+  padding:
+    22px 22px 16px;
+}
+
+.repositorySource {
+  margin:
+    0 0 19px;
+
+  color:
+    rgba(83, 89, 85, .33);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .24rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .105em;
+
+  text-transform:
+    uppercase;
+}
+
+.repositoryIdentity {
+  display:
+    flex;
+
+  align-items:
+    baseline;
+
+  flex-wrap:
+    wrap;
+
+  gap:
+    4px;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  margin:
+    0;
+}
+
+.repositoryOwner {
+  display:
+    inline;
+
+  margin:
+    0;
+
+  color:
+    rgba(70, 75, 72, .48);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .44rem;
+
+  line-height:
+    1.25;
+
+  letter-spacing:
+    .035em;
+
+  overflow-wrap:
+    anywhere;
+}
+
+.repositoryName {
+  display:
+    inline;
+
+  width:
+    auto;
+
+  min-width:
+    0;
+
+  margin:
+    0;
+
+  overflow:
+    visible;
+
+  color:
+    #464740;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .86rem;
+
+  font-weight:
+    600;
+
+  line-height:
+    1.22;
+
+  letter-spacing:
+    -.008em;
+
+  overflow-wrap:
+    anywhere;
+
+  -webkit-line-clamp:
+    unset;
+}
+
+.repositoryDescription {
+  display:
+    -webkit-box;
+
+  width:
+    auto;
+
+  max-width:
+    88%;
+
+  margin:
+    18px 0 0;
+
+  padding:
+    0;
+
+  overflow:
+    hidden;
+
+  border:
+    0;
+
+  color:
+    rgba(67, 70, 67, .56);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .55rem;
+
+  font-weight:
+    400;
+
+  line-height:
+    1.50;
+
+  letter-spacing:
+    .002em;
+
+  overflow-wrap:
+    break-word;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+.repositoryFooter {
+  display:
+    flex;
+
+  align-items:
+    baseline;
+
+  flex-wrap:
+    wrap;
+
+  gap:
+    4px 10px;
+
+  width:
+    auto;
+
+  min-width:
+    0;
+
+  margin:
+    auto 21px 13px;
+
+  padding:
+    0;
+
+  border:
+    0;
+
+  color:
+    rgba(77, 82, 79, .30);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .21rem;
+
+  line-height:
+    1.2;
+
+  letter-spacing:
+    .04em;
+
+  text-transform:
+    uppercase;
+}
+
+.repositoryFooter span,
+.repositoryFooter time {
+  white-space:
+    nowrap;
+}
+
+.repositoryFooter span + span::before,
+.repositoryFooter span + time::before {
+  content:
+    "·";
+
+  margin-right:
+    10px;
+
+  color:
+    rgba(77, 82, 79, .16);
+}
+
+.paper[data-presentation-kind='repository']::before,
+.paper[data-presentation-kind='repository']::after {
+  content:
+    none;
+
+  display:
+    none;
+}
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='repository'] {
+    display:
+      block;
+
+    width:
+      calc(100% - 40px);
+
+    max-width:
+      306px;
+
+    margin:
+      24px auto 31px;
+
+    padding:
+      0;
+
+    transform:
+      rotate(-.012deg);
+  }
+
+  .repositoryObject {
+    width:
+      100%;
+
+    padding:
+      0 5px 5px 0;
+  }
+
+  .repositoryBackCard {
+    left:
+      5px;
+
+    top:
+      5px;
+  }
+
+  .repositoryCard {
+    width:
+      100%;
+
+    min-height:
+      142px;
+  }
+
+  .repositoryMain {
+    padding:
+      19px 18px 14px;
+  }
+
+  .repositorySource {
+    margin-bottom:
+      16px;
+
+    font-size:
+      .22rem;
+  }
+
+  .repositoryOwner {
+    font-size:
+      .41rem;
+  }
+
+  .repositoryName {
+    font-size:
+      .80rem;
+  }
+
+  .repositoryDescription {
+    max-width:
+      92%;
+
+    margin-top:
+      15px;
+
+    font-size:
+      .52rem;
+
+    line-height:
+      1.48;
+  }
+
+  .repositoryFooter {
+    gap:
+      4px 8px;
+
+    margin:
+      auto 18px 11px;
+
+    font-size:
+      .19rem;
+  }
+
+  .repositoryFooter span + span::before,
+  .repositoryFooter span + time::before {
+    margin-right:
+      8px;
+  }
+}
