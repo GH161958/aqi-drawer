@@ -107,7 +107,12 @@
 ========================================== */
 
 @media (max-width: 520px) {
-  .header[data-cabinet-home='true'] {
+  .header[data-cabinet-home='true'],
+  .header[data-archive-home='true'] {
+    /*
+      Cabinet and Archive share the same
+      mobile Header → scene landing rhythm.
+    */
     margin-bottom:
       clamp(
         16px,

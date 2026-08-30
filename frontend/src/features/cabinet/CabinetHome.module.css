@@ -262,7 +262,6 @@
     translateY(1.5px);
 }
 
-.drawer:hover,
 .drawer:focus-visible {
   background:
     #e1d6c5;
@@ -270,9 +269,17 @@
   box-shadow:
     inset 0 4px 7px
       rgba(76, 50, 37, .06);
+}
 
-  transform:
-    translateY(2px);
+@media (hover: hover) and (pointer: fine) {
+  .drawer:hover {
+    background:
+      #e1d6c5;
+
+    box-shadow:
+      inset 0 4px 7px
+        rgba(76, 50, 37, .06);
+  }
 }
 
 .drawer:active {
@@ -282,9 +289,10 @@
   box-shadow:
     inset 0 5px 8px
       rgba(76, 50, 37, .075);
+}
 
-  transform:
-    translateY(4px);
+.drawer[data-motion-active="true"] {
+  z-index: 5;
 }
 
 .drawer:focus-visible {
@@ -299,6 +307,9 @@
 .drawerLabel {
   position: relative;
   z-index: 3;
+
+  transform-origin:
+    50% 50%;
 
   display: flex;
 
@@ -407,6 +418,9 @@
   transform:
     translateX(-50%);
 
+  transform-origin:
+    50% 50%;
+
   pointer-events: none;
 }
 
@@ -491,6 +505,9 @@
 
   z-index: 2;
 
+  transform-origin:
+    50% 0;
+
   top: 6px;
   right: 0;
   bottom: 0;
@@ -553,6 +570,9 @@
       rgba(68, 50, 38, .055);
 
   transform: none;
+
+  transform-origin:
+    50% 100%;
 
   pointer-events: none;
 }

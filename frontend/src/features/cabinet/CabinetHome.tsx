@@ -1,3 +1,8 @@
+import {
+  useRef,
+  type MouseEvent,
+} from 'react'
+
 import type {
   CabinetSlot,
 } from '../../types/pocket'
@@ -15,13 +20,21 @@ import {
   TypeCabinet,
 } from '../type-cabinet/TypeCabinet'
 
+import {
+  animateCabinetDrawerPull,
+  cancelCabinetDrawerMotion,
+} from './cabinetMotion'
+
 import styles from './CabinetHome.module.css'
 
 interface CabinetHomeProps {
   activeSlot: CabinetSlot | null
 
   onOpen:
-    (slot: CabinetSlot) => void
+    (
+      slot: CabinetSlot,
+      animateEnter?: boolean,
+    ) => void
 }
 
 export function CabinetHome({
@@ -33,6 +46,77 @@ export function CabinetHome({
     isLoading,
     isError,
   } = useCabinetData()
+
+  const motionSequence =
+    useRef(0)
+
+  const activeMotionTrigger =
+    useRef<HTMLButtonElement | null>(
+      null,
+    )
+
+  const openPhysicalDrawer =
+    async (
+      event:
+        MouseEvent<HTMLButtonElement>,
+      slot: CabinetSlot,
+      hasContents: boolean,
+    ) => {
+      /*
+        Keyboard and assistive-tech
+        synthetic clicks report detail=0.
+
+        Do not impose visual motion
+        on keyboard navigation.
+      */
+      if (event.detail === 0) {
+        onOpen(
+          slot,
+          false,
+        )
+
+        return
+      }
+
+      const trigger =
+        event.currentTarget
+
+      const sequence =
+        motionSequence.current + 1
+
+      motionSequence.current =
+        sequence
+
+      if (
+        activeMotionTrigger.current
+      ) {
+        cancelCabinetDrawerMotion(
+          activeMotionTrigger.current,
+        )
+      }
+
+      activeMotionTrigger.current =
+        trigger
+
+      const completed =
+        await animateCabinetDrawerPull(
+          trigger,
+          hasContents,
+        )
+
+      if (
+        !completed
+        || sequence
+          !== motionSequence.current
+      ) {
+        return
+      }
+
+      onOpen(
+        slot,
+        true,
+      )
+    }
 
   return (
     <section
@@ -93,9 +177,13 @@ export function CabinetHome({
                   aria-pressed={
                     activeSlot === status
                   }
-                  onClick={() =>
-                    onOpen(status)
-                  }
+                  onClick={(event) => {
+                    void openPhysicalDrawer(
+                      event,
+                      status,
+                      hasContents,
+                    )
+                  }}
                 >
                   {hasContents && (
                     <>
@@ -110,6 +198,7 @@ export function CabinetHome({
                         className={
                           styles.paperEdge
                         }
+                        data-drawer-paper
                         aria-hidden="true"
                       />
 
@@ -117,6 +206,7 @@ export function CabinetHome({
                         className={
                           styles.drawerFront
                         }
+                        data-drawer-front
                         aria-hidden="true"
                       />
                     </>
@@ -126,6 +216,7 @@ export function CabinetHome({
                     className={
                       styles.drawerLabel
                     }
+                    data-drawer-label
                   >
                     <span>
                       {label}
@@ -148,6 +239,7 @@ export function CabinetHome({
                     className={
                       styles.drawerPull
                     }
+                    data-drawer-pull
                     aria-hidden="true"
                   />
                 </button>

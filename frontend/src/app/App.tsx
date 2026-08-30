@@ -90,6 +90,12 @@ export function App() {
             ? 'true'
             : undefined
         }
+        data-archive-home={
+          !activeItemId
+          && activeSlot
+            ? 'true'
+            : undefined
+        }
       >
         <p
           className={styles.kicker}
