@@ -98,12 +98,28 @@ export function CabinetHome({
                   }
                 >
                   {hasContents && (
-                    <span
-                      className={
-                        styles.paperEdge
-                      }
-                      aria-hidden="true"
-                    />
+                    <>
+                      <span
+                        className={
+                          styles.drawerCavity
+                        }
+                        aria-hidden="true"
+                      />
+
+                      <span
+                        className={
+                          styles.paperEdge
+                        }
+                        aria-hidden="true"
+                      />
+
+                      <span
+                        className={
+                          styles.drawerFront
+                        }
+                        aria-hidden="true"
+                      />
+                    </>
                   )}
 
                   <span
