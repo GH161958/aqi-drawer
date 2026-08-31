@@ -1,32 +1,66 @@
 .stage {
-  width:
-    min(100%, 640px);
+  position: fixed;
+  z-index: 1000;
 
-  margin: 0 auto;
+  inset: 0;
+
+  box-sizing: border-box;
+
+  width: 100%;
+  height: 100svh;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  padding:
+    max(18px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    max(28px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+
+  background:
+    #cbc2b3;
+
+  overscroll-behavior:
+    contain;
 }
 
 .toolbar {
-  display: flex;
+  position: absolute;
+  z-index: 20;
 
-  align-items: baseline;
-  justify-content: space-between;
+  top:
+    max(
+      18px,
+      env(safe-area-inset-top)
+    );
 
-  gap: 20px;
-
-  margin-bottom: 17px;
+  left:
+    max(
+      18px,
+      env(safe-area-inset-left)
+    );
 }
 
 .returnAction {
   appearance: none;
 
-  padding: 0;
+  min-height: 46px;
 
-  border: 0;
+  padding:
+    11px 13px;
 
-  background: transparent;
+  border:
+    1px solid
+    rgba(83, 96, 78, .72);
+
+  border-radius: 0;
+
+  background:
+    rgba(255, 251, 241, .06);
 
   color:
-    var(--drawer-sage);
+    rgba(83, 96, 78, .86);
 
   font-family:
     var(--drawer-font-meta);
@@ -38,51 +72,531 @@
   cursor: pointer;
 }
 
-.kicker {
+/*
+  P2 LEGACY PORT
+
+  The original layout was NOT:
+  "large child papers placed behind Original".
+
+  It was:
+  inspect-stage
+    -> inspect-record-peek
+    -> inspect-original
+    -> inspect-side-tabs
+    -> inspect-filing-peek
+
+  Full Record / EE / Aqi / Filing papers were hidden aux panels
+  until a peek was selected.
+
+  The geometry below ports the final physical-layer values
+  recovered from legacy layout-correction.css.
+*/
+.bundle {
+  --p3-top:
+    clamp(
+      64px,
+      8svh,
+      78px
+    );
+
+  /*
+    The P2 paper is intentionally tall and internally scrollable.
+    The 48svh center term follows the recovered mobile P3 sizing
+    language while retaining a useful modern floor / ceiling.
+  */
+  --p3-height:
+    clamp(
+      430px,
+      48svh,
+      540px
+    );
+
+  position: relative;
+
+  isolation: isolate;
+
+  width:
+    min(
+      calc(100vw - 24px),
+      410px
+    );
+
+  height:
+    calc(
+      var(--p3-top)
+      + var(--p3-height)
+      + 70px
+    );
+
+  margin:
+    clamp(
+      112px,
+      14svh,
+      150px
+    )
+    auto
+    96px;
+
+  transform:
+    translateY(4px);
+}
+
+/*
+  ORIGINAL
+
+  Recovered final legacy relationship:
+  centered at 50%, width 80% of Inspect stage,
+  fixed paper height with internal scrolling.
+*/
+.originalLayer {
+  position: absolute;
+  z-index: 4;
+
+  top:
+    var(--p3-top);
+
+  left: 50%;
+
+  width: 80%;
+  height:
+    var(--p3-height);
+
+  margin: 0;
+
+  /*
+    IMPORTANT React ownership fix:
+
+    In legacy P2, .inspect-original was BOTH
+    the physical paper and the scroll container.
+
+    In React, .originalLayer is only the positioning wrapper.
+    OriginalPaper itself owns the paper background/material.
+
+    Therefore the wrapper must not become the scroll carrier,
+    otherwise the white paper can end while its content keeps
+    painting outside it (the broken mixed-media screenshot).
+  */
+  overflow: visible;
+
+  /*
+    P1 legacy paper depth:
+    first shadow = soft room depth
+    second solid offset = the extra sheet visibly stacked
+    underneath the main paper.
+  */
+  box-shadow:
+    1px 7px 13px rgba(54, 38, 28, .12),
+    4px 5px 0 rgba(236, 225, 207, .62);
+
+  transform:
+    translateX(-50%);
+}
+
+.originalLayer > * {
+  box-sizing: border-box;
+
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+
+  margin: 0;
+
+  /*
+    Port legacy scroll ownership to the real paper object.
+  */
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  overscroll-behavior:
+    contain;
+
+  -webkit-overflow-scrolling:
+    touch;
+}
+
+/*
+  RECEIPT
+
+  Exact P2 mobile physical layer:
+  top = Original top - 33px
+  left = 18%
+  width = 42%
+  height = 50px
+
+  Only 33px is visible above Original;
+  the remaining 17px is physically tucked underneath it.
+*/
+.receiptPeek {
+  position: absolute;
+  z-index: 2;
+
+  top:
+    calc(
+      var(--p3-top)
+      - 33px
+    );
+
+  left: 18%;
+
+  width: 42%;
+  height: 50px;
+  min-height: 50px;
+  max-height: 50px;
+
+  margin: 0;
+
+  padding:
+    8px 11px 10px;
+
+  display: block;
+
+  overflow: hidden;
+
+  appearance: none;
+
+  border: 0;
+  border-top:
+    1px solid
+    rgba(116, 93, 71, .16);
+
+  border-radius: 0;
+
   color:
-    var(--drawer-quiet-ink);
+    rgba(91, 82, 70, .72);
+
+  background:
+    #ebe2cf;
+
+  box-shadow:
+    1px 3px 5px
+    rgba(55, 39, 29, .055);
+
+  transform:
+    rotate(-.38deg);
+
+  transform-origin:
+    50% 100%;
+
+  text-align: left;
+
+  font:
+    .55rem/1.15
+    var(--drawer-font-meta);
+
+  letter-spacing:
+    .105em;
+
+  cursor: pointer;
+}
+
+/*
+  EE / AQI
+
+  Legacy final topology:
+  the tab starts 43-44px BEFORE Original's right edge.
+  The full slip is longer than the visible tab.
+  Original z-index 4 covers the buried portion.
+*/
+.sideTabs {
+  position: absolute;
+  z-index: 3;
+
+  top:
+    calc(
+      var(--p3-top)
+      + 92px
+    );
+
+  /*
+    Legacy P1 relationship:
+    Original right edge = 50% + 40%.
+    The 63px slip starts 43px before that edge,
+    leaving only ~20px visibly peeking out.
+  */
+  left:
+    calc(
+      50%
+      + 40%
+      - 43px
+    );
+
+  width: auto;
+
+  margin: 0;
+  padding: 0;
+
+  display: grid;
+
+  gap: 5px;
+}
+
+.sideTab {
+  position: relative;
+
+  width: 63px;
+  min-width: 63px;
+  max-width: 63px;
+
+  height: 17px;
+  min-height: 17px;
+  max-height: 17px;
+
+  margin: 0;
+
+  padding:
+    0 7px 0 0;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: flex-end;
+
+  appearance: none;
+
+  border-radius: 0;
+
+  box-shadow:
+    1px 2px 3px
+    rgba(55, 39, 29, .03);
+
+  font:
+    .44rem/1
+    var(--drawer-font-meta);
+
+  letter-spacing:
+    .02em;
+
+  text-align: right;
+
+  cursor: pointer;
+}
+
+.eePeek {
+  border:
+    1px solid
+    rgba(103, 118, 96, .26);
+
+  color:
+    rgba(88, 102, 83, .82);
+
+  background:
+    #dfe6da;
+}
+
+.replyPeek {
+  margin-left: 4px;
+
+  border:
+    1px solid
+    rgba(151, 124, 79, .26);
+
+  color:
+    rgba(118, 94, 58, .82);
+
+  background:
+    #eadfc8;
+}
+
+.sideTab[aria-pressed='true'] {
+  transform:
+    translateX(3px);
+}
+
+/*
+  FILING
+
+  Exact P2 mobile physical layer:
+  starts 17px before Original's bottom edge,
+  is 56% of Inspect stage,
+  and is only 70px tall.
+
+  Therefore only ~53px remains visible below Original.
+*/
+.filingPeek {
+  position: absolute;
+  z-index: 3;
+
+  top:
+    calc(
+      var(--p3-top)
+      + var(--p3-height)
+      - 17px
+    );
+
+  left: 31%;
+
+  width: 56%;
+  height: 70px;
+  min-height: 70px;
+  max-height: 70px;
+
+  margin: 0;
+
+  padding:
+    10px 13px 13px;
+
+  overflow: hidden;
+
+  appearance: none;
+
+  border:
+    1px solid
+    rgba(116, 93, 71, .16);
+
+  border-radius: 0;
+
+  color:
+    rgba(83, 77, 67, .73);
+
+  background:
+    #e9dfcb;
+
+  box-shadow:
+    1px 5px 9px
+    rgba(55, 39, 29, .075);
+
+  transform:
+    rotate(.52deg);
+
+  transform-origin:
+    50% 0;
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+.filingPeek span:first-child {
+  display: block;
 
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .61rem;
+  font-size: .45rem;
 
-  letter-spacing: .08em;
+  letter-spacing:
+    .075em;
+
+  opacity: .66;
 }
 
-.workspace {
+.filingPeek span:last-child {
+  display: block;
+
+  margin-top: 5px;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .56rem;
+
+  line-height: 1.2;
+}
+
+/*
+  When a source paper is selected, legacy hid its little source peek.
+  Keep the same semantic relationship even before motion is restored.
+*/
+.receiptPeek[aria-pressed='true'],
+.sideTab[aria-pressed='true'],
+.filingPeek[aria-pressed='true'] {
+  visibility: hidden;
+
+  pointer-events: none;
+}
+
+/*
+  Selected aux paper.
+  Motion is deliberately deferred.
+*/
+.pulledLayer {
+  position: absolute;
+  z-index: 10;
+
+  top:
+    var(--p3-top);
+
+  left: 10%;
+
+  width: 80%;
+
+  padding-bottom: 90px;
+}
+
+.paperReturn {
+  display: block;
+
+  margin:
+    0 0 10px auto;
+
+  appearance: none;
+
+  padding:
+    3px 0;
+
+  border: 0;
+  border-bottom:
+    1px solid
+    rgba(83, 96, 78, .30);
+
+  background:
+    transparent;
+
+  color:
+    var(--drawer-sage);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .62rem;
+
+  cursor: pointer;
+}
+
+.pulledPaper {
   position: relative;
 
   width: 100%;
 }
 
-.recordLayer {
-  position: relative;
-  z-index: 1;
-
-  margin-bottom: -13px;
+.pulledPaper > * {
+  margin-top: 0;
 }
 
-.originalLayer {
-  position: relative;
-  z-index: 2;
-
+/*
+  Trash remains outside the paper bundle.
+*/
+.trashOutside {
   width:
-    calc(100% - 14px);
+    min(
+      calc(100vw - 58px),
+      328px
+    );
 
-  margin-left: auto;
+  margin:
+    0 auto 40px;
 }
 
 .state {
+  width:
+    min(
+      calc(100% - 40px),
+      500px
+    );
+
+  margin:
+    180px auto 0;
+
   padding:
     42px 24px;
 
   border:
     1px solid
-    var(--drawer-rule);
+    rgba(116, 93, 71, .14);
 
   background:
-    rgba(255, 251, 241, .38);
+    rgba(255, 251, 241, .50);
 
   color:
     var(--drawer-quiet-ink);
@@ -107,13 +621,115 @@
   cursor: pointer;
 }
 
-@media (max-width: 520px) {
-  .recordLayer {
-    margin-bottom: -10px;
+.returnAction:focus-visible,
+.receiptPeek:focus-visible,
+.sideTab:focus-visible,
+.filingPeek:focus-visible,
+.paperReturn:focus-visible {
+  outline:
+    2px solid
+    rgba(83, 96, 78, .48);
+
+  outline-offset: 3px;
+}
+
+@media (min-width: 431px) {
+  .bundle {
+    transform:
+      translateY(7px);
   }
 
-  .originalLayer {
+  .receiptPeek {
+    top:
+      calc(
+        var(--p3-top)
+        - 34px
+      );
+
+    height: 52px;
+    min-height: 52px;
+    max-height: 52px;
+
+    padding:
+      8px 12px 10px;
+
+    font-size:
+      .56rem;
+  }
+
+  .sideTabs {
+    top:
+      calc(
+        var(--p3-top)
+        + 96px
+      );
+
+    left:
+      calc(
+        50%
+        + 40%
+        - 44px
+      );
+
+    gap: 6px;
+  }
+
+  .sideTab {
+    width: 64px;
+    min-width: 64px;
+    max-width: 64px;
+
+    height: 18px;
+    min-height: 18px;
+    max-height: 18px;
+
+    padding-right: 7px;
+
+    font-size: .46rem;
+  }
+
+  .filingPeek {
+    top:
+      calc(
+        var(--p3-top)
+        + var(--p3-height)
+        - 18px
+      );
+
+    height: 74px;
+    min-height: 74px;
+    max-height: 74px;
+
+    padding:
+      11px 14px 14px;
+  }
+}
+
+@media (max-width: 370px) {
+  .bundle {
     width:
-      calc(100% - 7px);
+      calc(100vw - 22px);
+
+    margin-top:
+      104px;
+  }
+
+  .sideTabs {
+    left:
+      calc(
+        50%
+        + 40%
+        - 41px
+      );
+  }
+
+  .sideTab {
+    width: 60px;
+    min-width: 60px;
+    max-width: 60px;
+
+    height: 17px;
+    min-height: 17px;
+    max-height: 17px;
   }
 }
