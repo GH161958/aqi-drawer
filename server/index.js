@@ -620,6 +620,7 @@ export async function createBridgeApp(config = {}) {
     res.status(Number(error?.status) || 500).json({
       error: error?.message || 'Internal server error.',
       ...(error?.code ? { code: error.code } : {}),
+      ...(typeof error?.field === 'string' && error.field ? { field: error.field } : {}),
       ...(Number.isInteger(error?.expectedFileCount) ? { expectedFileCount: error.expectedFileCount } : {}),
       ...(Number.isInteger(error?.receivedFileCount) ? { receivedFileCount: error.receivedFileCount } : {}),
     })

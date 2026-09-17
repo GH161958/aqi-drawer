@@ -422,6 +422,28 @@ try {
     docxBytes,
   )
 
+  const beforeUnexpectedFieldItems = await bridge.store.list({ limit: 500 })
+  const beforeUnexpectedFieldMedia = await listMediaFiles()
+  const unexpectedFieldForm = new FormData()
+  unexpectedFieldForm.set('title', 'Must reject the wrong file field')
+  unexpectedFieldForm.append(
+    'shortcutFile',
+    new Blob([Buffer.from('wrong-field')], { type: 'application/octet-stream' }),
+    'wrong-field.bin',
+  )
+  const unexpectedFieldResponse = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: unexpectedFieldForm },
+  )
+  const unexpectedFieldError = await unexpectedFieldResponse.json()
+  assert.equal(unexpectedFieldError.code, 'LIMIT_UNEXPECTED_FILE')
+  assert.equal(unexpectedFieldError.field, 'shortcutFile')
+  assert.equal(
+    (await bridge.store.list({ limit: 500 })).length,
+    beforeUnexpectedFieldItems.length,
+  )
+  assert.deepEqual(await listMediaFiles(), beforeUnexpectedFieldMedia)
+
   const beforeMissingFileItems = await bridge.store.list({ limit: 500 })
   const beforeMissingFileMedia = await listMediaFiles()
   const missingFileForm = new FormData()
