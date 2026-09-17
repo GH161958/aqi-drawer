@@ -261,6 +261,37 @@ export function ItemPreview({
     }
   })()
 
+
+
+  const attachedTabs =
+    (hasEeNote
+      || hasAqiReply) ? (
+      <span
+        className={styles.edgeTabs}
+        aria-label="这张纸还有附页"
+      >
+        {hasEeNote && (
+          <span
+            className={
+              styles.eeTab
+            }
+          >
+            EE
+          </span>
+        )}
+
+        {hasAqiReply && (
+          <span
+            className={
+              styles.aqiTab
+            }
+          >
+            Aqi
+          </span>
+        )}
+      </span>
+    ) : null
+
   return (
     <li className={styles.row}>
       <button
@@ -287,12 +318,22 @@ export function ItemPreview({
           onOpen(item)
         }
       >
+        {!isDocument
+          && !isArticle
+          && !isXhsPhoto
+          && !isPhoto
+          && presentation.kind !== 'mixed'
+          && presentation.kind !== 'repository'
+          && presentation.kind !== 'product'
+          && attachedTabs}
+
         {isDocument ? (
           <div
             className={
               styles.documentFolder
             }
           >
+              {attachedTabs}
             <div
               className={
                 styles.documentBack
@@ -385,6 +426,7 @@ export function ItemPreview({
               styles.articleObject
             }
           >
+              {attachedTabs}
             <span
               className={
                 styles.articleTape
@@ -476,6 +518,7 @@ export function ItemPreview({
               styles.xhsStorageObject
             }
           >
+              {attachedTabs}
             {photoAttachments.length > 0 && (
               <div
                 className={
@@ -580,6 +623,7 @@ export function ItemPreview({
                   styles.photoSleeve
                 }
               >
+              {attachedTabs}
 
 
                 <div
@@ -622,6 +666,7 @@ export function ItemPreview({
                   styles.photoSetSleeve
                 }
               >
+              {attachedTabs}
 
 
                 <div
@@ -714,6 +759,7 @@ export function ItemPreview({
                 styles.mixedObject
               }
             >
+              {attachedTabs}
               <div
                 className={
                   styles.mixedInsertStack
@@ -845,6 +891,7 @@ export function ItemPreview({
                 styles.repositoryObject
               }
             >
+              {attachedTabs}
               <div
                 className={
                   styles.repositoryBackCard
@@ -949,6 +996,7 @@ export function ItemPreview({
                 styles.productObject
               }
             >
+              {attachedTabs}
               <div
                 className={
                   styles.productMeta
@@ -1063,33 +1111,6 @@ export function ItemPreview({
         )}
       </button>
 
-      {(hasEeNote
-        || hasAqiReply) && (
-        <div
-          className={styles.edgeTabs}
-          aria-label="这张纸还有附页"
-        >
-          {hasEeNote && (
-            <span
-              className={
-                styles.eeTab
-              }
-            >
-              EE
-            </span>
-          )}
-
-          {hasAqiReply && (
-            <span
-              className={
-                styles.aqiTab
-              }
-            >
-              Aqi
-            </span>
-          )}
-        </div>
-      )}
     </li>
   )
 }

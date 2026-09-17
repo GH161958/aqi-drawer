@@ -6,6 +6,7 @@
 
 .paper {
   position: relative;
+  z-index: 2;
 
   display: block;
 
@@ -122,61 +123,193 @@
 
 .edgeTabs {
   position: absolute;
+  z-index: 8;
 
-  right: -24px;
-  bottom: 17px;
+  /*
+    Attached tabs now position against
+    the actual presentation object.
+  */
+  top:
+    clamp(
+      42px,
+      34%,
+      72px
+    );
+
+  /*
+    D inset:
+    mostly inside its own object,
+    with a small physical protrusion.
+  */
+  right: -8px;
+  bottom: auto;
 
   display: grid;
+  gap: 5px;
 
-  gap: 6px;
+  width: auto;
+
+  margin: 0;
+  padding: 0;
 
   pointer-events: none;
 }
 
+
 .edgeTabs span {
-  min-width: 44px;
+  position: relative;
+
+  box-sizing: border-box;
+
+  width: 63px;
+  min-width: 63px;
+  max-width: 63px;
+
+  height: 17px;
+  min-height: 17px;
+  max-height: 17px;
+
+  margin: 0;
 
   padding:
-    6px 8px 6px 14px;
+    0 7px 0 0;
 
-  font-family:
+  display: flex;
+
+  align-items: center;
+  justify-content: flex-end;
+
+  border-radius: 0;
+
+  white-space: nowrap;
+
+  font:
+    .44rem/1
     var(--drawer-font-meta);
 
-  font-size: .58rem;
+  letter-spacing:
+    .02em;
+
+  text-align: right;
 
   box-shadow:
-    1px 2px 4px
-    rgba(49, 37, 29, .06);
+    1px 2px 3px
+    rgba(55, 39, 29, .03);
+
+  /*
+    Preserve the 63px real slip.
+    Reveal the rightmost 42px.
+  */
+  clip-path:
+    inset(
+      0
+      0
+      0
+      21px
+    );
+
+  transform: none;
 }
 
-.eeTab {
-  border:
-    1px solid
-    rgba(126, 138, 119, .30);
+.edgeTabs span::after {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  bottom: 0;
+  left: 21px;
+
+  width: 1px;
 
   background:
-    #dfe8d9;
+    var(
+      --archive-tab-cut-edge,
+      rgba(103, 118, 96, .26)
+    );
+
+  pointer-events: none;
+}
+
+
+
+.eeTab {
+  --archive-tab-cut-edge:
+    rgba(103, 118, 96, .26);
+
+  border:
+    1px solid
+    rgba(103, 118, 96, .26);
 
   color:
-    var(--drawer-sage);
+    rgba(88, 102, 83, .82);
+
+  background:
+    #dfe6da;
 }
 
 .aqiTab {
+  --archive-tab-cut-edge:
+    rgba(151, 124, 79, .26);
+
+  margin-left: 4px;
+
   border:
     1px solid
-    rgba(166, 144, 110, .30);
+    rgba(151, 124, 79, .26);
+
+  color:
+    rgba(118, 94, 58, .82);
 
   background:
     #eadfc8;
-
-  color:
-    #74604c;
 }
 
 @media (max-width: 520px) {
   .edgeTabs {
-    right: -14px;
+    top:
+      clamp(
+        38px,
+        32%,
+        64px
+      );
+
+    right: -7px;
+
+    gap: 5px;
   }
+
+  .edgeTabs span {
+    width: 63px;
+    min-width: 63px;
+    max-width: 63px;
+
+    height: 17px;
+    min-height: 17px;
+    max-height: 17px;
+
+    padding:
+      0 7px 0 0;
+
+    font:
+      .44rem/1
+      var(--drawer-font-meta);
+
+    clip-path:
+      inset(
+        0
+        0
+        0
+        23px
+      );
+
+    transform: none;
+  }
+
+  .edgeTabs span::after {
+    left: 23px;
+  }
+
 
   .paper {
     padding:
@@ -3250,6 +3383,8 @@
 ------------------------------------------ */
 
 .productObject {
+  position: relative;
+
   display:
     block;
 
