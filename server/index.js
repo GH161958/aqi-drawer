@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
+import { unlink } from 'node:fs/promises'
 import express from 'express'
 import multer from 'multer'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
@@ -17,6 +18,7 @@ import { extractXhsNoteId, XhsAdapter } from './adapters/xhs.js'
 const SERVICE_VERSION = '2.5.0'
 const DRAWER_SESSION_COOKIE = 'aqi_drawer_session'
 const DRAWER_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+const MAX_UPLOAD_FILES = 5
 
 export async function createBridgeApp(config = {}) {
   const root = path.dirname(fileURLToPath(import.meta.url))
@@ -53,7 +55,7 @@ export async function createBridgeApp(config = {}) {
       destination: store.mediaDir,
       filename: (_req, _file, callback) => callback(null, randomUUID()),
     }),
-    limits: { files: 5, fileSize: 25 * 1024 * 1024 },
+    limits: { files: MAX_UPLOAD_FILES, fileSize: 25 * 1024 * 1024 },
   })
   const mcpHost =
     settings.temporaryPublicMcp
@@ -424,35 +426,64 @@ export async function createBridgeApp(config = {}) {
   })
 
   const handleUpload = ({ defaultText = false } = {}) => async (req, res, next) => {
+    const files = Array.isArray(req.files) ? req.files : []
+    let uploadedAttachments
+    let storedItem = null
+
     try {
       let payload = parseRequestPayload(req.body)
-      if (typeof req.body?.payload === 'string' && req.body.payload.trim()) payload = JSON.parse(req.body.payload)
+      if (typeof req.body?.payload === 'string' && req.body.payload.trim()) {
+        payload = {
+          ...payload,
+          ...parseRequestPayload(JSON.parse(req.body.payload)),
+        }
+      }
       delete payload.payload
+
+      const expectedFileCount = parseExpectedFileCount(payload)
+      delete payload.expectedFileCount
+
+      if (
+        expectedFileCount !== null
+        && files.length !== expectedFileCount
+      ) {
+        const error = httpError(
+          422,
+          `Expected ${expectedFileCount} uploaded file(s), but received ${files.length}.`,
+        )
+        error.code = 'EXPECTED_FILE_COUNT_MISMATCH'
+        error.expectedFileCount = expectedFileCount
+        error.receivedFileCount = files.length
+        throw error
+      }
+
       payload = normalizeIncomingShare(payload)
       if (isSelfServiceShare(payload.sourceUrl, req, settings)) {
         throw httpError(400, '这看起来是口袋自己的服务地址，没有作为收藏保存。请从原 App 的分享菜单运行快捷指令。')
       }
-      const files = Array.isArray(req.files) ? req.files : []
-      const attachments = files.map((file) => ({
-        id: randomUUID(),
-        name: file.originalname,
-        mimeType: file.mimetype,
-        size: file.size,
-        storageName: file.filename,
+      uploadedAttachments = files.map((file) => ({
+        file,
+        attachment: {
+          id: randomUUID(),
+          name: file.originalname,
+          mimeType: file.mimetype,
+          size: file.size,
+          storageName: file.filename,
+        },
       }))
+      const attachments = uploadedAttachments.map((entry) => entry.attachment)
       const allAttachments = [...(payload.attachments ?? []), ...attachments]
       const xhsInput = [payload.sourceUrl, payload.text].filter(Boolean).join('\n')
-      let item
       if (xhsAdapter.canHandle(xhsInput)) {
         try {
           const xhs = await xhsAdapter.parse(xhsInput)
-          item = await store.upsertXhs({ ...payload, attachments: allAttachments, sharedText: payload.text, xhs }, {
+          storedItem = await store.upsertXhs({ ...payload, attachments: allAttachments, sharedText: payload.text, xhs }, {
             loadImage: (url) => xhsAdapter.loadImage(url),
           })
         } catch (error) {
           const resolvedUrl = cleanWebUrl(error?.finalUrl) || payload.sourceUrl
           const noteId = extractXhsNoteId(resolvedUrl)
-          item = await store.upsert({
+          storedItem = await store.upsert({
             ...payload,
             attachments: allAttachments,
             sourceUrl: resolvedUrl,
@@ -470,19 +501,41 @@ export async function createBridgeApp(config = {}) {
           console.warn(`XHS adapter fell back to a link item: ${String(error?.message || 'unknown error').slice(0, 160)}`)
         }
       } else {
-        item = await store.upsert({ ...payload, attachments: allAttachments })
+        storedItem = await store.upsert({ ...payload, attachments: allAttachments })
       }
-      const receipt = createDropReceipt(item)
+
+      const retainedAttachmentIds = new Set(
+        storedItem.attachments.map((attachment) => attachment.id),
+      )
+      await removeUploadedFiles(
+        uploadedAttachments
+          .filter(({ attachment }) => !retainedAttachmentIds.has(attachment.id))
+          .map(({ file }) => file),
+      )
+
+      const receipt = createDropReceipt(storedItem)
       const responseMode = String(req.query.response ?? '').toLowerCase()
       if (responseMode === 'text' || (defaultText && responseMode !== 'json')) {
         return res.status(200).type('text/plain; charset=utf-8').send(receipt.message)
       }
-      res.status(200).json({ ok: true, message: receipt.message, receipt, item })
-    } catch (error) { next(error) }
+      res.status(200).json({ ok: true, message: receipt.message, receipt, item: storedItem })
+    } catch (error) {
+      const retainedAttachmentIds = new Set(
+        storedItem?.attachments.map((attachment) => attachment.id) ?? [],
+      )
+      await removeUploadedFiles(
+        uploadedAttachments
+          ? uploadedAttachments
+              .filter(({ attachment }) => !retainedAttachmentIds.has(attachment.id))
+              .map(({ file }) => file)
+          : files,
+      )
+      next(error)
+    }
   }
 
-  app.post('/api/pocket/items/upload', upload.array('files', 5), handleUpload())
-  app.post(`/drop/${settings.dropSecret}`, upload.array('files', 5), handleUpload({ defaultText: true }))
+  app.post('/api/pocket/items/upload', upload.array('files', MAX_UPLOAD_FILES), handleUpload())
+  app.post(`/drop/${settings.dropSecret}`, upload.array('files', MAX_UPLOAD_FILES), handleUpload({ defaultText: true }))
 
   app.get('/api/pocket/media/:attachmentId', async (req, res, next) => {
     try {
@@ -564,7 +617,12 @@ export async function createBridgeApp(config = {}) {
 
   app.use((error, _req, res, _next) => {
     void _next
-    res.status(Number(error?.status) || 500).json({ error: error?.message || 'Internal server error.' })
+    res.status(Number(error?.status) || 500).json({
+      error: error?.message || 'Internal server error.',
+      ...(error?.code ? { code: error.code } : {}),
+      ...(Number.isInteger(error?.expectedFileCount) ? { expectedFileCount: error.expectedFileCount } : {}),
+      ...(Number.isInteger(error?.receivedFileCount) ? { receivedFileCount: error.receivedFileCount } : {}),
+    })
   })
 
   return {
@@ -798,6 +856,44 @@ function parseRequestPayload(body) {
   }
   if (Array.isArray(body)) return { share: body }
   return body && typeof body === 'object' ? { ...body } : {}
+}
+
+function parseExpectedFileCount(payload) {
+  if (!Object.hasOwn(payload, 'expectedFileCount')) return null
+
+  const raw = payload.expectedFileCount
+  const value = typeof raw === 'string' && raw.trim() !== ''
+    ? Number(raw)
+    : raw
+
+  if (
+    !Number.isInteger(value)
+    || value < 0
+    || value > MAX_UPLOAD_FILES
+  ) {
+    const error = httpError(
+      422,
+      `expectedFileCount must be an integer from 0 through ${MAX_UPLOAD_FILES}.`,
+    )
+    error.code = 'INVALID_EXPECTED_FILE_COUNT'
+    throw error
+  }
+
+  return value
+}
+
+async function removeUploadedFiles(files) {
+  await Promise.all(
+    files.map(async (file) => {
+      try {
+        await unlink(file.path)
+      } catch (error) {
+        if (error?.code !== 'ENOENT') {
+          console.error(`Failed to remove uploaded file ${file.filename}: ${error?.message || 'unknown error'}`)
+        }
+      }
+    }),
+  )
 }
 
 function createDropReceipt(item) {

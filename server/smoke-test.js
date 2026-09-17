@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -383,6 +383,106 @@ try {
   assert.equal('storageName' in uploaded.item.attachments[0], false)
   const imageItem = await client.callTool({ name: 'pocket_get', arguments: { id: 'image-item' } })
   assert.equal(imageItem.content.some((entry) => entry.type === 'image'), true)
+
+  const mediaDir = path.join(dataDir, 'media')
+  const listMediaFiles = async () => (await readdir(mediaDir)).sort()
+  const docxBytes = Buffer.from('PK\u0003\u0004aqi-drawer-docx-shaped-smoke-test')
+  const docxPayload = {
+    title: 'DOCX multipart intake regression',
+    text: 'DOCX multipart intake regression payload',
+    expectedFileCount: 1,
+  }
+  const docxForm = new FormData()
+  docxForm.set('payload', JSON.stringify(docxPayload))
+  docxForm.append(
+    'files',
+    new Blob(
+      [docxBytes],
+      { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+    ),
+    'drawer-note.docx',
+  )
+  const docxUpload = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: docxForm },
+  ).then(checkJson)
+  assert.equal(docxUpload.item.attachments.length, 1)
+  assert.equal(docxUpload.item.attachments[0].name, 'drawer-note.docx')
+  assert.equal(
+    docxUpload.item.attachments[0].mimeType,
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  )
+  assert.equal(docxUpload.item.attachments[0].size, docxBytes.length)
+  const downloadedDocx = await fetch(
+    `${baseUrl}${docxUpload.item.attachments[0].url}`,
+  )
+  assert.equal(downloadedDocx.status, 200)
+  assert.deepEqual(
+    Buffer.from(await downloadedDocx.arrayBuffer()),
+    docxBytes,
+  )
+
+  const beforeMissingFileItems = await bridge.store.list({ limit: 500 })
+  const beforeMissingFileMedia = await listMediaFiles()
+  const missingFileForm = new FormData()
+  missingFileForm.set('title', 'Must not become a title-only item')
+  missingFileForm.set('expectedFileCount', '1')
+  const missingFileResponse = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: missingFileForm },
+  )
+  const missingFileError = await missingFileResponse.json()
+  assert.equal(missingFileResponse.status, 422)
+  assert.equal(missingFileError.code, 'EXPECTED_FILE_COUNT_MISMATCH')
+  assert.equal(missingFileError.expectedFileCount, 1)
+  assert.equal(missingFileError.receivedFileCount, 0)
+  assert.equal(
+    (await bridge.store.list({ limit: 500 })).length,
+    beforeMissingFileItems.length,
+  )
+  assert.deepEqual(await listMediaFiles(), beforeMissingFileMedia)
+
+  const beforeFailedUploadMedia = await listMediaFiles()
+  const failedUploadForm = new FormData()
+  failedUploadForm.set('payload', '{malformed-json')
+  failedUploadForm.append(
+    'files',
+    new Blob([Buffer.from('orphan-me-not')], { type: 'application/octet-stream' }),
+    'failed-upload.bin',
+  )
+  const failedUploadResponse = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: failedUploadForm },
+  )
+  assert.equal(failedUploadResponse.status, 500)
+  assert.deepEqual(await listMediaFiles(), beforeFailedUploadMedia)
+
+  const beforeDuplicateMedia = await listMediaFiles()
+  const repeatedDocxForm = new FormData()
+  repeatedDocxForm.set('payload', JSON.stringify(docxPayload))
+  repeatedDocxForm.append(
+    'files',
+    new Blob(
+      [docxBytes],
+      { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+    ),
+    'drawer-note.docx',
+  )
+  const repeatedDocx = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: repeatedDocxForm },
+  ).then(checkJson)
+  assert.equal(repeatedDocx.item.id, docxUpload.item.id)
+  assert.equal(repeatedDocx.item.attachments.length, 1)
+  assert.deepEqual(await listMediaFiles(), beforeDuplicateMedia)
+  const originalDocxStillPresent = await fetch(
+    `${baseUrl}${docxUpload.item.attachments[0].url}`,
+  )
+  assert.equal(originalDocxStillPresent.status, 200)
+  assert.deepEqual(
+    Buffer.from(await originalDocxStillPresent.arrayBuffer()),
+    docxBytes,
+  )
 
   for (let index = 0; index < 2; index += 1) {
     await client.callTool({
