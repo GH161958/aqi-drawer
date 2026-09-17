@@ -425,6 +425,93 @@ try {
     docxBytes,
   )
 
+  const indexedFirstBytes = Buffer.from('indexed-first-file')
+  const indexedSecondBytes = Buffer.from('indexed-second-file')
+  const indexedForm = new FormData()
+  indexedForm.set('payload', JSON.stringify({
+    title: 'Indexed multipart intake regression',
+    text: 'Two indexed files belong to one item',
+    expectedFileCount: 2,
+  }))
+  indexedForm.append(
+    'file1',
+    new Blob([indexedFirstBytes], { type: 'text/plain' }),
+    '第一份.txt',
+  )
+  indexedForm.append(
+    'file2',
+    new Blob([indexedSecondBytes], { type: 'text/plain' }),
+    '第二份.txt',
+  )
+  const indexedUpload = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: indexedForm },
+  ).then(checkJson)
+  assert.deepEqual(
+    indexedUpload.item.attachments.map((attachment) => attachment.name),
+    ['第一份.txt', '第二份.txt'],
+  )
+  assert.deepEqual(
+    indexedUpload.item.attachments.map((attachment) => attachment.size),
+    [indexedFirstBytes.length, indexedSecondBytes.length],
+  )
+
+  const beforeMissingIndexedItems = await bridge.store.list({ limit: 500 })
+  const beforeMissingIndexedMedia = await listMediaFiles()
+  const missingIndexedForm = new FormData()
+  missingIndexedForm.set('payload', JSON.stringify({
+    title: 'Must not keep a partial indexed upload',
+    expectedFileCount: 2,
+  }))
+  missingIndexedForm.append(
+    'file1',
+    new Blob([Buffer.from('only-one-indexed-file')], { type: 'text/plain' }),
+    'only-one.txt',
+  )
+  const missingIndexedResponse = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: missingIndexedForm },
+  )
+  const missingIndexedError = await missingIndexedResponse.json()
+  assert.equal(missingIndexedResponse.status, 422)
+  assert.equal(missingIndexedError.code, 'EXPECTED_FILE_COUNT_MISMATCH')
+  assert.equal(missingIndexedError.expectedFileCount, 2)
+  assert.equal(missingIndexedError.receivedFileCount, 1)
+  assert.equal(
+    (await bridge.store.list({ limit: 500 })).length,
+    beforeMissingIndexedItems.length,
+  )
+  assert.deepEqual(await listMediaFiles(), beforeMissingIndexedMedia)
+
+  const beforeTooManyItems = await bridge.store.list({ limit: 500 })
+  const beforeTooManyMedia = await listMediaFiles()
+  const tooManyFilesForm = new FormData()
+  tooManyFilesForm.set('title', 'Must reject more than five total files')
+  tooManyFilesForm.append(
+    'files',
+    new Blob([Buffer.from('legacy-field-file')], { type: 'text/plain' }),
+    'legacy.txt',
+  )
+  for (let index = 1; index <= 5; index += 1) {
+    tooManyFilesForm.append(
+      `file${index}`,
+      new Blob([Buffer.from(`indexed-${index}`)], { type: 'text/plain' }),
+      `indexed-${index}.txt`,
+    )
+  }
+  const tooManyFilesResponse = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: tooManyFilesForm },
+  )
+  const tooManyFilesError = await tooManyFilesResponse.json()
+  assert.equal(tooManyFilesResponse.ok, false)
+  assert.equal(tooManyFilesError.code, 'LIMIT_FILE_COUNT')
+  assert.equal(
+    (await bridge.store.list({ limit: 500 })).length,
+    beforeTooManyItems.length,
+  )
+  assert.deepEqual(await listMediaFiles(), beforeTooManyMedia)
+
   const beforeUnexpectedFieldItems = await bridge.store.list({ limit: 500 })
   const beforeUnexpectedFieldMedia = await listMediaFiles()
   const unexpectedFieldForm = new FormData()

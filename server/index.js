@@ -19,6 +19,13 @@ const SERVICE_VERSION = '2.5.0'
 const DRAWER_SESSION_COOKIE = 'aqi_drawer_session'
 const DRAWER_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 const MAX_UPLOAD_FILES = 5
+const UPLOAD_FIELDS = [
+  { name: 'files', maxCount: MAX_UPLOAD_FILES },
+  ...Array.from(
+    { length: MAX_UPLOAD_FILES },
+    (_, index) => ({ name: `file${index + 1}`, maxCount: 1 }),
+  ),
+]
 
 export async function createBridgeApp(config = {}) {
   const root = path.dirname(fileURLToPath(import.meta.url))
@@ -57,6 +64,14 @@ export async function createBridgeApp(config = {}) {
     }),
     limits: { files: MAX_UPLOAD_FILES, fileSize: 25 * 1024 * 1024 },
   })
+  const receiveUpload = upload.fields(UPLOAD_FIELDS)
+  const acceptUpload = (req, res, next) => {
+    receiveUpload(req, res, async (error) => {
+      if (!error) return next()
+      await removeUploadedFiles(normalizeMultipartFiles(req.files))
+      next(error)
+    })
+  }
   const mcpHost =
     settings.temporaryPublicMcp
       ? '0.0.0.0'
@@ -426,7 +441,7 @@ export async function createBridgeApp(config = {}) {
   })
 
   const handleUpload = ({ defaultText = false } = {}) => async (req, res, next) => {
-    const files = Array.isArray(req.files) ? req.files : []
+    const files = normalizeMultipartFiles(req.files)
     let uploadedAttachments
     let storedItem = null
 
@@ -534,8 +549,8 @@ export async function createBridgeApp(config = {}) {
     }
   }
 
-  app.post('/api/pocket/items/upload', upload.array('files', MAX_UPLOAD_FILES), handleUpload())
-  app.post(`/drop/${settings.dropSecret}`, upload.array('files', MAX_UPLOAD_FILES), handleUpload({ defaultText: true }))
+  app.post('/api/pocket/items/upload', acceptUpload, handleUpload())
+  app.post(`/drop/${settings.dropSecret}`, acceptUpload, handleUpload({ defaultText: true }))
 
   app.get('/api/pocket/media/:attachmentId', async (req, res, next) => {
     try {
@@ -892,6 +907,19 @@ function normalizeUploadedFilename(value) {
 
   const candidate = Buffer.from(original, 'latin1').toString('utf8')
   return (candidate.includes('\uFFFD') ? original : candidate).normalize('NFC')
+}
+
+function normalizeMultipartFiles(value) {
+  if (Array.isArray(value)) return value
+  if (!value || typeof value !== 'object') return []
+
+  return [
+    ...(Array.isArray(value.files) ? value.files : []),
+    ...Array.from(
+      { length: MAX_UPLOAD_FILES },
+      (_, index) => value[`file${index + 1}`]?.[0],
+    ).filter(Boolean),
+  ]
 }
 
 async function removeUploadedFiles(files) {
