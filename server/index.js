@@ -465,7 +465,7 @@ export async function createBridgeApp(config = {}) {
         file,
         attachment: {
           id: randomUUID(),
-          name: file.originalname,
+          name: normalizeUploadedFilename(file.originalname),
           mimeType: file.mimetype,
           size: file.size,
           storageName: file.filename,
@@ -881,6 +881,17 @@ function parseExpectedFileCount(payload) {
   }
 
   return value
+}
+
+function normalizeUploadedFilename(value) {
+  const original = String(value ?? '')
+  const containsNonLatin1 = [...original]
+    .some((character) => character.codePointAt(0) > 0xFF)
+
+  if (containsNonLatin1) return original.normalize('NFC')
+
+  const candidate = Buffer.from(original, 'latin1').toString('utf8')
+  return (candidate.includes('\uFFFD') ? original : candidate).normalize('NFC')
 }
 
 async function removeUploadedFiles(files) {

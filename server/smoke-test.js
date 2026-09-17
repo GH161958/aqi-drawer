@@ -387,6 +387,7 @@ try {
   const mediaDir = path.join(dataDir, 'media')
   const listMediaFiles = async () => (await readdir(mediaDir)).sort()
   const docxBytes = Buffer.from('PK\u0003\u0004aqi-drawer-docx-shaped-smoke-test')
+  const docxFilename = '抽屉笔记.docx'
   const docxPayload = {
     title: 'DOCX multipart intake regression',
     text: 'DOCX multipart intake regression payload',
@@ -400,19 +401,21 @@ try {
       [docxBytes],
       { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
     ),
-    'drawer-note.docx',
+    docxFilename,
   )
   const docxUpload = await fetch(
     `${baseUrl}/api/pocket/items/upload`,
     { method: 'POST', body: docxForm },
   ).then(checkJson)
   assert.equal(docxUpload.item.attachments.length, 1)
-  assert.equal(docxUpload.item.attachments[0].name, 'drawer-note.docx')
+  assert.equal(docxUpload.item.attachments[0].name, docxFilename)
   assert.equal(
     docxUpload.item.attachments[0].mimeType,
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   )
   assert.equal(docxUpload.item.attachments[0].size, docxBytes.length)
+  const storedDocxUpload = await bridge.store.get(docxUpload.item.id)
+  assert.equal(storedDocxUpload.attachments[0].name, docxFilename)
   const downloadedDocx = await fetch(
     `${baseUrl}${docxUpload.item.attachments[0].url}`,
   )
@@ -488,7 +491,7 @@ try {
       [docxBytes],
       { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
     ),
-    'drawer-note.docx',
+    docxFilename,
   )
   const repeatedDocx = await fetch(
     `${baseUrl}/api/pocket/items/upload`,
