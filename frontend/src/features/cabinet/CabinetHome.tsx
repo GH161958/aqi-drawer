@@ -21,6 +21,10 @@ import {
 } from '../type-cabinet/TypeCabinet'
 
 import {
+  CapturePocket,
+} from '../capture/CapturePocket'
+
+import {
   animateCabinetDrawerPull,
   cancelCabinetDrawerMotion,
 } from './cabinetMotion'
@@ -131,6 +135,13 @@ export function CabinetHome({
       </h2>
 
       <div className={styles.cabinet}>
+        <CapturePocket />
+
+        <div
+          className={styles.topRail}
+          aria-hidden="true"
+        />
+
         <TypeCabinet />
         <button
           className={styles.plaque}

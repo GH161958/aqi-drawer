@@ -14,10 +14,47 @@ import type {
   PocketContentSnapshot,
   PocketAttachmentSummary,
   PocketItemSummary,
+  PocketIntakeReceipt,
+  PocketIntakeResult,
   PocketKind,
   PocketReplySummary,
   PocketStatus,
 } from '../types/pocket'
+
+export class DrawerIntakeError extends Error {
+  readonly status: number
+  readonly code: string
+  readonly field: string
+  readonly expectedFileCount?: number
+  readonly receivedFileCount?: number
+
+  constructor(
+    message: string,
+    {
+      status,
+      code = '',
+      field = '',
+      expectedFileCount,
+      receivedFileCount,
+    }: {
+      status: number
+      code?: string
+      field?: string
+      expectedFileCount?: number
+      receivedFileCount?: number
+    },
+  ) {
+    super(message)
+    this.name = 'DrawerIntakeError'
+    this.status = status
+    this.code = code
+    this.field = field
+    this.expectedFileCount =
+      expectedFileCount
+    this.receivedFileCount =
+      receivedFileCount
+  }
+}
 
 const pocketKinds =
   new Set<PocketKind>([
@@ -1790,5 +1827,160 @@ export async function readPocketItemContent(
                 === true,
           }
         : {},
+  }
+}
+
+function parseIntakeReceipt(
+  value: unknown,
+): PocketIntakeReceipt | null {
+  if (!isRecord(value)) return null
+
+  const status = value.status
+  if (
+    status !== 'saved'
+    && status !== 'merged'
+  ) {
+    return null
+  }
+
+  if (
+    typeof value.itemId !== 'string'
+    || typeof value.message !== 'string'
+  ) {
+    return null
+  }
+
+  return {
+    status,
+    itemId: value.itemId,
+    title: stringValue(value.title),
+    sourceApp: stringValue(value.sourceApp),
+    receivedCount:
+      typeof value.receivedCount === 'number'
+        ? value.receivedCount
+        : 1,
+    message: value.message,
+  }
+}
+
+export async function capturePocketItem({
+  text,
+  files,
+}: {
+  text: string
+  files: File[]
+}): Promise<PocketIntakeResult> {
+  const cleanText = text.trim()
+
+  if (!cleanText && files.length === 0) {
+    throw new DrawerIntakeError(
+      '先放进一段文字、一个链接，或至少一个文件。',
+      {
+        status: 400,
+        code: 'EMPTY_CAPTURE_DRAFT',
+      },
+    )
+  }
+
+  const request =
+    files.length > 0
+      ? (() => {
+          const body = new FormData()
+          body.set(
+            'payload',
+            JSON.stringify({
+              ...(cleanText
+                ? { share: cleanText }
+                : {}),
+              expectedFileCount:
+                files.length,
+            }),
+          )
+          for (const file of files) {
+            body.append('files', file)
+          }
+          return { method: 'POST', body }
+        })()
+      : {
+          method: 'POST',
+          headers: {
+            'content-type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            share: cleanText,
+            expectedFileCount: 0,
+          }),
+        }
+
+  const response =
+    await drawerFetch(
+      '/api/pocket/items/upload',
+      {
+        ...request,
+        credentials: 'same-origin',
+        headers: {
+          ...('headers' in request
+            ? request.headers
+            : {}),
+          accept: 'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response.json().catch(() => null)
+
+  if (!response.ok) {
+    const detail = isRecord(payload)
+      ? payload
+      : {}
+
+    throw new DrawerIntakeError(
+      stringValue(
+        detail.error,
+        `Drawer intake returned ${response.status}`,
+      ),
+      {
+        status: response.status,
+        code: stringValue(detail.code),
+        field: stringValue(detail.field),
+        expectedFileCount:
+          typeof detail.expectedFileCount
+            === 'number'
+            ? detail.expectedFileCount
+            : undefined,
+        receivedFileCount:
+          typeof detail.receivedFileCount
+            === 'number'
+            ? detail.receivedFileCount
+            : undefined,
+      },
+    )
+  }
+
+  if (!isRecord(payload)) {
+    throw new Error(
+      'Drawer intake returned an invalid response.',
+    )
+  }
+
+  const item = parsePocketItem(payload.item)
+  const receipt =
+    parseIntakeReceipt(payload.receipt)
+
+  if (!item || !receipt) {
+    throw new Error(
+      'Drawer intake returned an invalid receipt.',
+    )
+  }
+
+  return {
+    item,
+    receipt,
+    message: stringValue(
+      payload.message,
+      receipt.message,
+    ),
   }
 }

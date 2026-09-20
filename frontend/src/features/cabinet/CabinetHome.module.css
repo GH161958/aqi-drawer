@@ -32,6 +32,7 @@
 
 .cabinet {
   position: relative;
+  isolation: isolate;
 
   width: min(74%, 390px);
 
@@ -76,12 +77,23 @@
   pointer-events: none;
 }
 
-.cabinet::after {
+.topRail {
   position: absolute;
+  z-index: 12;
 
   top: -6px;
   right: -6px;
   left: -6px;
+
+  height: 16px;
+
+  pointer-events: none;
+}
+
+.topRail::before {
+  position: absolute;
+
+  inset: 0 0 auto;
 
   height: 7px;
 
@@ -95,6 +107,20 @@
   box-shadow:
     0 5px 8px
     rgba(47, 33, 26, .11);
+
+  content: "";
+}
+
+.topRail::after {
+  position: absolute;
+
+  top: 7px;
+  right: 6px;
+  bottom: 0;
+  left: 6px;
+
+  background:
+    #7b6252;
 
   content: "";
 }

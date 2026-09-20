@@ -24,6 +24,21 @@ export interface PocketAttachmentSummary {
   url?: string
 }
 
+export interface PocketIntakeReceipt {
+  status: 'saved' | 'merged'
+  itemId: string
+  title: string
+  sourceApp: string
+  receivedCount: number
+  message: string
+}
+
+export interface PocketIntakeResult {
+  item: PocketItemSummary
+  receipt: PocketIntakeReceipt
+  message: string
+}
+
 export interface PocketReplySummary {
   id?: string
 
