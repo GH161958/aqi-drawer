@@ -35,4 +35,48 @@
     SFMono-Regular,
     Menlo,
     monospace;
+
+  --paper-attached-tab-ee-background: #efeade;
+  --paper-attached-tab-ee-border:
+    rgba(103, 118, 96, .26);
+  --paper-attached-tab-ee-text:
+    rgba(88, 102, 83, .82);
+
+  --paper-attached-tab-aqi-background: #eee6d8;
+  --paper-attached-tab-aqi-border:
+    rgba(151, 124, 79, .26);
+  --paper-attached-tab-aqi-text:
+    rgba(118, 94, 58, .82);
+
+  --paper-attached-tab-font:
+    var(--drawer-font-meta);
+  --paper-attached-tab-font-size: .44rem;
+  --paper-attached-tab-font-weight: 400;
+  --paper-attached-tab-line-height: 1;
+  --paper-attached-tab-letter-spacing: .02em;
+
+  --paper-attached-tab-width: 63px;
+  --paper-attached-tab-height: 17px;
+  --paper-attached-tab-buried: 43px;
+  --paper-attached-tab-gap: 5px;
+}
+
+@media (min-width: 431px) {
+  :root {
+    --paper-attached-tab-width: 64px;
+    --paper-attached-tab-height: 18px;
+    --paper-attached-tab-buried: 44px;
+    --paper-attached-tab-gap: 6px;
+    --paper-attached-tab-font-size: .46rem;
+  }
+}
+
+@media (max-width: 370px) {
+  :root {
+    --paper-attached-tab-width: 60px;
+    --paper-attached-tab-height: 17px;
+    --paper-attached-tab-buried: 41px;
+    --paper-attached-tab-gap: 5px;
+    --paper-attached-tab-font-size: .44rem;
+  }
 }

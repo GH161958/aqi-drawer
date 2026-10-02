@@ -266,30 +266,37 @@ export function ItemPreview({
   const attachedTabs =
     (hasEeNote
       || hasAqiReply) ? (
-      <span
-        className={styles.edgeTabs}
-        aria-label="这张纸还有附页"
-      >
-        {hasEeNote && (
-          <span
-            className={
-              styles.eeTab
-            }
-          >
-            EE
-          </span>
-        )}
+      <>
+        <span
+          className={styles.edgeTabs}
+          aria-label="这张纸还有附页"
+        >
+          {hasEeNote && (
+            <span
+              className={
+                styles.eeTab
+              }
+              aria-hidden="true"
+            />
+          )}
 
-        {hasAqiReply && (
-          <span
-            className={
-              styles.aqiTab
-            }
-          >
-            Aqi
-          </span>
-        )}
-      </span>
+          {hasAqiReply && (
+            <span
+              className={
+                styles.aqiTab
+              }
+              aria-hidden="true"
+            />
+          )}
+        </span>
+
+        <span
+          className={
+            styles.previewBundleCover
+          }
+          aria-hidden="true"
+        />
+      </>
     ) : null
 
   return (
@@ -304,7 +311,7 @@ export function ItemPreview({
                 ? `${styles.paper} ${styles.xhsCarrier}`
                 : isPhoto
                   ? `${styles.paper} ${styles.photoCarrier}`
-                  : styles.paper
+                  : `${styles.paper} ${styles.previewPaperBundle}`
         }
         data-kind={item.kind}
         data-presentation-kind={
@@ -330,10 +337,11 @@ export function ItemPreview({
         {isDocument ? (
           <div
             className={
-              styles.documentFolder
+              `${styles.documentFolder} ${styles.previewPaperBundle}`
             }
           >
-              {attachedTabs}
+            {attachedTabs}
+
             <div
               className={
                 styles.documentBack
@@ -423,10 +431,11 @@ export function ItemPreview({
         ) : isArticle ? (
           <div
             className={
-              styles.articleObject
+              `${styles.articleObject} ${styles.previewPaperBundle}`
             }
           >
-              {attachedTabs}
+            {attachedTabs}
+
             <span
               className={
                 styles.articleTape
@@ -515,43 +524,47 @@ export function ItemPreview({
         ) : isXhsPhoto ? (
           <div
             className={
-              styles.xhsStorageObject
+              `${styles.xhsStorageObject} ${styles.previewPaperBundle}`
             }
           >
-              {attachedTabs}
+            {attachedTabs}
+
             {photoAttachments.length > 0 && (
-              <div
-                className={
-                  styles.xhsPhotoStack
-                }
-                data-photo-count={
-                  photoAttachments.length
-                }
-              >
-                {photoAttachments.map(
-                  (
-                    photo,
-                    index,
-                  ) => (
-                    <img
-                      key={
-                        photo.id
-                        || `${photo.name}-${index}`
-                      }
-                      src={photo.url}
-                      alt={
-                        index === 0
-                          ? (
-                            item.title
-                            || photo.name
-                            || '小红书收藏图片'
-                          )
-                          : ''
-                      }
-                      loading="lazy"
-                    />
-                  ),
-                )}
+              <div>
+                <div
+                  className={
+                    styles.xhsPhotoStack
+                  }
+                  data-photo-count={
+                    photoAttachments.length
+                  }
+                >
+                  {photoAttachments.map(
+                    (
+                      photo,
+                      index,
+                    ) => (
+                      <img
+                        key={
+                          photo.id
+                          || `${photo.name}-${index}`
+                        }
+                        src={photo.url}
+                        alt={
+                          index === 0
+                            ? (
+                              item.title
+                              || photo.name
+                              || '小红书收藏图片'
+                            )
+                            : ''
+                        }
+                        loading="lazy"
+                      />
+                    ),
+                  )}
+                </div>
+
               </div>
             )}
 
@@ -620,11 +633,10 @@ export function ItemPreview({
             {photoAttachments.length === 1 ? (
               <div
                 className={
-                  styles.photoSleeve
+                  `${styles.photoSleeve} ${styles.previewPaperBundle}`
                 }
               >
-              {attachedTabs}
-
+                {attachedTabs}
 
                 <div
                   className={
@@ -663,11 +675,10 @@ export function ItemPreview({
             ) : (
               <div
                 className={
-                  styles.photoSetSleeve
+                  `${styles.photoSetSleeve} ${styles.previewPaperBundle}`
                 }
               >
-              {attachedTabs}
-
+                {attachedTabs}
 
                 <div
                   className={
@@ -756,10 +767,11 @@ export function ItemPreview({
         ) : presentation.kind === 'mixed' ? (
             <div
               className={
-                styles.mixedObject
+                `${styles.mixedObject} ${styles.previewPaperBundle}`
               }
             >
               {attachedTabs}
+
               <div
                 className={
                   styles.mixedInsertStack
@@ -824,10 +836,10 @@ export function ItemPreview({
               </div>
 
               <section
-                className={
-                  styles.mixedPocket
-                }
-              >
+                  className={
+                    styles.mixedPocket
+                  }
+                >
                 <div
                   className={
                     styles.mixedPocketMeta
@@ -888,10 +900,11 @@ export function ItemPreview({
           ) : presentation.kind === 'repository' ? (
             <div
               className={
-                styles.repositoryObject
+                `${styles.repositoryObject} ${styles.previewPaperBundle}`
               }
             >
               {attachedTabs}
+
               <div
                 className={
                   styles.repositoryBackCard
@@ -900,10 +913,10 @@ export function ItemPreview({
               />
 
               <article
-                className={
-                  styles.repositoryCard
-                }
-              >
+                  className={
+                    styles.repositoryCard
+                  }
+                >
                 <div
                   className={
                     styles.repositoryMain
@@ -992,11 +1005,12 @@ export function ItemPreview({
             </div>
           ) : presentation.kind === 'product' ? (
             <div
-              className={
-                styles.productObject
-              }
-            >
+            className={
+              `${styles.productObject} ${styles.previewPaperBundle}`
+            }
+          >
               {attachedTabs}
+
               <div
                 className={
                   styles.productMeta

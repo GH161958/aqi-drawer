@@ -8,9 +8,13 @@
   position: relative;
   z-index: 2;
 
+  isolation: isolate;
+
   display: block;
 
   width: 100%;
+
+  overflow: visible;
 
   padding:
     clamp(20px, 5vw, 30px);
@@ -36,6 +40,27 @@
     rgba(52, 39, 30, .07);
 
   cursor: pointer;
+}
+
+.previewPaperBundle {
+  position: relative;
+
+  isolation: isolate;
+
+  overflow: visible;
+}
+
+.previewBundleCover {
+  position: absolute;
+  z-index: -1;
+
+  inset: 0;
+
+  border-radius: inherit;
+
+  background: inherit;
+
+  pointer-events: none;
 }
 
 .meta {
@@ -122,32 +147,43 @@
 }
 
 .edgeTabs {
+  --preview-edge-tab-width:
+    var(--paper-attached-tab-width);
+  --preview-edge-tab-exposure: 14px;
+  --preview-edge-tab-height: 12px;
+  --preview-edge-tab-top: 72px;
+
   position: absolute;
-  z-index: 8;
+  z-index: -2;
 
   /*
     Attached tabs now position against
     the actual presentation object.
   */
   top:
-    clamp(
-      42px,
-      34%,
-      72px
-    );
+    var(--preview-edge-tab-top);
 
-  /*
-    D inset:
-    mostly inside its own object,
-    with a small physical protrusion.
-  */
-  right: -8px;
+  right:
+    calc(
+      -1
+      * var(--preview-edge-tab-exposure)
+    );
   bottom: auto;
 
   display: grid;
-  gap: 5px;
+  grid-template-columns:
+    var(--preview-edge-tab-exposure);
+  gap:
+    var(--paper-attached-tab-gap);
 
-  width: auto;
+  width:
+    var(--preview-edge-tab-exposure);
+  min-width:
+    var(--preview-edge-tab-exposure);
+  max-width:
+    var(--preview-edge-tab-exposure);
+
+  overflow: hidden;
 
   margin: 0;
   padding: 0;
@@ -161,13 +197,21 @@
 
   box-sizing: border-box;
 
-  width: 63px;
-  min-width: 63px;
-  max-width: 63px;
+  width:
+    var(--preview-edge-tab-width);
+  min-width:
+    var(--preview-edge-tab-width);
+  max-width:
+    var(--preview-edge-tab-width);
 
-  height: 17px;
-  min-height: 17px;
-  max-height: 17px;
+  justify-self: end;
+
+  height:
+    var(--preview-edge-tab-height);
+  min-height:
+    var(--preview-edge-tab-height);
+  max-height:
+    var(--preview-edge-tab-height);
 
   margin: 0;
 
@@ -183,12 +227,20 @@
 
   white-space: nowrap;
 
-  font:
-    .44rem/1
-    var(--drawer-font-meta);
+  font-family:
+    var(--paper-attached-tab-font);
+
+  font-size:
+    var(--paper-attached-tab-font-size);
+
+  font-weight:
+    var(--paper-attached-tab-font-weight);
+
+  line-height:
+    var(--paper-attached-tab-line-height);
 
   letter-spacing:
-    .02em;
+    var(--paper-attached-tab-letter-spacing);
 
   text-align: right;
 
@@ -196,118 +248,37 @@
     1px 2px 3px
     rgba(55, 39, 29, .03);
 
-  /*
-    Preserve the 63px real slip.
-    Reveal the rightmost 42px.
-  */
-  clip-path:
-    inset(
-      0
-      0
-      0
-      21px
-    );
-
   transform: none;
 }
 
-.edgeTabs span::after {
-  content: "";
-
-  position: absolute;
-
-  top: 0;
-  bottom: 0;
-  left: 21px;
-
-  width: 1px;
-
-  background:
-    var(
-      --archive-tab-cut-edge,
-      rgba(103, 118, 96, .26)
-    );
-
-  pointer-events: none;
-}
-
-
-
 .eeTab {
-  --archive-tab-cut-edge:
-    rgba(103, 118, 96, .26);
-
   border:
     1px solid
-    rgba(103, 118, 96, .26);
+    var(--paper-attached-tab-ee-border);
 
   color:
-    rgba(88, 102, 83, .82);
+    var(--paper-attached-tab-ee-text);
 
   background:
-    #dfe6da;
+    var(--paper-attached-tab-ee-background);
 }
 
 .aqiTab {
-  --archive-tab-cut-edge:
-    rgba(151, 124, 79, .26);
-
-  margin-left: 4px;
-
   border:
     1px solid
-    rgba(151, 124, 79, .26);
+    var(--paper-attached-tab-aqi-border);
 
   color:
-    rgba(118, 94, 58, .82);
+    var(--paper-attached-tab-aqi-text);
 
   background:
-    #eadfc8;
+    var(--paper-attached-tab-aqi-background);
 }
 
 @media (max-width: 520px) {
   .edgeTabs {
-    top:
-      clamp(
-        38px,
-        32%,
-        64px
-      );
+    --preview-edge-tab-top: 64px;
 
-    right: -7px;
-
-    gap: 5px;
-  }
-
-  .edgeTabs span {
-    width: 63px;
-    min-width: 63px;
-    max-width: 63px;
-
-    height: 17px;
-    min-height: 17px;
-    max-height: 17px;
-
-    padding:
-      0 7px 0 0;
-
-    font:
-      .44rem/1
-      var(--drawer-font-meta);
-
-    clip-path:
-      inset(
-        0
-        0
-        0
-        23px
-      );
-
-    transform: none;
-  }
-
-  .edgeTabs span::after {
-    left: 23px;
   }
 
 
@@ -2864,7 +2835,7 @@
     10px 10px 13px;
 
   overflow:
-    hidden;
+    visible;
 
   border:
     1px solid
@@ -3351,7 +3322,7 @@
     0;
 
   overflow:
-    hidden;
+    visible;
 
   appearance:
     none;
@@ -4299,6 +4270,8 @@
 }
 
 .mixedObject {
+  --mixed-pocket-offset: 79px;
+
   position:
     relative;
 
@@ -4315,7 +4288,15 @@
     border-box;
 
   padding-top:
-    79px;
+    var(--mixed-pocket-offset);
+}
+
+.mixedObject > .edgeTabs {
+  --preview-edge-tab-top:
+    calc(
+      var(--mixed-pocket-offset)
+      + 18px
+    );
 }
 
 .mixedInsertStack {
@@ -4769,11 +4750,13 @@
   }
 
   .mixedObject {
+    --mixed-pocket-offset: 70px;
+
     width:
       100%;
 
     padding-top:
-      70px;
+      var(--mixed-pocket-offset);
   }
 
   .mixedInsertStack {
