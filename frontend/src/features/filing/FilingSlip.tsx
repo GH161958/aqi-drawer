@@ -11,6 +11,10 @@ import {
   useFileItem,
 } from './useFileItem'
 
+import {
+  AuxiliaryReturn,
+} from '../inspect/AuxiliaryReturn'
+
 import type {
   PocketItemSummary,
   PocketStatus,
@@ -20,6 +24,7 @@ import styles from './FilingSlip.module.css'
 
 interface FilingSlipProps {
   item: PocketItemSummary
+  onClose: () => void
 
   onFiled:
     (item: PocketItemSummary) => void
@@ -28,6 +33,7 @@ interface FilingSlipProps {
 export function FilingSlip({
   item,
   onFiled,
+  onClose,
 }: FilingSlipProps) {
   const mutation =
     useFileItem(item.id)
@@ -94,6 +100,16 @@ export function FilingSlip({
         <p className={styles.kicker}>
           FILING
         </p>
+
+        <div
+          className={
+            styles.returnSlot
+          }
+        >
+          <AuxiliaryReturn
+            onClick={onClose}
+          />
+        </div>
 
         <h2
           id={`filing-title-${item.id}`}

@@ -125,39 +125,50 @@ export function ReplySlip({
         >
           {author}
         </p>
-
-        {reply.id && !confirming && (
-          <button
-            type="button"
-            className={
-              styles.hideAction
-            }
-            disabled={pending}
-            onClick={() =>
-              setConfirming(true)
-            }
-          >
-            {pending
-              ? '正在收起…'
-              : '收起这张'}
-          </button>
-        )}
       </header>
 
       <p className={styles.text}>
         {text}
       </p>
 
-      {annotations.length > 0 && (
-        <p
+      {(annotations.length > 0
+        || (reply.id && !confirming)) && (
+        <footer
           className={
-            styles.annotation
+            styles.footer
           }
         >
-          {annotations.join(
-            ' · ',
+          {annotations.length > 0
+            ? (
+              <p
+                className={
+                  styles.annotation
+                }
+              >
+                {annotations.join(
+                  ' · ',
+                )}
+              </p>
+            )
+            : <span aria-hidden="true" />}
+
+          {reply.id && !confirming && (
+            <button
+              type="button"
+              className={
+                styles.hideAction
+              }
+              disabled={pending}
+              onClick={() =>
+                setConfirming(true)
+              }
+            >
+              {pending
+                ? '正在隐藏…'
+                : '隐藏回复'}
+            </button>
           )}
-        </p>
+        </footer>
       )}
 
       {reply.id && confirming && (
@@ -171,7 +182,7 @@ export function ReplySlip({
               styles.confirmText
             }
           >
-            收起后，这张回条不会再显示。
+            隐藏后，这条回复不会再显示。
           </p>
 
           <div
@@ -190,8 +201,8 @@ export function ReplySlip({
               }
             >
               {pending
-                ? '正在收起…'
-                : '确认收起'}
+                ? '正在隐藏…'
+                : '确认隐藏'}
             </button>
 
             <button

@@ -12,7 +12,10 @@ import styles from './ItemPreview.module.css'
 interface ItemPreviewProps {
   item: PocketItemSummary
   onOpen:
-    (item: PocketItemSummary) => void
+    (
+      item: PocketItemSummary,
+      trigger: HTMLButtonElement,
+    ) => void
 }
 
 function previewPhotoAttachments(
@@ -321,8 +324,11 @@ export function ItemPreview({
           presentation.sourceFlavor
         }
         type="button"
-        onClick={() =>
-          onOpen(item)
+        onClick={(event) =>
+          onOpen(
+            item,
+            event.currentTarget,
+          )
         }
       >
         {!isDocument

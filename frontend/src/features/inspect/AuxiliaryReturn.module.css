@@ -1,0 +1,69 @@
+.action {
+  flex: 0 0 auto;
+
+  position: relative;
+
+  display: flex;
+
+  align-items: flex-start;
+  justify-content: flex-end;
+
+  width: 58px;
+  height: 44px;
+
+  margin: 0;
+
+  padding:
+    13px 0 0;
+
+  box-sizing: border-box;
+
+  appearance: none;
+
+  border: 0;
+
+  background: transparent;
+
+  color:
+    var(--paper-type-action-color);
+
+  font-family:
+    var(--paper-type-action-family);
+
+  font-size:
+    var(--paper-type-action-size);
+
+  font-weight:
+    var(--paper-type-action-weight);
+
+  line-height:
+    var(--paper-type-action-line-height);
+
+  letter-spacing:
+    var(--paper-type-action-spacing);
+
+  white-space: nowrap;
+
+  cursor: pointer;
+
+}
+
+.action > span {
+  display: inline-block;
+
+  padding-bottom: 2px;
+
+  border-bottom:
+    1px solid
+    var(--paper-type-action-underline);
+
+  white-space: nowrap;
+}
+
+.action:focus-visible {
+  outline:
+    2px solid
+    rgba(83, 96, 78, .48);
+
+  outline-offset: 2px;
+}

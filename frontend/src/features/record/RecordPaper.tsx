@@ -15,10 +15,15 @@ import {
   TagEditor,
 } from '../tags/TagEditor'
 
+import {
+  AuxiliaryReturn,
+} from '../inspect/AuxiliaryReturn'
+
 import styles from './RecordPaper.module.css'
 
 interface RecordPaperProps {
   item: PocketItemSummary
+  onClose: () => void
 }
 
 function archiveNumber(
@@ -182,6 +187,7 @@ function IndexField({
 
 export function RecordPaper({
   item,
+  onClose,
 }: RecordPaperProps) {
   const activity =
     [...item.activity].sort(
@@ -190,54 +196,37 @@ export function RecordPaper({
     )
 
   return (
-    <details className={styles.paper}>
-      <summary className={styles.summary}>
-        <span className={styles.receiptLabel}>
-          RECEIPT
-        </span>
-
-        {activity.length > 0 && (
-          <span className={styles.receiptCount}>
-            {archiveNumber(
-              activity.length,
-            )}
-          </span>
-        )}
-
-        <span
-          className={styles.disclosure}
-          aria-hidden="true"
-        >
-          +
-        </span>
-      </summary>
-
+    <article className={styles.paper}>
       <div className={styles.sheet}>
         <header className={styles.heading}>
-          <p className={styles.kicker}>
-            AQI DRAWER
-          </p>
-
-          <div className={styles.titleRow}>
-            <h2 className={styles.title}>
-              ITEM RECORD
-            </h2>
-
-            {activity.length > 0 && (
-              <span className={styles.count}>
-                {archiveNumber(
+          <div className={styles.receiptRow}>
+            <span className={styles.receiptId}>
+              RECEIPT · {
+                archiveNumber(
                   activity.length,
-                )}
-              </span>
-            )}
+                )
+              }
+            </span>
+          </div>
+
+          <h2 className={styles.title}>
+            ITEM RECORD
+          </h2>
+
+          <div className={styles.identityRow}>
+            <p className={styles.kicker}>
+              AQI DRAWER
+            </p>
+
+            <div className={styles.returnSlot}>
+              <AuxiliaryReturn
+                onClick={onClose}
+              />
+            </div>
           </div>
         </header>
 
         <section className={styles.section}>
-          <h3 className={styles.sectionTitle}>
-            CURRENT INDEX
-          </h3>
-
           <dl className={styles.fields}>
             <IndexField label="SOURCE">
               {item.sourceApp || '—'}
@@ -253,19 +242,21 @@ export function RecordPaper({
 
             {item.sourceTags.length > 0 && (
               <IndexField label="SOURCE TAGS">
-                {item.sourceTags
-                  .map(
-                    (tag) =>
-                      `#${tag}`,
-                  )
-                  .join('  ')}
+                <span className={styles.terms}>
+                  {item.sourceTags.map(
+                    (tag) => (
+                      <span
+                        key={tag}
+                        className={styles.term}
+                      >
+                        #{tag}
+                      </span>
+                    ),
+                  )}
+                </span>
               </IndexField>
             )}
           </dl>
-
-          <p className={styles.indexNote}>
-            INDEX EDITING MOVES NEXT
-          </p>
         </section>
 
         <section className={styles.section}>
@@ -310,6 +301,6 @@ export function RecordPaper({
           )}
         </section>
       </div>
-    </details>
+    </article>
   )
 }

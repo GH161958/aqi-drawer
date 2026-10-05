@@ -1,34 +1,29 @@
 .slip {
   padding:
-    14px 13px 13px;
+    0 0 16px;
 
-  border:
+  border: 0;
+  border-bottom:
     1px solid
-    rgba(126, 104, 81, .20);
+    rgba(126, 104, 81, .18);
 
-  background:
-    #e9dfcc;
+  background: transparent;
 
   color:
     var(--drawer-ink);
 
-  box-shadow:
-    1px 3px 7px
-    rgba(55, 39, 29, .04);
+  box-shadow: none;
+
+  opacity: 1;
 }
 
 .slip[data-author="aqi"] {
-  border-left-color:
-    rgba(83, 96, 78, .32);
+  border-bottom-color:
+    rgba(83, 96, 78, .20);
 }
 
 .header {
-  display: flex;
-
-  align-items: baseline;
-  justify-content: space-between;
-
-  gap: 12px;
+  display: block;
 }
 
 .kicker {
@@ -40,9 +35,17 @@
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .50rem;
+  font-size:
+    var(--paper-type-label-size);
 
-  letter-spacing: .08em;
+  font-weight:
+    var(--paper-type-label-weight);
+
+  line-height:
+    var(--paper-type-label-line-height);
+
+  letter-spacing:
+    var(--paper-type-label-spacing);
 }
 
 .hideAction {
@@ -57,17 +60,27 @@
 
   border-bottom:
     1px solid
-    rgba(110, 77, 64, .18);
+    var(--paper-type-action-underline);
 
   background: transparent;
 
   color:
-    rgba(110, 77, 64, .62);
+    var(--paper-type-action-color);
 
   font-family:
-    var(--drawer-font-meta);
+    var(--paper-type-action-family);
 
-  font-size: .52rem;
+  font-size:
+    var(--paper-type-action-size);
+
+  font-weight:
+    var(--paper-type-action-weight);
+
+  line-height:
+    var(--paper-type-action-line-height);
+
+  letter-spacing:
+    var(--paper-type-action-spacing);
 
   cursor: pointer;
 }
@@ -80,7 +93,7 @@
 
 .text {
   margin:
-    12px 0 0;
+    22px 0 0;
 
   color:
     rgba(52, 46, 39, .84);
@@ -88,16 +101,39 @@
   font-family:
     var(--drawer-font-body);
 
-  font-size: .70rem;
+  font-size:
+    var(--paper-type-body-size);
 
-  line-height: 1.7;
+  font-weight:
+    var(--paper-type-body-weight);
+
+  line-height:
+    var(--paper-type-body-line-height);
+
+  letter-spacing:
+    var(--paper-type-body-spacing);
 
   white-space: pre-wrap;
 }
 
-.annotation {
+.footer {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+
+  align-items: start;
+
+  gap: 12px;
+
   margin:
-    11px 0 0;
+    24px 0 0;
+}
+
+.annotation {
+  min-width: 0;
+
+  margin: 0;
 
   color:
     var(--drawer-quiet-ink);
@@ -105,11 +141,19 @@
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .48rem;
+  font-size:
+    var(--paper-type-meta-size);
 
-  line-height: 1.45;
+  font-weight:
+    var(--paper-type-meta-weight);
 
-  letter-spacing: .045em;
+  line-height:
+    var(--paper-type-meta-line-height);
+
+  letter-spacing:
+    var(--paper-type-meta-spacing);
+
+  overflow-wrap: anywhere;
 }
 
 .confirmation {
@@ -133,9 +177,17 @@
   font-family:
     var(--drawer-font-body);
 
-  font-size: .58rem;
+  font-size:
+    var(--paper-type-body-size);
 
-  line-height: 1.55;
+  font-weight:
+    var(--paper-type-body-weight);
+
+  line-height:
+    var(--paper-type-body-line-height);
+
+  letter-spacing:
+    var(--paper-type-body-spacing);
 }
 
 .confirmActions {
@@ -161,12 +213,24 @@
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .54rem;
+  font-size:
+    var(--paper-type-action-size);
+
+  font-weight:
+    var(--paper-type-action-weight);
+
+  line-height:
+    var(--paper-type-action-line-height);
+
+  letter-spacing:
+    var(--paper-type-action-spacing);
 
   cursor: pointer;
 }
 
 .confirmHide {
+  padding-bottom: 2px;
+
   color:
     rgba(112, 72, 58, .82);
 

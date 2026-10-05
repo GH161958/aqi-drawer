@@ -11,14 +11,20 @@ import {
   useUpdateEeNote,
 } from './useUpdateEeNote'
 
+import {
+  AuxiliaryReturn,
+} from '../inspect/AuxiliaryReturn'
+
 import styles from './EeNotePaper.module.css'
 
 interface EeNotePaperProps {
   item: PocketItemSummary
+  onClose: () => void
 }
 
 export function EeNotePaper({
   item,
+  onClose,
 }: EeNotePaperProps) {
   const [
     draft,
@@ -98,14 +104,26 @@ export function EeNotePaper({
         `ee-note-title-${item.id}`
       }
     >
-      <p
-        id={`ee-note-title-${item.id}`}
-        className={styles.kicker}
-      >
-        {hasNote
-          ? '伊伊留的一句'
-          : '留一句给阿栖'}
-      </p>
+      <header className={styles.header}>
+        <p
+          id={`ee-note-title-${item.id}`}
+          className={styles.kicker}
+        >
+          {hasNote
+            ? '伊伊留的一句'
+            : '留一句给阿栖'}
+        </p>
+
+        <div
+          className={
+            styles.returnSlot
+          }
+        >
+          <AuxiliaryReturn
+            onClick={onClose}
+          />
+        </div>
+      </header>
 
       <form
         className={styles.form}

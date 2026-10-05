@@ -7,7 +7,13 @@
   box-sizing: border-box;
 
   width: 100%;
+  height: 100vh;
   height: 100svh;
+  height: 100dvh;
+
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
 
   overflow-x: hidden;
   overflow-y: auto;
@@ -45,19 +51,17 @@
 .returnAction {
   appearance: none;
 
-  min-height: 46px;
+  min-width: 64px;
+  min-height: 44px;
 
   padding:
-    11px 13px;
+    11px 10px;
 
-  border:
-    1px solid
-    rgba(83, 96, 78, .72);
+  border: 0;
 
   border-radius: 0;
 
-  background:
-    rgba(255, 251, 241, .06);
+  background: transparent;
 
   color:
     rgba(83, 96, 78, .86);
@@ -92,6 +96,39 @@
   recovered from legacy layout-correction.css.
 */
 .bundle {
+  --record-paper-color: #e7dcc9;
+  --record-paper-border:
+    rgba(126, 104, 81, .26);
+  --record-paper-shadow:
+    1px 5px 14px
+    rgba(52, 39, 30, .055);
+
+  --filing-paper-color: #ece2d2;
+  --filing-paper-border:
+    rgba(116, 93, 71, .16);
+  --filing-paper-shadow:
+    1px 5px 9px
+    rgba(55, 39, 29, .075);
+
+  --ee-paper-color: #efeade;
+  --ee-paper-border:
+    rgba(103, 118, 96, .26);
+  --ee-paper-shadow:
+    1px 3px 7px
+    rgba(55, 39, 29, .045);
+
+  --reply-paper-color: #eee6d8;
+  --reply-paper-border:
+    rgba(151, 124, 79, .26);
+  --reply-paper-shadow:
+    1px 3px 7px
+    rgba(55, 39, 29, .04);
+
+  --p3-width: 80%;
+  --p3-half: 40%;
+
+  --bundle-rest-y: 4px;
+
   --p3-top:
     clamp(
       64px,
@@ -135,10 +172,31 @@
       150px
     )
     auto
-    96px;
+    0;
 
   transform:
-    translateY(4px);
+    translateY(
+      var(
+        --inspect-motion-y,
+        var(--bundle-rest-y)
+      )
+    );
+
+  transition:
+    transform 190ms ease-out;
+}
+
+.stage[data-phase='opening'] .bundle,
+.stage[data-phase='returning'] .bundle {
+  --inspect-motion-y:
+    calc(
+      var(--bundle-rest-y)
+      + 18px
+    );
+}
+
+.stage[data-phase='returning'] .bundle {
+  transition-duration: 180ms;
 }
 
 /*
@@ -157,7 +215,8 @@
 
   left: 50%;
 
-  width: 80%;
+  width:
+    var(--p3-width);
   height:
     var(--p3-height);
 
@@ -237,9 +296,9 @@
       - 33px
     );
 
-  left: 18%;
+  left: 14%;
 
-  width: 42%;
+  width: 56%;
   height: 50px;
   min-height: 50px;
   max-height: 50px;
@@ -258,7 +317,7 @@
   border: 0;
   border-top:
     1px solid
-    rgba(116, 93, 71, .16);
+    var(--record-paper-border);
 
   border-radius: 0;
 
@@ -266,11 +325,12 @@
     rgba(91, 82, 70, .72);
 
   background:
-    #ebe2cf;
+    var(--record-paper-color);
 
   box-shadow:
-    1px 3px 5px
-    rgba(55, 39, 29, .055);
+    var(--record-paper-shadow);
+
+  opacity: 1;
 
   transform:
     rotate(-.38deg);
@@ -317,8 +377,8 @@
   left:
     calc(
       50%
-      + 40%
-      - 43px
+      + var(--p3-half)
+      - var(--paper-attached-tab-buried)
     );
 
   width: auto;
@@ -328,19 +388,26 @@
 
   display: grid;
 
-  gap: 5px;
+  gap:
+    var(--paper-attached-tab-gap);
 }
 
 .sideTab {
   position: relative;
 
-  width: 63px;
-  min-width: 63px;
-  max-width: 63px;
+  width:
+    var(--paper-attached-tab-width);
+  min-width:
+    var(--paper-attached-tab-width);
+  max-width:
+    var(--paper-attached-tab-width);
 
-  height: 17px;
-  min-height: 17px;
-  max-height: 17px;
+  height:
+    var(--paper-attached-tab-height);
+  min-height:
+    var(--paper-attached-tab-height);
+  max-height:
+    var(--paper-attached-tab-height);
 
   margin: 0;
 
@@ -360,12 +427,20 @@
     1px 2px 3px
     rgba(55, 39, 29, .03);
 
-  font:
-    .44rem/1
-    var(--drawer-font-meta);
+  font-family:
+    var(--paper-attached-tab-font);
+
+  font-size:
+    var(--paper-attached-tab-font-size);
+
+  font-weight:
+    var(--paper-attached-tab-font-weight);
+
+  line-height:
+    var(--paper-attached-tab-line-height);
 
   letter-spacing:
-    .02em;
+    var(--paper-attached-tab-letter-spacing);
 
   text-align: right;
 
@@ -375,13 +450,18 @@
 .eePeek {
   border:
     1px solid
-    rgba(103, 118, 96, .26);
+    var(--paper-attached-tab-ee-border);
 
   color:
-    rgba(88, 102, 83, .82);
+    var(--paper-attached-tab-ee-text);
 
   background:
-    #dfe6da;
+    var(--paper-attached-tab-ee-background);
+
+  box-shadow:
+    var(--ee-paper-shadow);
+
+  opacity: 1;
 }
 
 .replyPeek {
@@ -389,13 +469,18 @@
 
   border:
     1px solid
-    rgba(151, 124, 79, .26);
+    var(--paper-attached-tab-aqi-border);
 
   color:
-    rgba(118, 94, 58, .82);
+    var(--paper-attached-tab-aqi-text);
 
   background:
-    #eadfc8;
+    var(--paper-attached-tab-aqi-background);
+
+  box-shadow:
+    var(--reply-paper-shadow);
+
+  opacity: 1;
 }
 
 .sideTab[aria-pressed='true'] {
@@ -442,7 +527,7 @@
 
   border:
     1px solid
-    rgba(116, 93, 71, .16);
+    var(--filing-paper-border);
 
   border-radius: 0;
 
@@ -450,11 +535,12 @@
     rgba(83, 77, 67, .73);
 
   background:
-    #e9dfcb;
+    var(--filing-paper-color);
 
   box-shadow:
-    1px 5px 9px
-    rgba(55, 39, 29, .075);
+    var(--filing-paper-shadow);
+
+  opacity: 1;
 
   transform:
     rotate(.52deg);
@@ -508,50 +594,94 @@
 
 /*
   Selected aux paper.
-  Motion is deliberately deferred.
+  Motion is intentionally absent in this checkpoint.
+  The selected paper switches directly above Original.
 */
 .pulledLayer {
   position: absolute;
   z-index: 10;
 
+  padding-bottom: 90px;
+
+}
+
+.pulledLayer[data-paper='record'] {
   top:
-    var(--p3-top);
+    calc(
+      var(--p3-top)
+      - 20px
+    );
+
+  left: 8%;
+
+  width: 64%;
+}
+
+.pulledLayer[data-paper='record'] .pulledPaper > * {
+  width: 100%;
+
+  min-height:
+    min(66dvh, 430px);
+
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.pulledLayer[data-paper='ee'] {
+  top:
+    calc(
+      var(--p3-top)
+      + 44px
+    );
 
   left: 10%;
 
-  width: 80%;
-
-  padding-bottom: 90px;
+  width: 86%;
 }
 
-.paperReturn {
-  display: block;
+.pulledLayer[data-paper='ee'] .pulledPaper > * {
+  width: 74%;
 
-  margin:
-    0 0 10px auto;
+  margin-right: 0;
+  margin-left: auto;
+}
 
-  appearance: none;
+.pulledLayer[data-paper='replies'] {
+  top:
+    calc(
+      var(--p3-top)
+      + 61px
+    );
 
-  padding:
-    3px 0;
+  left: 7%;
 
-  border: 0;
-  border-bottom:
-    1px solid
-    rgba(83, 96, 78, .30);
+  width: 87%;
+}
 
-  background:
-    transparent;
+.pulledLayer[data-paper='replies'] .pulledPaper > * {
+  width: 76%;
 
-  color:
-    var(--drawer-sage);
+  margin-right: 2%;
+  margin-left: auto;
+}
 
-  font-family:
-    var(--drawer-font-meta);
+.pulledLayer[data-paper='filing'] {
+  top:
+    calc(
+      var(--p3-top)
+      + 108px
+    );
 
-  font-size: .62rem;
+  left: 8%;
 
-  cursor: pointer;
+  width: 88%;
+}
+
+.pulledLayer[data-paper='filing'] .pulledPaper > * {
+  width: 78%;
+
+  margin-right: auto;
+  margin-left: auto;
 }
 
 .pulledPaper {
@@ -575,7 +705,7 @@
     );
 
   margin:
-    0 auto 40px;
+    30px auto 40px;
 }
 
 .state {
@@ -624,8 +754,7 @@
 .returnAction:focus-visible,
 .receiptPeek:focus-visible,
 .sideTab:focus-visible,
-.filingPeek:focus-visible,
-.paperReturn:focus-visible {
+.filingPeek:focus-visible {
   outline:
     2px solid
     rgba(83, 96, 78, .48);
@@ -635,8 +764,7 @@
 
 @media (min-width: 431px) {
   .bundle {
-    transform:
-      translateY(7px);
+    --bundle-rest-y: 7px;
   }
 
   .receiptPeek {
@@ -664,28 +792,6 @@
         + 96px
       );
 
-    left:
-      calc(
-        50%
-        + 40%
-        - 44px
-      );
-
-    gap: 6px;
-  }
-
-  .sideTab {
-    width: 64px;
-    min-width: 64px;
-    max-width: 64px;
-
-    height: 18px;
-    min-height: 18px;
-    max-height: 18px;
-
-    padding-right: 7px;
-
-    font-size: .46rem;
   }
 
   .filingPeek {
@@ -705,31 +811,42 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .bundle {
+    transition: none;
+  }
+
+  .stage[data-phase='opening'] .bundle,
+  .stage[data-phase='returning'] .bundle {
+    --inspect-motion-y:
+      var(--bundle-rest-y);
+  }
+}
+
+@media (max-width: 430px) {
+  .bundle {
+    --p3-width: 88%;
+    --p3-half: 44%;
+
+    width:
+      calc(100vw - 16px);
+
+    --p3-height:
+      clamp(
+        392px,
+        calc(128.48vw - 20.56px),
+        min(76dvh, 540px)
+      );
+  }
+}
+
 @media (max-width: 370px) {
   .bundle {
     width:
-      calc(100vw - 22px);
+      calc(100vw - 14px);
 
     margin-top:
       104px;
   }
 
-  .sideTabs {
-    left:
-      calc(
-        50%
-        + 40%
-        - 41px
-      );
-  }
-
-  .sideTab {
-    width: 60px;
-    min-width: 60px;
-    max-width: 60px;
-
-    height: 17px;
-    min-height: 17px;
-    max-height: 17px;
-  }
 }

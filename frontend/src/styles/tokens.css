@@ -36,6 +36,42 @@
     Menlo,
     monospace;
 
+  --paper-type-eyebrow-size: .50rem;
+  --paper-type-eyebrow-line-height: normal;
+  --paper-type-eyebrow-weight: 400;
+  --paper-type-eyebrow-spacing: .10em;
+
+  --paper-type-title-size: .76rem;
+  --paper-type-title-line-height: normal;
+  --paper-type-title-weight: 400;
+  --paper-type-title-spacing: .065em;
+
+  --paper-type-label-size: .54rem;
+  --paper-type-label-line-height: normal;
+  --paper-type-label-weight: 400;
+  --paper-type-label-spacing: .10em;
+
+  --paper-type-body-size: .69rem;
+  --paper-type-body-line-height: 1.55;
+  --paper-type-body-weight: 400;
+  --paper-type-body-spacing: 0;
+
+  --paper-type-action-family:
+    var(--drawer-font-meta);
+  --paper-type-action-size: .64rem;
+  --paper-type-action-line-height: normal;
+  --paper-type-action-weight: 400;
+  --paper-type-action-spacing: 0;
+  --paper-type-action-color:
+    var(--drawer-sage);
+  --paper-type-action-underline:
+    rgba(83, 96, 78, .24);
+
+  --paper-type-meta-size: .49rem;
+  --paper-type-meta-line-height: 1.45;
+  --paper-type-meta-weight: 400;
+  --paper-type-meta-spacing: .03em;
+
   --paper-attached-tab-ee-background: #efeade;
   --paper-attached-tab-ee-border:
     rgba(103, 118, 96, .26);

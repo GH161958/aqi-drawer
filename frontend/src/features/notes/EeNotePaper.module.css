@@ -10,22 +10,47 @@
 
   border:
     1px solid
-    rgba(126, 104, 81, .22);
+    var(
+      --ee-paper-border,
+      rgba(103, 118, 96, .26)
+    );
 
   background:
-    #e9dfcc;
+    var(
+      --ee-paper-color,
+      #efeade
+    );
 
   color:
     var(--drawer-ink);
 
   box-shadow:
-    1px 3px 7px
-    rgba(55, 39, 29, .045);
+    var(
+      --ee-paper-shadow,
+      1px 3px 7px
+      rgba(55, 39, 29, .045)
+    );
+
+  opacity: 1;
+}
+
+.header {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+
+  align-items: start;
+
+  column-gap: 12px;
+
+  margin-bottom: 4px;
 }
 
 .kicker {
-  margin:
-    0 0 10px;
+  grid-column: 1;
+
+  margin: 0;
 
   color:
     var(--drawer-brass);
@@ -33,11 +58,23 @@
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .51rem;
+  font-size:
+    var(--paper-type-eyebrow-size);
 
-  line-height: 1.3;
+  font-weight:
+    var(--paper-type-eyebrow-weight);
 
-  letter-spacing: .09em;
+  line-height:
+    var(--paper-type-eyebrow-line-height);
+
+  letter-spacing:
+    var(--paper-type-eyebrow-spacing);
+}
+
+.returnSlot {
+  grid-column: 2;
+
+  justify-self: end;
 }
 
 .form {
@@ -116,34 +153,37 @@
   appearance: none;
 
   padding:
-    3px 0;
+    3px 0 2px;
 
   border: 0;
 
   border-bottom:
     1px solid
-    rgba(83, 96, 78, .28);
+    var(--paper-type-action-underline);
 
   background:
     transparent;
 
   color:
-    var(--drawer-sage);
+    var(--paper-type-action-color);
 
   font-family:
-    var(--drawer-font-meta);
+    var(--paper-type-action-family);
 
-  font-size: .59rem;
+  font-size:
+    var(--paper-type-action-size);
+
+  font-weight:
+    var(--paper-type-action-weight);
+
+  line-height:
+    var(--paper-type-action-line-height);
+
+  letter-spacing:
+    var(--paper-type-action-spacing);
 
   cursor: pointer;
-}
 
-.removeAction {
-  color:
-    rgba(110, 77, 64, .72);
-
-  border-bottom-color:
-    rgba(110, 77, 64, .20);
 }
 
 .saveAction:disabled,
@@ -162,9 +202,17 @@
   color:
     var(--drawer-quiet-ink);
 
-  font-size: .56rem;
+  font-size:
+    var(--paper-type-meta-size);
 
-  line-height: 1.5;
+  font-weight:
+    var(--paper-type-meta-weight);
+
+  line-height:
+    var(--paper-type-meta-line-height);
+
+  letter-spacing:
+    var(--paper-type-meta-spacing);
 }
 
 .visuallyHidden {

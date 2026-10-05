@@ -67,7 +67,10 @@ interface ArchiveDrawerProps {
   onBack: () => void
 
   onInspect:
-    (itemId: string) => void
+    (
+      itemId: string,
+      trigger: HTMLButtonElement,
+    ) => void
 }
 
 export function ArchiveDrawer({
@@ -241,14 +244,17 @@ export function ArchiveDrawer({
 
   function openPreview(
     item: PocketItemSummary,
+    trigger: HTMLButtonElement,
   ) {
-    onInspect(item.id)
+    onInspect(item.id, trigger)
   }
 
   return (
     <section
       className={styles.view}
       aria-labelledby="archive-title"
+      data-archive-focus-fallback
+      tabIndex={-1}
     >
       <div
         className={styles.toolbar}

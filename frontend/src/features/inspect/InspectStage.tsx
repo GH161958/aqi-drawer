@@ -1,13 +1,16 @@
 import {
+  useCallback,
   useEffect,
+  useLayoutEffect,
+  useRef,
   useState,
 } from 'react'
 
 import { TrashAction } from '../trash/TrashAction'
 
 import {
-  OriginalPaper,
-} from './OriginalPaper'
+  InspectOriginalPaper,
+} from './InspectOriginalPaper'
 
 import {
   useInspectItem,
@@ -33,16 +36,10 @@ import {
   cabinetSlotLabels,
 } from '../cabinet/cabinet'
 
-import type {
-  CabinetSlot,
-  PocketItemSummary,
-} from '../../types/pocket'
-
 import styles from './InspectStage.module.css'
 
 interface InspectStageProps {
   itemId: string
-  originSlot: CabinetSlot
   onBack: () => void
 }
 
@@ -52,13 +49,22 @@ type AttachedPaper =
   | 'replies'
   | 'filing'
 
+type InspectPhase =
+  | 'opening'
+  | 'resting'
+  | 'returning'
+
+const RETURN_FALLBACK_MS = 240
+
 export function InspectStage({
   itemId,
-  originSlot,
   onBack,
 }: InspectStageProps) {
   const query =
     useInspectItem(itemId)
+
+  const inspectedItemId =
+    query.data?.id
 
   const [
     activePaper,
@@ -68,47 +74,304 @@ export function InspectStage({
       null,
     )
 
+  const [phase, setPhase] =
+    useState<InspectPhase>(
+      'opening',
+    )
+
+  const returnTimerRef =
+    useRef<number | null>(null)
+
+  const returnedRef =
+    useRef(false)
+
+  const openedItemRef =
+    useRef<string | null>(null)
+
+  const returnButtonRef =
+    useRef<HTMLButtonElement | null>(
+      null,
+    )
+
+  const attachedPaperFrameRef =
+    useRef<number | null>(null)
+
+  const attachedPaperRef =
+    useRef<HTMLElement | null>(null)
+
+  const paperTriggerRefs =
+    useRef<
+      Partial<
+        Record<
+          AttachedPaper,
+          HTMLButtonElement | null
+        >
+      >
+    >({})
+
   useEffect(
     () => {
+      if (!inspectedItemId) return
+
+      returnButtonRef.current?.focus({
+        preventScroll: true,
+      })
+    },
+    [inspectedItemId],
+  )
+
+  useLayoutEffect(
+    () => {
+      if (
+        !inspectedItemId
+        || openedItemRef.current
+          === itemId
+      ) {
+        return
+      }
+
+      openedItemRef.current = itemId
       setActivePaper(null)
+      setPhase('opening')
+      returnedRef.current = false
+
+      const frame =
+        window.requestAnimationFrame(
+          () => {
+            setPhase('resting')
+          },
+        )
+
+      return () => {
+        window.cancelAnimationFrame(
+          frame,
+        )
+      }
     },
     [
       itemId,
+      inspectedItemId,
     ],
   )
 
-  function handleFiled(
-    item: PocketItemSummary,
-  ) {
-    if (
-      originSlot !== 'all'
-      && originSlot !== item.status
-    ) {
+  useEffect(
+    () => {
+      const scrollY =
+        window.scrollY
+
+      const previous = {
+        position:
+          document.body.style.position,
+        top: document.body.style.top,
+        width:
+          document.body.style.width,
+        overflow:
+          document.body.style.overflow,
+      }
+
+      document.body.style.position =
+        'fixed'
+      document.body.style.top =
+        `-${scrollY}px`
+      document.body.style.width =
+        '100%'
+      document.body.style.overflow =
+        'hidden'
+
+      return () => {
+        document.body.style.position =
+          previous.position
+        document.body.style.top =
+          previous.top
+        document.body.style.width =
+          previous.width
+        document.body.style.overflow =
+          previous.overflow
+
+        window.scrollTo(0, scrollY)
+      }
+    },
+    [],
+  )
+
+  useEffect(
+    () => () => {
+      if (returnTimerRef.current) {
+        window.clearTimeout(
+          returnTimerRef.current,
+        )
+      }
+
+      if (attachedPaperFrameRef.current) {
+        window.cancelAnimationFrame(
+          attachedPaperFrameRef.current,
+        )
+      }
+    },
+    [],
+  )
+
+  const finishReturn =
+    useCallback(() => {
+      if (returnedRef.current) return
+
+      returnedRef.current = true
+
+      if (returnTimerRef.current) {
+        window.clearTimeout(
+          returnTimerRef.current,
+        )
+      }
+
       onBack()
-    }
+    }, [onBack])
+
+  const requestReturn =
+    useCallback(() => {
+      if (phase === 'returning') return
+
+      setActivePaper(null)
+      setPhase('returning')
+
+      if (
+        window.matchMedia(
+          '(prefers-reduced-motion: reduce)',
+        ).matches
+      ) {
+        window.requestAnimationFrame(
+          () => finishReturn(),
+        )
+        return
+      }
+
+      returnTimerRef.current =
+        window.setTimeout(
+          finishReturn,
+          RETURN_FALLBACK_MS,
+        )
+    }, [finishReturn, phase])
+
+  useEffect(
+    () => {
+      function handleKeyDown(
+        event: KeyboardEvent,
+      ) {
+        if (
+          event.key === 'Escape'
+          && phase !== 'returning'
+        ) {
+          event.preventDefault()
+          requestReturn()
+        }
+      }
+
+      window.addEventListener(
+        'keydown',
+        handleKeyDown,
+      )
+
+      return () => {
+        window.removeEventListener(
+          'keydown',
+          handleKeyDown,
+        )
+      }
+    },
+    [phase, requestReturn],
+  )
+
+  function handleFiled() {
+    requestReturn()
   }
 
   function toggleAttachedPaper(
     paper: AttachedPaper,
   ) {
-    setActivePaper(
-      (current) =>
-        current === paper
-          ? null
-          : paper,
-    )
+    if (
+      activePaper === paper
+    ) {
+      closeAttachedPaper()
+      return
+    }
+
+    if (attachedPaperFrameRef.current) {
+      window.cancelAnimationFrame(
+        attachedPaperFrameRef.current,
+      )
+    }
+
+    setActivePaper(paper)
+
+    attachedPaperFrameRef.current =
+      window.requestAnimationFrame(
+        () => {
+          attachedPaperRef.current?.focus({
+            preventScroll: true,
+          })
+        },
+      )
+  }
+
+  function closeAttachedPaper() {
+    const previousPaper = activePaper
+
+    setActivePaper(null)
+
+    if (previousPaper) {
+      window.requestAnimationFrame(
+        () => {
+          paperTriggerRefs.current[
+            previousPaper
+          ]?.focus({
+            preventScroll: true,
+          })
+        },
+      )
+    }
   }
 
   return (
     <section
       className={styles.stage}
+      role="dialog"
+      aria-modal="true"
       aria-label="Inspect Drawer item"
+      data-phase={phase}
+      onClick={(event) => {
+        const target = event.target
+
+        if (
+          !(target instanceof Element)
+          || target.closest(
+            [
+              'button',
+              'a',
+              'input',
+              'textarea',
+              'select',
+              'label',
+              `.${styles.originalLayer}`,
+              `.${styles.pulledLayer}`,
+            ].join(','),
+          )
+        ) {
+          return
+        }
+
+        if (activePaper) {
+          closeAttachedPaper()
+        } else {
+          requestReturn()
+        }
+      }}
     >
       <div className={styles.toolbar}>
         <button
+          ref={returnButtonRef}
           className={styles.returnAction}
           type="button"
-          onClick={onBack}
+          disabled={phase === 'returning'}
+          onClick={requestReturn}
         >
           ← 放回
         </button>
@@ -128,7 +391,7 @@ export function InspectStage({
 
           <button
             type="button"
-            onClick={onBack}
+            onClick={requestReturn}
           >
             放回抽屉
           </button>
@@ -142,8 +405,25 @@ export function InspectStage({
             data-active-paper={
               activePaper ?? undefined
             }
+            onTransitionEnd={
+              (event) => {
+                if (
+                  phase === 'returning'
+                  && event.target
+                    === event.currentTarget
+                  && event.propertyName
+                    === 'transform'
+                ) {
+                  finishReturn()
+                }
+              }
+            }
           >
             <button
+              ref={(node) => {
+                paperTriggerRefs.current
+                  .record = node
+              }}
               type="button"
               className={styles.receiptPeek}
               aria-label="查看收件记录"
@@ -170,6 +450,10 @@ export function InspectStage({
               aria-label="附页"
             >
               <button
+                ref={(node) => {
+                  paperTriggerRefs.current
+                    .ee = node
+                }}
                 type="button"
                 className={`${styles.sideTab} ${styles.eePeek}`}
                 aria-label="查看 EE 留下的附页"
@@ -188,6 +472,10 @@ export function InspectStage({
               {(query.data.replies.length > 0
                 || query.data.hiddenReplies.length > 0) && (
                 <button
+                  ref={(node) => {
+                    paperTriggerRefs.current
+                      .replies = node
+                  }}
                   type="button"
                   className={`${styles.sideTab} ${styles.replyPeek}`}
                   aria-label="查看 Aqi 回条"
@@ -206,6 +494,10 @@ export function InspectStage({
             </div>
 
             <button
+              ref={(node) => {
+                paperTriggerRefs.current
+                  .filing = node
+              }}
               type="button"
               className={styles.filingPeek}
               aria-label="查看归档附页"
@@ -236,30 +528,21 @@ export function InspectStage({
                 styles.originalLayer
               }
             >
-              <OriginalPaper
+              <InspectOriginalPaper
                 item={query.data}
               />
             </div>
 
             {activePaper && (
               <section
+                ref={attachedPaperRef}
                 className={
                   styles.pulledLayer
                 }
                 aria-label="抽出的附页"
+                tabIndex={-1}
+                data-paper={activePaper}
               >
-                <button
-                  type="button"
-                  className={
-                    styles.paperReturn
-                  }
-                  onClick={() =>
-                    setActivePaper(null)
-                  }
-                >
-                  放回这张
-                </button>
-
                 <div
                   className={
                     styles.pulledPaper
@@ -269,6 +552,9 @@ export function InspectStage({
                     === 'record' && (
                     <RecordPaper
                       item={query.data}
+                      onClose={
+                        closeAttachedPaper
+                      }
                     />
                   )}
 
@@ -276,6 +562,9 @@ export function InspectStage({
                     === 'ee' && (
                     <EeNotePaper
                       item={query.data}
+                      onClose={
+                        closeAttachedPaper
+                      }
                     />
                   )}
 
@@ -283,6 +572,9 @@ export function InspectStage({
                     === 'replies' && (
                     <ReplyStack
                       item={query.data}
+                      onClose={
+                        closeAttachedPaper
+                      }
                     />
                   )}
 
@@ -292,6 +584,9 @@ export function InspectStage({
                       item={query.data}
                       onFiled={
                         handleFiled
+                      }
+                      onClose={
+                        closeAttachedPaper
                       }
                     />
                   )}
@@ -303,7 +598,7 @@ export function InspectStage({
           <div className={styles.trashOutside}>
             <TrashAction
               item={query.data}
-              onTrashed={onBack}
+              onTrashed={requestReturn}
             />
           </div>
         </>

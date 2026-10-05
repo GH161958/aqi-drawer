@@ -1,4 +1,5 @@
 import {
+  useRef,
   useState,
 } from 'react'
 
@@ -14,7 +15,6 @@ import {
   InspectStage,
 } from '../features/inspect/InspectStage'
 
-
 import type {
   CabinetSlot,
 } from '../types/pocket'
@@ -22,6 +22,14 @@ import type {
 import styles from './App.module.css'
 
 export function App() {
+  const inspectFocusReturnRef =
+    useRef<HTMLButtonElement | null>(
+      null,
+    )
+
+  const inspectScrollYRef =
+    useRef(0)
+
   const [
     activeSlot,
     setActiveSlot,
@@ -76,8 +84,52 @@ export function App() {
     resetArchiveIndex()
   }
 
+  function inspectItem(
+    itemId: string,
+    trigger: HTMLButtonElement,
+  ) {
+    inspectFocusReturnRef.current =
+      trigger
+
+    inspectScrollYRef.current =
+      window.scrollY
+
+    setActiveItemId(itemId)
+  }
+
   function returnToDrawer() {
     setActiveItemId(null)
+
+    window.requestAnimationFrame(
+      () => {
+        window.scrollTo(
+          0,
+          inspectScrollYRef.current,
+        )
+
+        const origin =
+          inspectFocusReturnRef.current
+
+        const fallback =
+          document.querySelector<HTMLElement>(
+            '[data-archive-focus-fallback]',
+          )
+
+        if (origin?.isConnected) {
+          origin.focus({
+            preventScroll: true,
+          })
+        } else {
+          fallback?.focus({
+            preventScroll: true,
+          })
+        }
+
+        inspectFocusReturnRef.current =
+          null
+
+      },
+    )
   }
 
   return (
@@ -111,48 +163,58 @@ export function App() {
 
       </header>
 
+      {activeSlot && (
+        <div
+          aria-hidden={
+            activeItemId
+              ? true
+              : undefined
+          }
+          inert={
+            activeItemId
+              ? true
+              : undefined
+          }
+        >
+          <ArchiveDrawer
+            slot={activeSlot}
+            collectionFilter={
+              archiveCollection
+            }
+            sourceFilter={
+              archiveSource
+            }
+            tagFilter={
+              archiveTag
+            }
+            onCollectionFilterChange={
+              setArchiveCollection
+            }
+            onSourceFilterChange={
+              setArchiveSource
+            }
+            onTagFilterChange={
+              setArchiveTag
+            }
+            onBack={
+              returnToCabinet
+            }
+            onInspect={inspectItem}
+          />
+        </div>
+      )}
+
       {activeItemId ? (
         <InspectStage
           itemId={activeItemId}
-          originSlot={
-            activeSlot ?? 'all'
-          }
           onBack={returnToDrawer}
         />
-      ) : activeSlot ? (
-        <ArchiveDrawer
-          slot={activeSlot}
-          collectionFilter={
-            archiveCollection
-          }
-          sourceFilter={
-            archiveSource
-          }
-          tagFilter={
-            archiveTag
-          }
-          onCollectionFilterChange={
-            setArchiveCollection
-          }
-          onSourceFilterChange={
-            setArchiveSource
-          }
-          onTagFilterChange={
-            setArchiveTag
-          }
-          onBack={
-            returnToCabinet
-          }
-          onInspect={
-            setActiveItemId
-          }
-        />
-      ) : (
+      ) : !activeSlot ? (
         <CabinetHome
           activeSlot={null}
           onOpen={openDrawer}
         />
-      )}
+      ) : null}
     </main>
   )
 }

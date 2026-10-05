@@ -18,14 +18,20 @@ import {
   useRestoreReply,
 } from './useRestoreReply'
 
+import {
+  AuxiliaryReturn,
+} from '../inspect/AuxiliaryReturn'
+
 import styles from './ReplyStack.module.css'
 
 interface ReplyStackProps {
   item: PocketItemSummary
+  onClose: () => void
 }
 
 export function ReplyStack({
   item,
+  onClose,
 }: ReplyStackProps) {
   const [
     showHidden,
@@ -93,18 +99,22 @@ export function ReplyStack({
             styles.stackTitle
           }
         >
-          REPLY SLIPS
+          AQI / {
+            String(
+              replies.length,
+            ).padStart(2, '0')
+          }
         </p>
 
-        <span
+        <div
           className={
-            styles.count
+            styles.returnSlot
           }
         >
-          {String(
-            replies.length,
-          ).padStart(2, '0')}
-        </span>
+          <AuxiliaryReturn
+            onClick={onClose}
+          />
+        </div>
       </header>
 
       {replies.length > 0 && (
@@ -144,6 +154,19 @@ export function ReplyStack({
             ),
           )}
         </div>
+      )}
+
+      {replies.length === 0 && (
+        <p
+          className={
+            styles.emptyIdentity
+          }
+        >
+          {hiddenReplies[0]
+            ?.author === 'EE'
+            ? 'EE 留了一张回条'
+            : 'AQI LEFT A NOTE'}
+        </p>
       )}
 
       {hiddenReplies.length > 0 && (
