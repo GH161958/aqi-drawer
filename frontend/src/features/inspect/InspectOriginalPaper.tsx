@@ -14,6 +14,10 @@ import {
   SourceReadPanel,
 } from '../source-reading/SourceReadPanel'
 
+import {
+  InspectMedia,
+} from './InspectMedia'
+
 import styles from './OriginalPaper.module.css'
 
 interface InspectOriginalPaperProps {
@@ -49,14 +53,6 @@ function formatDate(
 export function InspectOriginalPaper({
   item,
 }: InspectOriginalPaperProps) {
-  const images =
-    item.attachments.filter(
-      (attachment) =>
-        attachment.url
-        && attachment.mimeType
-          .startsWith('image/'),
-    )
-
   const presentation =
     classifyPresentation(item)
 
@@ -94,53 +90,10 @@ export function InspectOriginalPaper({
         </div>
       )}
 
-      {images.length > 0 && (
-        <div className={styles.images}>
-          {images
-            .slice(0, 4)
-            .map(
-              (
-                attachment,
-                index,
-              ) => (
-                <figure
-                  key={attachment.id}
-                  className={
-                    styles.imageSheet
-                  }
-                >
-                  <img
-                    src={attachment.url}
-                    alt={
-                      index === 0
-                        ? item.title
-                        : ''
-                    }
-                    loading="lazy"
-                  />
-
-                  {images.length > 1 && (
-                    <figcaption>
-                      {String(
-                        index + 1,
-                      ).padStart(
-                        2,
-                        '0',
-                      )}
-                      {' / '}
-                      {String(
-                        images.length,
-                      ).padStart(
-                        2,
-                        '0',
-                      )}
-                    </figcaption>
-                  )}
-                </figure>
-              ),
-            )}
-        </div>
-      )}
+      <InspectMedia
+        attachments={item.attachments}
+        title={item.title}
+      />
 
       {item.sourceUrl && (
         <SourceReadPanel
