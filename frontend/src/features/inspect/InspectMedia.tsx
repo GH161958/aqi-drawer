@@ -1,11 +1,17 @@
 import {
   useEffect,
+  useRef,
   useState,
 } from 'react'
 
 import type {
   KeyboardEvent,
+  PointerEvent,
 } from 'react'
+
+import {
+  createPortal,
+} from 'react-dom'
 
 import type {
   PocketAttachmentSummary,
@@ -78,26 +84,119 @@ export function InspectMedia({
     setRequestedIndex,
   ] = useState(0)
 
+  const [
+    viewerOpen,
+    setViewerOpen,
+  ] = useState(false)
+
+  const viewerRef =
+    useRef<HTMLElement | null>(null)
+
+  const viewerCloseRef =
+    useRef<HTMLButtonElement | null>(null)
+
+  const viewerTriggerRef =
+    useRef<HTMLButtonElement | null>(null)
+
+  const restoreFrameRef =
+    useRef<number | null>(null)
+
+  const viewerFocusFrameRef =
+    useRef<number | null>(null)
+
+  const stageScrollRef =
+    useRef<{
+      node: HTMLElement
+      scrollTop: number
+    } | null>(null)
+
+  const swipeStartRef =
+    useRef<{
+      pointerId: number
+      x: number
+      y: number
+    } | null>(null)
+
   useEffect(() => {
     setRequestedIndex(0)
+    setViewerOpen(false)
   }, [imageIdentity])
+
+  useEffect(
+    () => {
+      if (!viewerOpen) return
+
+      const trigger =
+        viewerTriggerRef.current
+
+      const stage =
+        stageScrollRef.current
+
+      const previousInert =
+        stage?.node.inert
+
+      if (stage) {
+        stage.node.inert = true
+      }
+
+      viewerFocusFrameRef.current =
+        window.requestAnimationFrame(
+          () => {
+            viewerCloseRef.current?.focus({
+              preventScroll: true,
+            })
+          },
+        )
+
+      return () => {
+        if (viewerFocusFrameRef.current) {
+          window.cancelAnimationFrame(
+            viewerFocusFrameRef.current,
+          )
+        }
+
+        if (stage) {
+          stage.node.inert =
+            previousInert ?? false
+
+          stage.node.scrollTop =
+            stage.scrollTop
+        }
+
+        restoreFrameRef.current =
+          window.requestAnimationFrame(
+            () => {
+              if (trigger?.isConnected) {
+                trigger.focus({
+                  preventScroll: true,
+                })
+              }
+            },
+          )
+      }
+    },
+    [viewerOpen],
+  )
+
+  useEffect(
+    () => () => {
+      if (restoreFrameRef.current) {
+        window.cancelAnimationFrame(
+          restoreFrameRef.current,
+        )
+      }
+
+      if (viewerFocusFrameRef.current) {
+        window.cancelAnimationFrame(
+          viewerFocusFrameRef.current,
+        )
+      }
+    },
+    [],
+  )
 
   if (images.length === 0) {
     return null
-  }
-
-  if (images.length === 1) {
-    const image = images[0]
-
-    return (
-      <figure className={styles.single}>
-        <img
-          src={image.url}
-          alt={imageAlt(image, title, 0)}
-          loading="lazy"
-        />
-      </figure>
-    )
   }
 
   const activeIndex =
@@ -130,6 +229,37 @@ export function InspectMedia({
     )
   }
 
+  function openViewer(
+    trigger: HTMLButtonElement,
+  ) {
+    if (restoreFrameRef.current) {
+      window.cancelAnimationFrame(
+        restoreFrameRef.current,
+      )
+    }
+
+    viewerTriggerRef.current = trigger
+
+    const stage =
+      trigger.closest<HTMLElement>(
+        '[role="dialog"][aria-label="Inspect Drawer item"]',
+      )
+
+    stageScrollRef.current =
+      stage
+        ? {
+            node: stage,
+            scrollTop: stage.scrollTop,
+          }
+        : null
+
+    setViewerOpen(true)
+  }
+
+  function closeViewer() {
+    setViewerOpen(false)
+  }
+
   function handleKeyDown(
     event: KeyboardEvent<HTMLElement>,
   ) {
@@ -152,75 +282,337 @@ export function InspectMedia({
     }
   }
 
+  function handleViewerKeyDown(
+    event: KeyboardEvent<HTMLElement>,
+  ) {
+    event.stopPropagation()
+
+    if (
+      event.altKey
+      || event.ctrlKey
+      || event.metaKey
+    ) {
+      return
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeViewer()
+      return
+    }
+
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      move(-1)
+      return
+    }
+
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      move(1)
+      return
+    }
+
+    if (event.key !== 'Tab') return
+
+    const viewer = viewerRef.current
+
+    if (!viewer) return
+
+    const controls =
+      Array.from(
+        viewer.querySelectorAll<HTMLElement>(
+          'button:not(:disabled)',
+        ),
+      )
+
+    if (controls.length === 0) return
+
+    const first = controls[0]
+    const last =
+      controls[controls.length - 1]
+
+    if (
+      event.shiftKey
+      && document.activeElement === first
+    ) {
+      event.preventDefault()
+      last.focus()
+      return
+    }
+
+    if (
+      !event.shiftKey
+      && document.activeElement === last
+    ) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  function handlePointerDown(
+    event: PointerEvent<HTMLDivElement>,
+  ) {
+    if (event.pointerType === 'mouse') {
+      return
+    }
+
+    swipeStartRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    }
+  }
+
+  function handlePointerUp(
+    event: PointerEvent<HTMLDivElement>,
+  ) {
+    const start = swipeStartRef.current
+
+    swipeStartRef.current = null
+
+    if (
+      !start
+      || start.pointerId !== event.pointerId
+    ) {
+      return
+    }
+
+    const deltaX =
+      event.clientX - start.x
+
+    const deltaY =
+      event.clientY - start.y
+
+    if (
+      Math.abs(deltaX) < 52
+      || Math.abs(deltaX)
+        <= Math.abs(deltaY) * 1.25
+    ) {
+      return
+    }
+
+    move(deltaX > 0 ? -1 : 1)
+  }
+
+  const viewer =
+    viewerOpen
+    && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className={styles.viewerBackdrop}
+            onClick={(event) => {
+              event.stopPropagation()
+
+              if (
+                event.target
+                === event.currentTarget
+              ) {
+                closeViewer()
+              }
+            }}
+          >
+            <section
+              ref={viewerRef}
+              className={styles.viewer}
+              role="dialog"
+              aria-modal="true"
+              aria-label="查看完整照片"
+              onKeyDown={handleViewerKeyDown}
+            >
+              <button
+                ref={viewerCloseRef}
+                type="button"
+                className={styles.viewerClose}
+                aria-label="关闭完整照片"
+                onClick={closeViewer}
+              >
+                ×
+              </button>
+
+              <div
+                className={
+                  styles.viewerImageFrame
+                }
+                onPointerDown={
+                  handlePointerDown
+                }
+                onPointerUp={handlePointerUp}
+                onPointerCancel={() => {
+                  swipeStartRef.current = null
+                }}
+              >
+                <img
+                  key={activeImage.id}
+                  src={activeImage.url}
+                  alt={imageAlt(
+                    activeImage,
+                    title,
+                    activeIndex,
+                  )}
+                />
+              </div>
+
+              <div
+                className={
+                  styles.viewerControls
+                }
+              >
+                {images.length > 1 && (
+                  <button
+                    type="button"
+                    aria-label={`上一张照片，当前第 ${activeIndex + 1} 张`}
+                    disabled={activeIndex === 0}
+                    onClick={() => move(-1)}
+                  >
+                    ←
+                  </button>
+                )}
+
+                <span
+                  className={
+                    styles.viewerCounter
+                  }
+                  aria-live="polite"
+                >
+                  {formatCounter(
+                    activeIndex + 1,
+                  )}
+                  {' / '}
+                  {formatCounter(images.length)}
+                </span>
+
+                {images.length > 1 && (
+                  <button
+                    type="button"
+                    aria-label={`下一张照片，当前第 ${activeIndex + 1} 张`}
+                    disabled={
+                      activeIndex
+                      === images.length - 1
+                    }
+                    onClick={() => move(1)}
+                  >
+                    →
+                  </button>
+                )}
+              </div>
+            </section>
+          </div>,
+          document.body,
+        )
+      : null
+
   return (
-    <section
-      className={styles.stack}
-      aria-label={`${images.length} 张照片`}
-      onKeyDown={handleKeyDown}
-    >
-      <div className={styles.stackStage}>
-        {backingImages.map(
-          (image, index) => (
-            <div
-              key={image.id}
-              className={styles.backing}
-              data-layer={index + 1}
-              aria-hidden="true"
+    <>
+      {images.length === 1
+        ? (
+          <figure className={styles.single}>
+            <button
+              type="button"
+              className={styles.singleButton}
+              aria-label="打开完整照片"
+              onClick={(event) =>
+                openViewer(
+                  event.currentTarget,
+                )
+              }
             >
               <img
-                src={image.url}
-                alt=""
+                src={activeImage.url}
+                alt={imageAlt(
+                  activeImage,
+                  title,
+                  0,
+                )}
                 loading="lazy"
               />
+            </button>
+          </figure>
+        )
+        : (
+          <section
+            className={styles.stack}
+            aria-label={`${images.length} 张照片`}
+            onKeyDown={handleKeyDown}
+          >
+            <div className={styles.stackStage}>
+              {backingImages.map(
+                (image, index) => (
+                  <div
+                    key={image.id}
+                    className={styles.backing}
+                    data-layer={index + 1}
+                    aria-hidden="true"
+                  >
+                    <img
+                      src={image.url}
+                      alt=""
+                      loading="lazy"
+                    />
+                  </div>
+                ),
+              )}
+
+              <button
+                type="button"
+                className={styles.active}
+                aria-label={`打开第 ${activeIndex + 1} 张完整照片`}
+                onClick={(event) =>
+                  openViewer(
+                    event.currentTarget,
+                  )
+                }
+              >
+                <img
+                  key={activeImage.id}
+                  src={activeImage.url}
+                  alt={imageAlt(
+                    activeImage,
+                    title,
+                    activeIndex,
+                  )}
+                  loading="lazy"
+                />
+              </button>
             </div>
-          ),
+
+            <div className={styles.controls}>
+              <button
+                type="button"
+                aria-label="上一张照片"
+                disabled={activeIndex === 0}
+                onClick={() => move(-1)}
+              >
+                ←
+              </button>
+
+              <span
+                className={styles.counter}
+                aria-live="polite"
+              >
+                {formatCounter(
+                  activeIndex + 1,
+                )}
+                {' / '}
+                {formatCounter(images.length)}
+              </span>
+
+              <button
+                type="button"
+                aria-label="下一张照片"
+                disabled={
+                  activeIndex
+                  === images.length - 1
+                }
+                onClick={() => move(1)}
+              >
+                →
+              </button>
+            </div>
+          </section>
         )}
 
-        <figure className={styles.active}>
-          <img
-            key={activeImage.id}
-            src={activeImage.url}
-            alt={imageAlt(
-              activeImage,
-              title,
-              activeIndex,
-            )}
-            loading="lazy"
-          />
-        </figure>
-      </div>
-
-      <div className={styles.controls}>
-        <button
-          type="button"
-          aria-label="上一张照片"
-          disabled={activeIndex === 0}
-          onClick={() => move(-1)}
-        >
-          ←
-        </button>
-
-        <span
-          className={styles.counter}
-          aria-live="polite"
-        >
-          {formatCounter(activeIndex + 1)}
-          {' / '}
-          {formatCounter(images.length)}
-        </span>
-
-        <button
-          type="button"
-          aria-label="下一张照片"
-          disabled={
-            activeIndex
-            === images.length - 1
-          }
-          onClick={() => move(1)}
-        >
-          →
-        </button>
-      </div>
-    </section>
+      {viewer}
+    </>
   )
 }
