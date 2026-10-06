@@ -129,6 +129,39 @@
 
   --bundle-rest-y: 4px;
 
+  --receipt-exposure: 33px;
+  --receipt-height: 50px;
+  --filing-overlap: 17px;
+  --filing-height: 70px;
+  --filing-exposure:
+    calc(
+      var(--filing-height)
+      - var(--filing-overlap)
+    );
+
+  --bundle-frame-height:
+    clamp(
+      560px,
+      calc(
+        100svh
+        - max(
+          96px,
+          calc(
+            env(safe-area-inset-top)
+            + 78px
+          )
+        )
+        - max(
+          62px,
+          calc(
+            env(safe-area-inset-bottom)
+            + 42px
+          )
+        )
+      ),
+      700px
+    );
+
   --p3-top:
     clamp(
       64px,
@@ -136,16 +169,11 @@
       78px
     );
 
-  /*
-    The P2 paper is intentionally tall and internally scrollable.
-    The 48svh center term follows the recovered mobile P3 sizing
-    language while retaining a useful modern floor / ceiling.
-  */
   --p3-height:
-    clamp(
-      430px,
-      48svh,
-      540px
+    calc(
+      var(--bundle-frame-height)
+      - var(--receipt-exposure)
+      - var(--filing-exposure)
     );
 
   position: relative;
@@ -162,14 +190,14 @@
     calc(
       var(--p3-top)
       + var(--p3-height)
-      + 70px
+      + var(--filing-height)
     );
 
   margin:
     clamp(
-      112px,
-      14svh,
-      150px
+      48px,
+      6svh,
+      68px
     )
     auto
     0;
@@ -293,15 +321,18 @@
   top:
     calc(
       var(--p3-top)
-      - 33px
+      - var(--receipt-exposure)
     );
 
   left: 14%;
 
   width: 56%;
-  height: 50px;
-  min-height: 50px;
-  max-height: 50px;
+  height:
+    var(--receipt-height);
+  min-height:
+    var(--receipt-height);
+  max-height:
+    var(--receipt-height);
 
   margin: 0;
 
@@ -506,15 +537,18 @@
     calc(
       var(--p3-top)
       + var(--p3-height)
-      - 17px
+      - var(--filing-overlap)
     );
 
   left: 31%;
 
   width: 56%;
-  height: 70px;
-  min-height: 70px;
-  max-height: 70px;
+  height:
+    var(--filing-height);
+  min-height:
+    var(--filing-height);
+  max-height:
+    var(--filing-height);
 
   margin: 0;
 
@@ -765,18 +799,25 @@
 @media (min-width: 431px) {
   .bundle {
     --bundle-rest-y: 7px;
+    --receipt-exposure: 34px;
+    --receipt-height: 52px;
+    --filing-overlap: 18px;
+    --filing-height: 74px;
   }
 
   .receiptPeek {
     top:
       calc(
         var(--p3-top)
-        - 34px
+        - var(--receipt-exposure)
       );
 
-    height: 52px;
-    min-height: 52px;
-    max-height: 52px;
+    height:
+      var(--receipt-height);
+    min-height:
+      var(--receipt-height);
+    max-height:
+      var(--receipt-height);
 
     padding:
       8px 12px 10px;
@@ -799,12 +840,15 @@
       calc(
         var(--p3-top)
         + var(--p3-height)
-        - 18px
+        - var(--filing-overlap)
       );
 
-    height: 74px;
-    min-height: 74px;
-    max-height: 74px;
+    height:
+      var(--filing-height);
+    min-height:
+      var(--filing-height);
+    max-height:
+      var(--filing-height);
 
     padding:
       11px 14px 14px;
@@ -831,12 +875,6 @@
     width:
       calc(100vw - 16px);
 
-    --p3-height:
-      clamp(
-        392px,
-        calc(128.48vw - 20.56px),
-        min(76dvh, 540px)
-      );
   }
 }
 
@@ -845,8 +883,6 @@
     width:
       calc(100vw - 14px);
 
-    margin-top:
-      104px;
   }
 
 }
