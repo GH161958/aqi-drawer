@@ -7,13 +7,6 @@
   box-sizing: border-box;
 
   width: 100%;
-  height: 100vh;
-  height: 100svh;
-  height: 100dvh;
-
-  min-height: 100vh;
-  min-height: 100svh;
-  min-height: 100dvh;
 
   overflow-x: hidden;
   overflow-y: auto;
@@ -27,8 +20,20 @@
   background:
     #cbc2b3;
 
-  overscroll-behavior:
+  overscroll-behavior-y:
     contain;
+
+  touch-action:
+    pan-y;
+
+  -webkit-overflow-scrolling:
+    touch;
+}
+
+.stage[data-presented='false'] {
+  visibility: hidden;
+
+  pointer-events: none;
 }
 
 .toolbar {
@@ -143,7 +148,7 @@
     clamp(
       560px,
       calc(
-        100svh
+        calc(100 * var(--inspect-vh))
         - max(
           96px,
           calc(
@@ -165,7 +170,7 @@
   --p3-top:
     clamp(
       64px,
-      8svh,
+      calc(8 * var(--inspect-vh)),
       78px
     );
 
@@ -196,7 +201,7 @@
   margin:
     clamp(
       48px,
-      6svh,
+      calc(6 * var(--inspect-vh)),
       68px
     )
     auto
@@ -210,8 +215,7 @@
       )
     );
 
-  transition:
-    transform 190ms ease-out;
+  transition: none;
 }
 
 .stage[data-phase='opening'] .bundle,
@@ -224,7 +228,8 @@
 }
 
 .stage[data-phase='returning'] .bundle {
-  transition-duration: 180ms;
+  transition:
+    transform 180ms ease-out;
 }
 
 /*
@@ -856,7 +861,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bundle {
+  .bundle,
+  .stage[data-phase='returning'] .bundle {
     transition: none;
   }
 

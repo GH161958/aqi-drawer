@@ -2,8 +2,13 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
+} from 'react'
+
+import type {
+  CSSProperties,
 } from 'react'
 
 import { TrashAction } from '../trash/TrashAction'
@@ -40,6 +45,10 @@ import styles from './InspectStage.module.css'
 
 interface InspectStageProps {
   itemId: string
+  presented: boolean
+  onPresentationReady: (
+    itemId: string,
+  ) => void
   onBack: () => void
 }
 
@@ -50,14 +59,27 @@ type AttachedPaper =
   | 'filing'
 
 type InspectPhase =
-  | 'opening'
   | 'resting'
   | 'returning'
 
 const RETURN_FALLBACK_MS = 240
 
+function isTouchAppleWebKit() {
+  return (
+    navigator.maxTouchPoints > 0
+    && /AppleWebKit/u.test(
+      navigator.userAgent,
+    )
+    && /(iPad|iPhone|iPod|Macintosh)/u.test(
+      navigator.userAgent,
+    )
+  )
+}
+
 export function InspectStage({
   itemId,
+  presented,
+  onPresentationReady,
   onBack,
 }: InspectStageProps) {
   const query =
@@ -65,6 +87,30 @@ export function InspectStage({
 
   const inspectedItemId =
     query.data?.id
+
+  const stableViewportUnit =
+    useMemo(
+      () => ({
+        itemId,
+        unit:
+          document.documentElement
+            .clientHeight / 100,
+      }),
+      [itemId],
+    ).unit
+
+  const stageStyle = {
+    '--inspect-vh':
+      `${stableViewportUnit}px`,
+  } as CSSProperties
+
+  const [mediaReadyItemId, setMediaReadyItemId] =
+    useState<string | null>(null)
+
+  const presentationReady =
+    Boolean(query.data)
+    && mediaReadyItemId
+      === inspectedItemId
 
   const [
     activePaper,
@@ -76,8 +122,11 @@ export function InspectStage({
 
   const [phase, setPhase] =
     useState<InspectPhase>(
-      'opening',
+      'resting',
     )
+
+  const phaseRef =
+    useRef<InspectPhase>('resting')
 
   const returnTimerRef =
     useRef<number | null>(null)
@@ -85,13 +134,13 @@ export function InspectStage({
   const returnedRef =
     useRef(false)
 
-  const openedItemRef =
-    useRef<string | null>(null)
-
   const returnButtonRef =
     useRef<HTMLButtonElement | null>(
       null,
     )
+
+  const stageRef =
+    useRef<HTMLElement | null>(null)
 
   const attachedPaperFrameRef =
     useRef<number | null>(null)
@@ -109,55 +158,108 @@ export function InspectStage({
       >
     >({})
 
+  const readyNotificationRef =
+    useRef<string | null>(null)
+
   useEffect(
     () => {
-      if (!inspectedItemId) return
+      if (!presented) return
 
       returnButtonRef.current?.focus({
         preventScroll: true,
       })
     },
-    [inspectedItemId],
+    [presented],
   )
 
-  useLayoutEffect(
+  const handleInitialMediaReady =
+    useCallback(() => {
+      if (!inspectedItemId) return
+
+      setMediaReadyItemId(
+        inspectedItemId,
+      )
+    }, [inspectedItemId])
+
+  useEffect(
     () => {
+      const readyItemId =
+        query.isError
+          ? itemId
+          : inspectedItemId
+
       if (
-        !inspectedItemId
-        || openedItemRef.current
-          === itemId
+        !readyItemId
+        || (
+          !query.isError
+          && !presentationReady
+        )
+        || readyNotificationRef.current
+          === readyItemId
       ) {
         return
       }
 
-      openedItemRef.current = itemId
-      setActivePaper(null)
-      setPhase('opening')
-      returnedRef.current = false
-
-      const frame =
-        window.requestAnimationFrame(
-          () => {
-            setPhase('resting')
-          },
-        )
-
-      return () => {
-        window.cancelAnimationFrame(
-          frame,
-        )
-      }
+      readyNotificationRef.current =
+        readyItemId
+      onPresentationReady(readyItemId)
     },
     [
-      itemId,
       inspectedItemId,
+      itemId,
+      onPresentationReady,
+      presentationReady,
+      query.isError,
     ],
   )
 
-  useEffect(
+  useLayoutEffect(
     () => {
+      if (!presented) return
+
       const scrollY =
         window.scrollY
+
+      if (isTouchAppleWebKit()) {
+        const handleTouchMove = (
+          event: TouchEvent,
+        ) => {
+          const target = event.target
+
+          if (!(target instanceof Node)) {
+            event.preventDefault()
+            return
+          }
+
+          const viewer =
+            document.querySelector<HTMLElement>(
+              '[role="dialog"][aria-label="查看完整照片"]',
+            )
+
+          if (
+            stageRef.current?.contains(target)
+            || viewer?.parentElement
+              ?.contains(target)
+          ) {
+            return
+          }
+
+          event.preventDefault()
+        }
+
+        document.addEventListener(
+          'touchmove',
+          handleTouchMove,
+          { passive: false },
+        )
+
+        return () => {
+          document.removeEventListener(
+            'touchmove',
+            handleTouchMove,
+          )
+        }
+      }
 
       const previous = {
         position:
@@ -191,7 +293,7 @@ export function InspectStage({
         window.scrollTo(0, scrollY)
       }
     },
-    [],
+    [itemId, presented],
   )
 
   useEffect(
@@ -200,6 +302,7 @@ export function InspectStage({
         window.clearTimeout(
           returnTimerRef.current,
         )
+        returnTimerRef.current = null
       }
 
       if (attachedPaperFrameRef.current) {
@@ -221,6 +324,7 @@ export function InspectStage({
         window.clearTimeout(
           returnTimerRef.current,
         )
+        returnTimerRef.current = null
       }
 
       onBack()
@@ -228,10 +332,27 @@ export function InspectStage({
 
   const requestReturn =
     useCallback(() => {
-      if (phase === 'returning') return
+      if (
+        phaseRef.current === 'returning'
+      ) {
+        return
+      }
 
       setActivePaper(null)
+      phaseRef.current = 'returning'
       setPhase('returning')
+
+      if (returnTimerRef.current) {
+        window.clearTimeout(
+          returnTimerRef.current,
+        )
+        returnTimerRef.current = null
+      }
+
+      if (!presented) {
+        finishReturn()
+        return
+      }
 
       if (
         window.matchMedia(
@@ -249,7 +370,7 @@ export function InspectStage({
           finishReturn,
           RETURN_FALLBACK_MS,
         )
-    }, [finishReturn, phase])
+    }, [finishReturn, presented])
 
   useEffect(
     () => {
@@ -332,10 +453,27 @@ export function InspectStage({
 
   return (
     <section
+      ref={stageRef}
       className={styles.stage}
+      style={stageStyle}
       role="dialog"
       aria-modal="true"
       aria-label="Inspect Drawer item"
+      aria-hidden={
+        presented
+          ? undefined
+          : true
+      }
+      inert={
+        presented
+          ? undefined
+          : true
+      }
+      data-presented={
+        presented
+          ? 'true'
+          : 'false'
+      }
       data-phase={phase}
       onClick={(event) => {
         const target = event.target
@@ -376,12 +514,6 @@ export function InspectStage({
           ← 放回
         </button>
       </div>
-
-      {query.isPending && (
-        <div className={styles.state}>
-          正在把这张纸拿近一点……
-        </div>
-      )}
 
       {query.isError && (
         <div className={styles.state}>
@@ -530,6 +662,9 @@ export function InspectStage({
             >
               <InspectOriginalPaper
                 item={query.data}
+                onInitialMediaReady={
+                  handleInitialMediaReady
+                }
               />
             </div>
 
@@ -603,6 +738,7 @@ export function InspectStage({
           </div>
         </>
       )}
+
     </section>
   )
 }

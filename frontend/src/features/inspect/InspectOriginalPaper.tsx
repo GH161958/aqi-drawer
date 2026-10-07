@@ -22,6 +22,7 @@ import styles from './OriginalPaper.module.css'
 
 interface InspectOriginalPaperProps {
   item: PocketItemSummary
+  onInitialMediaReady: () => void
 }
 
 function formatDate(
@@ -52,6 +53,7 @@ function formatDate(
 
 export function InspectOriginalPaper({
   item,
+  onInitialMediaReady,
 }: InspectOriginalPaperProps) {
   const presentation =
     classifyPresentation(item)
@@ -91,8 +93,12 @@ export function InspectOriginalPaper({
       )}
 
       <InspectMedia
+        key={item.id}
         attachments={item.attachments}
         title={item.title}
+        onInitialReady={
+          onInitialMediaReady
+        }
       />
 
       {item.sourceUrl && (

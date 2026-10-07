@@ -22,6 +22,7 @@ import styles from './InspectMedia.module.css'
 interface InspectMediaProps {
   attachments: PocketAttachmentSummary[]
   title: string
+  onInitialReady: () => void
 }
 
 function imageAlt(
@@ -65,6 +66,7 @@ function getBackingImages(
 export function InspectMedia({
   attachments,
   title,
+  onInitialReady,
 }: InspectMediaProps) {
   const images =
     attachments.filter(
@@ -76,6 +78,15 @@ export function InspectMedia({
 
   const imageIdentity =
     images
+      .map((image) => image.id)
+      .join('\u0000')
+
+  const initialReadinessIdentity =
+    images
+      .slice(
+        0,
+        Math.min(3, images.length),
+      )
       .map((image) => image.id)
       .join('\u0000')
 
@@ -116,6 +127,222 @@ export function InspectMedia({
       x: number
       y: number
     } | null>(null)
+
+  const initialImageRefs =
+    useRef(
+      new Map<
+        string,
+        HTMLImageElement
+      >(),
+    )
+
+  const readinessGenerationRef =
+    useRef(0)
+
+  const readinessFrameRef =
+    useRef<number | null>(null)
+
+  useEffect(
+    () => {
+      const generation =
+        readinessGenerationRef.current + 1
+
+      readinessGenerationRef.current =
+        generation
+
+      if (readinessFrameRef.current) {
+        window.cancelAnimationFrame(
+          readinessFrameRef.current,
+        )
+        readinessFrameRef.current = null
+      }
+
+      let cancelled = false
+      let completed = false
+      const loadHandledIds =
+        new Set<string>()
+      const terminalIds =
+        new Set<string>()
+      const listeners: Array<{
+        image: HTMLImageElement
+        handleLoad: () => void
+        handleError: () => void
+      }> = []
+
+      const requiredImageIds =
+        initialReadinessIdentity
+          ? initialReadinessIdentity.split(
+              '\u0000',
+            )
+          : []
+
+      const reportReady = () => {
+        if (
+          cancelled
+          || completed
+          || readinessGenerationRef.current
+            !== generation
+        ) {
+          return
+        }
+
+        completed = true
+        readinessFrameRef.current =
+          window.requestAnimationFrame(
+            () => {
+              readinessFrameRef.current =
+                null
+
+              if (
+                cancelled
+                || readinessGenerationRef.current
+                  !== generation
+              ) {
+                return
+              }
+
+              onInitialReady()
+            },
+          )
+      }
+
+      if (requiredImageIds.length === 0) {
+        reportReady()
+
+        return () => {
+          cancelled = true
+
+          if (readinessFrameRef.current) {
+            window.cancelAnimationFrame(
+              readinessFrameRef.current,
+            )
+            readinessFrameRef.current =
+              null
+          }
+        }
+      }
+
+      const settleImage = (id: string) => {
+        if (
+          cancelled
+          || readinessGenerationRef.current
+            !== generation
+          || terminalIds.has(id)
+        ) {
+          return
+        }
+
+        terminalIds.add(id)
+        if (
+          terminalIds.size
+          === requiredImageIds.length
+        ) {
+          reportReady()
+        }
+      }
+
+      for (
+        const attachmentId
+        of requiredImageIds
+      ) {
+        const image =
+          initialImageRefs.current.get(
+            attachmentId,
+          )
+
+        if (!image) continue
+
+        const handleError = () => {
+          settleImage(
+            attachmentId,
+          )
+        }
+
+        const handleLoad = () => {
+          if (
+            loadHandledIds.has(
+              attachmentId,
+            )
+          ) {
+            return
+          }
+
+          loadHandledIds.add(
+            attachmentId,
+          )
+
+          if (
+            typeof image.decode
+            !== 'function'
+          ) {
+            settleImage(
+              attachmentId,
+            )
+            return
+          }
+
+          image.decode().then(
+            () => settleImage(
+              attachmentId,
+            ),
+            () => settleImage(
+              attachmentId,
+            ),
+          )
+        }
+
+        listeners.push({
+          image,
+          handleLoad,
+          handleError,
+        })
+        image.addEventListener(
+          'load',
+          handleLoad,
+        )
+        image.addEventListener(
+          'error',
+          handleError,
+        )
+
+        if (image.complete) {
+          if (image.naturalWidth > 0) {
+            handleLoad()
+          } else {
+            handleError()
+          }
+        }
+      }
+
+      return () => {
+        cancelled = true
+
+        for (const listener of listeners) {
+          listener.image.removeEventListener(
+            'load',
+            listener.handleLoad,
+          )
+          listener.image.removeEventListener(
+            'error',
+            listener.handleError,
+          )
+        }
+
+        if (readinessFrameRef.current) {
+          window.cancelAnimationFrame(
+            readinessFrameRef.current,
+          )
+          readinessFrameRef.current =
+            null
+        }
+      }
+    },
+    [
+      images.length,
+      initialReadinessIdentity,
+      onInitialReady,
+    ],
+  )
 
   useEffect(() => {
     setRequestedIndex(0)
@@ -506,7 +733,9 @@ export function InspectMedia({
     <>
       {images.length === 1
         ? (
-          <figure className={styles.single}>
+          <figure
+            className={styles.single}
+          >
             <button
               type="button"
               className={styles.singleButton}
@@ -518,13 +747,25 @@ export function InspectMedia({
               }
             >
               <img
+                ref={(node) => {
+                  if (node) {
+                    initialImageRefs.current.set(
+                      activeImage.id,
+                      node,
+                    )
+                  } else {
+                    initialImageRefs.current.delete(
+                      activeImage.id,
+                    )
+                  }
+                }}
                 src={activeImage.url}
                 alt={imageAlt(
                   activeImage,
                   title,
                   0,
                 )}
-                loading="lazy"
+                loading="eager"
               />
             </button>
           </figure>
@@ -545,9 +786,21 @@ export function InspectMedia({
                     aria-hidden="true"
                   >
                     <img
+                      ref={(node) => {
+                        if (node) {
+                          initialImageRefs.current.set(
+                            image.id,
+                            node,
+                          )
+                        } else {
+                          initialImageRefs.current.delete(
+                            image.id,
+                          )
+                        }
+                      }}
                       src={image.url}
                       alt=""
-                      loading="lazy"
+                      loading="eager"
                     />
                   </div>
                 ),
@@ -564,6 +817,18 @@ export function InspectMedia({
                 }
               >
                 <img
+                  ref={(node) => {
+                    if (node) {
+                      initialImageRefs.current.set(
+                        activeImage.id,
+                        node,
+                      )
+                    } else {
+                      initialImageRefs.current.delete(
+                        activeImage.id,
+                      )
+                    }
+                  }}
                   key={activeImage.id}
                   src={activeImage.url}
                   alt={imageAlt(
@@ -571,7 +836,7 @@ export function InspectMedia({
                     title,
                     activeIndex,
                   )}
-                  loading="lazy"
+                  loading="eager"
                 />
               </button>
             </div>

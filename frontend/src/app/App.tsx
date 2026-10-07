@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useRef,
   useState,
 } from 'react'
@@ -46,6 +47,21 @@ export function App() {
       null,
     )
 
+  const activeItemIdRef =
+    useRef<string | null>(null)
+
+  activeItemIdRef.current = activeItemId
+
+  const [
+    presentedItemId,
+    setPresentedItemId,
+  ] =
+    useState<string | null>(null)
+
+  const inspectPresented =
+    activeItemId !== null
+    && presentedItemId === activeItemId
+
   const [
     archiveCollection,
     setArchiveCollection,
@@ -78,6 +94,7 @@ export function App() {
   }
 
   function returnToCabinet() {
+    setPresentedItemId(null)
     setActiveItemId(null)
     setActiveSlot(null)
 
@@ -94,10 +111,24 @@ export function App() {
     inspectScrollYRef.current =
       window.scrollY
 
+    setPresentedItemId(null)
     setActiveItemId(itemId)
   }
 
+  const presentInspect =
+    useCallback((itemId: string) => {
+      if (
+        activeItemIdRef.current
+        !== itemId
+      ) {
+        return
+      }
+
+      setPresentedItemId(itemId)
+    }, [])
+
   function returnToDrawer() {
+    setPresentedItemId(null)
     setActiveItemId(null)
 
     window.requestAnimationFrame(
@@ -143,7 +174,7 @@ export function App() {
             : undefined
         }
         data-archive-home={
-          !activeItemId
+          !inspectPresented
           && activeSlot
             ? 'true'
             : undefined
@@ -166,12 +197,12 @@ export function App() {
       {activeSlot && (
         <div
           aria-hidden={
-            activeItemId
+            inspectPresented
               ? true
               : undefined
           }
           inert={
-            activeItemId
+            inspectPresented
               ? true
               : undefined
           }
@@ -207,6 +238,10 @@ export function App() {
       {activeItemId ? (
         <InspectStage
           itemId={activeItemId}
+          presented={inspectPresented}
+          onPresentationReady={
+            presentInspect
+          }
           onBack={returnToDrawer}
         />
       ) : !activeSlot ? (
