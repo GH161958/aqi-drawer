@@ -644,7 +644,10 @@
   width: 100%;
 
   min-height:
-    min(66dvh, 430px);
+    min(
+      calc(66 * var(--inspect-vh)),
+      430px
+    );
 
   margin-right: auto;
   margin-left: 0;
