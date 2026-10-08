@@ -155,8 +155,26 @@ export function TagEditor({
           : undefined
       }
     >
-      <div className={styles.label}>
-        TAGS
+      <div className={styles.fieldHead}>
+        <div className={styles.label}>
+          INDEX TERMS
+        </div>
+
+        <button
+          type="button"
+          className={styles.editToggle}
+          aria-expanded={editing}
+          onClick={() =>
+            setEditing(
+              (value) =>
+                !value,
+            )
+          }
+        >
+          {editing
+            ? '完成'
+            : '整理'}
+        </button>
       </div>
 
       <div className={styles.content}>
@@ -207,25 +225,6 @@ export function TagEditor({
               )}
           </div>
 
-          <button
-            type="button"
-            className={
-              styles.editToggle
-            }
-            aria-expanded={
-              editing
-            }
-            onClick={() =>
-              setEditing(
-                (value) =>
-                  !value,
-              )
-            }
-          >
-            {editing
-              ? '完成'
-              : '整理'}
-          </button>
         </div>
 
         {editing && (
@@ -318,34 +317,40 @@ export function TagEditor({
                   styles.newRow
                 }
               >
-                <input
-                  id={
-                    `new-tag-${item.id}`
-                  }
+                <div
                   className={
-                    styles.newInput
+                    styles.inputViewport
                   }
-                  value={newTag}
-                  disabled={busy}
-                  placeholder="新的标签"
-                  onChange={
-                    (event) =>
-                      setNewTag(
-                        event.target.value,
-                      )
-                  }
-                  onKeyDown={
-                    (event) => {
-                      if (
-                        event.key
-                        === 'Enter'
-                      ) {
-                        event.preventDefault()
-                        attach(newTag)
+                >
+                  <input
+                    id={
+                      `new-tag-${item.id}`
+                    }
+                    className={
+                      styles.newInput
+                    }
+                    value={newTag}
+                    disabled={busy}
+                    placeholder="新的标签"
+                    onChange={
+                      (event) =>
+                        setNewTag(
+                          event.target.value,
+                        )
+                    }
+                    onKeyDown={
+                      (event) => {
+                        if (
+                          event.key
+                          === 'Enter'
+                        ) {
+                          event.preventDefault()
+                          attach(newTag)
+                        }
                       }
                     }
-                  }
-                />
+                  />
+                </div>
 
                 <button
                   type="button"

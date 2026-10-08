@@ -126,8 +126,26 @@ export function CollectionEditor({
           : undefined
       }
     >
-      <div className={styles.label}>
-        COLLECTION
+      <div className={styles.fieldHead}>
+        <div className={styles.label}>
+          COLLECTION
+        </div>
+
+        <button
+          type="button"
+          className={styles.editToggle}
+          aria-expanded={editing}
+          onClick={() =>
+            setEditing(
+              (value) =>
+                !value,
+            )
+          }
+        >
+          {editing
+            ? '完成'
+            : '整理'}
+        </button>
       </div>
 
       <div className={styles.content}>
@@ -136,22 +154,6 @@ export function CollectionEditor({
             {item.collection
               || '未归档'}
           </span>
-
-          <button
-            type="button"
-            className={styles.editToggle}
-            aria-expanded={editing}
-            onClick={() =>
-              setEditing(
-                (value) =>
-                  !value,
-              )
-            }
-          >
-            {editing
-              ? '完成'
-              : '整理'}
-          </button>
         </div>
 
         {editing && (
@@ -232,32 +234,38 @@ export function CollectionEditor({
               </label>
 
               <div className={styles.newRow}>
-                <input
-                  id={
-                    `new-collection-${item.id}`
+                <div
+                  className={
+                    styles.inputViewport
                   }
-                  className={styles.newInput}
-                  value={newName}
-                  disabled={busy}
-                  placeholder="新的分类"
-                  onChange={
-                    (event) =>
-                      setNewName(
-                        event.target.value,
-                      )
-                  }
-                  onKeyDown={
-                    (event) => {
-                      if (
-                        event.key
-                        === 'Enter'
-                      ) {
-                        event.preventDefault()
-                        createNew()
+                >
+                  <input
+                    id={
+                      `new-collection-${item.id}`
+                    }
+                    className={styles.newInput}
+                    value={newName}
+                    disabled={busy}
+                    placeholder="新的分类"
+                    onChange={
+                      (event) =>
+                        setNewName(
+                          event.target.value,
+                        )
+                    }
+                    onKeyDown={
+                      (event) => {
+                        if (
+                          event.key
+                          === 'Enter'
+                        ) {
+                          event.preventDefault()
+                          createNew()
+                        }
                       }
                     }
-                  }
-                />
+                  />
+                </div>
 
                 <button
                   type="button"

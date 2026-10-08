@@ -101,6 +101,8 @@
   --paper-type-meta-weight: 400;
   --paper-type-meta-spacing: .03em;
 
+  --paper-type-input-size: 16px;
+
   --paper-attached-tab-ee-background: #efeade;
   --paper-attached-tab-ee-border:
     rgba(103, 118, 96, .26);
