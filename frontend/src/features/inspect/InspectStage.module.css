@@ -519,11 +519,22 @@
 
   Therefore only ~53px remains visible below Original.
 */
+.filingSlot {
+  position: relative;
+  grid-row: 3;
+
+  width: 100%;
+  height:
+    var(--filing-height);
+  min-height:
+    var(--filing-height);
+  max-height:
+    var(--filing-height);
+}
+
 .filingPeek {
   position: relative;
   z-index: 3;
-
-  grid-row: 3;
 
   justify-self: start;
 
@@ -691,19 +702,19 @@
   margin-left: auto;
 }
 
-.pulledLayer[data-paper='filing'] {
-  top:
-    calc(
-      var(--p3-top)
-      + 108px
-    );
+.filingPulledLayer {
+  position: absolute;
+  z-index: 10;
+
+  bottom:
+    var(--filing-overlap);
 
   left: 8%;
 
   width: 88%;
 }
 
-.pulledLayer[data-paper='filing'] .pulledPaper > * {
+.filingPulledLayer .pulledPaper > * {
   width: 78%;
 
   margin-right: auto;

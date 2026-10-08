@@ -148,6 +148,18 @@ export function InspectStage({
   const attachedPaperRef =
     useRef<HTMLElement | null>(null)
 
+  const filingPulledPaperRef =
+    useRef<HTMLDivElement | null>(null)
+
+  const filingScrollTopRef =
+    useRef<number | null>(null)
+
+  const filingRevealFrameRef =
+    useRef<number | null>(null)
+
+  const filingRevealGenerationRef =
+    useRef(0)
+
   const paperTriggerRefs =
     useRef<
       Partial<
@@ -160,6 +172,83 @@ export function InspectStage({
 
   const readyNotificationRef =
     useRef<string | null>(null)
+
+  const cancelFilingReveal =
+    useCallback(() => {
+      filingRevealGenerationRef.current += 1
+
+      if (filingRevealFrameRef.current) {
+        window.cancelAnimationFrame(
+          filingRevealFrameRef.current,
+        )
+        filingRevealFrameRef.current = null
+      }
+    }, [])
+
+  const clearFilingInteraction =
+    useCallback((restoreScroll: boolean) => {
+      cancelFilingReveal()
+
+      const savedScrollTop =
+        filingScrollTopRef.current
+
+      filingScrollTopRef.current = null
+
+      if (
+        !restoreScroll
+        || savedScrollTop === null
+        || !stageRef.current
+      ) {
+        return
+      }
+
+      const stage = stageRef.current
+      const maxScrollTop =
+        Math.max(
+          0,
+          stage.scrollHeight - stage.clientHeight,
+        )
+
+      stage.scrollTo({
+        top: Math.min(
+          maxScrollTop,
+          Math.max(0, savedScrollTop),
+        ),
+        behavior: 'auto',
+      })
+    }, [cancelFilingReveal])
+
+  const closeAttachedPaper =
+    useCallback(() => {
+      const previousPaper = activePaper
+
+      if (previousPaper === 'filing') {
+        clearFilingInteraction(true)
+      }
+
+      setActivePaper(null)
+
+      if (!previousPaper) return
+
+      if (attachedPaperFrameRef.current) {
+        window.cancelAnimationFrame(
+          attachedPaperFrameRef.current,
+        )
+      }
+
+      attachedPaperFrameRef.current =
+        window.requestAnimationFrame(
+          () => {
+            attachedPaperFrameRef.current = null
+
+            paperTriggerRefs.current[
+              previousPaper
+            ]?.focus({
+              preventScroll: true,
+            })
+          },
+        )
+    }, [activePaper, clearFilingInteraction])
 
   useEffect(
     () => {
@@ -309,9 +398,111 @@ export function InspectStage({
         window.cancelAnimationFrame(
           attachedPaperFrameRef.current,
         )
+
+        attachedPaperFrameRef.current = null
+      }
+      cancelFilingReveal()
+      filingScrollTopRef.current = null
+    },
+    [cancelFilingReveal, itemId],
+  )
+
+  useLayoutEffect(
+    () => {
+      if (activePaper !== 'filing') return
+
+      cancelFilingReveal()
+
+      const generation =
+        filingRevealGenerationRef.current
+
+      filingRevealFrameRef.current =
+        window.requestAnimationFrame(
+          () => {
+            if (
+              generation
+                !== filingRevealGenerationRef.current
+            ) {
+              return
+            }
+
+            filingRevealFrameRef.current = null
+
+            const stage = stageRef.current
+            const filingPaper =
+              filingPulledPaperRef.current
+
+            if (!stage || !filingPaper) return
+
+            const stageRect =
+              stage.getBoundingClientRect()
+            const filingRect =
+              filingPaper.getBoundingClientRect()
+            const stageStyles =
+              window.getComputedStyle(stage)
+            const paddingTop =
+              Number.parseFloat(
+                stageStyles.paddingTop,
+              ) || 0
+            const paddingBottom =
+              Number.parseFloat(
+                stageStyles.paddingBottom,
+              ) || 0
+            const visibleTop =
+              stageRect.top + paddingTop
+            const visibleBottom =
+              stageRect.bottom - paddingBottom
+            const visibleHeight =
+              visibleBottom - visibleTop
+
+            let delta = 0
+
+            if (
+              filingRect.height > visibleHeight
+              || filingRect.top < visibleTop
+            ) {
+              delta = filingRect.top - visibleTop
+            } else if (
+              filingRect.bottom > visibleBottom
+            ) {
+              delta =
+                filingRect.bottom - visibleBottom
+            }
+
+            if (delta === 0) return
+
+            const maxScrollTop =
+              Math.max(
+                0,
+                stage.scrollHeight
+                  - stage.clientHeight,
+              )
+            const nextScrollTop =
+              Math.min(
+                maxScrollTop,
+                Math.max(
+                  0,
+                  stage.scrollTop + delta,
+                ),
+              )
+
+            stage.scrollTo({
+              top: nextScrollTop,
+              behavior: 'auto',
+            })
+          },
+        )
+
+      return () => {
+        if (
+          generation
+          === filingRevealGenerationRef.current
+        ) {
+          cancelFilingReveal()
+        }
       }
     },
-    [],
+    [activePaper, cancelFilingReveal, itemId],
   )
 
   const finishReturn =
@@ -338,6 +529,7 @@ export function InspectStage({
         return
       }
 
+      clearFilingInteraction(false)
       setActivePaper(null)
       phaseRef.current = 'returning'
       setPhase('returning')
@@ -370,7 +562,11 @@ export function InspectStage({
           finishReturn,
           RETURN_FALLBACK_MS,
         )
-    }, [finishReturn, presented])
+    }, [
+      clearFilingInteraction,
+      finishReturn,
+      presented,
+    ])
 
   useEffect(
     () => {
@@ -382,7 +578,12 @@ export function InspectStage({
           && phase !== 'returning'
         ) {
           event.preventDefault()
-          requestReturn()
+
+          if (activePaper === 'filing') {
+            closeAttachedPaper()
+          } else {
+            requestReturn()
+          }
         }
       }
 
@@ -398,7 +599,12 @@ export function InspectStage({
         )
       }
     },
-    [phase, requestReturn],
+    [
+      activePaper,
+      closeAttachedPaper,
+      phase,
+      requestReturn,
+    ],
   )
 
   function handleFiled() {
@@ -413,6 +619,15 @@ export function InspectStage({
     ) {
       closeAttachedPaper()
       return
+    }
+
+    if (activePaper === 'filing') {
+      clearFilingInteraction(true)
+    }
+
+    if (paper === 'filing') {
+      filingScrollTopRef.current =
+        stageRef.current?.scrollTop ?? 0
     }
 
     if (attachedPaperFrameRef.current) {
@@ -431,24 +646,6 @@ export function InspectStage({
           })
         },
       )
-  }
-
-  function closeAttachedPaper() {
-    const previousPaper = activePaper
-
-    setActivePaper(null)
-
-    if (previousPaper) {
-      window.requestAnimationFrame(
-        () => {
-          paperTriggerRefs.current[
-            previousPaper
-          ]?.focus({
-            preventScroll: true,
-          })
-        },
-      )
-    }
   }
 
   return (
@@ -490,6 +687,7 @@ export function InspectStage({
               'label',
               `.${styles.originalLayer}`,
               `.${styles.pulledLayer}`,
+              `.${styles.filingPulledLayer}`,
             ].join(','),
           )
         ) {
@@ -625,35 +823,66 @@ export function InspectStage({
               )}
             </div>
 
-            <button
-              ref={(node) => {
-                paperTriggerRefs.current
-                  .filing = node
-              }}
-              type="button"
-              className={styles.filingPeek}
-              aria-label="查看归档附页"
-              aria-pressed={
-                activePaper === 'filing'
-              }
-              onClick={() =>
-                toggleAttachedPaper(
-                  'filing',
-                )
-              }
+            <div
+              className={styles.filingSlot}
             >
-              <span>
-                FILING · {
-                  cabinetSlotLabels[
-                    query.data.status
-                  ]
+              <button
+                ref={(node) => {
+                  paperTriggerRefs.current
+                    .filing = node
+                }}
+                type="button"
+                className={styles.filingPeek}
+                aria-label="查看归档附页"
+                aria-pressed={
+                  activePaper === 'filing'
                 }
-              </span>
+                onClick={() =>
+                  toggleAttachedPaper(
+                    'filing',
+                  )
+                }
+              >
+                <span>
+                  FILING · {
+                    cabinetSlotLabels[
+                      query.data.status
+                    ]
+                  }
+                </span>
 
-              <span>
-                看完放哪儿？
-              </span>
-            </button>
+                <span>
+                  看完放哪儿？
+                </span>
+              </button>
+
+              {activePaper === 'filing' && (
+                <section
+                  ref={attachedPaperRef}
+                  className={
+                    styles.filingPulledLayer
+                  }
+                  aria-label="抽出的附页"
+                  tabIndex={-1}
+                  data-paper="filing"
+                >
+                  <div
+                    ref={filingPulledPaperRef}
+                    className={
+                      styles.pulledPaper
+                    }
+                  >
+                    <FilingSlip
+                      item={query.data}
+                      onFiled={handleFiled}
+                      onClose={
+                        closeAttachedPaper
+                      }
+                    />
+                  </div>
+                </section>
+              )}
+            </div>
 
             <div
               className={
@@ -668,7 +897,8 @@ export function InspectStage({
               />
             </div>
 
-            {activePaper && (
+            {activePaper
+              && activePaper !== 'filing' && (
               <section
                 ref={attachedPaperRef}
                 className={
@@ -707,19 +937,6 @@ export function InspectStage({
                     === 'replies' && (
                     <ReplyStack
                       item={query.data}
-                      onClose={
-                        closeAttachedPaper
-                      }
-                    />
-                  )}
-
-                  {activePaper
-                    === 'filing' && (
-                    <FilingSlip
-                      item={query.data}
-                      onFiled={
-                        handleFiled
-                      }
                       onClose={
                         closeAttachedPaper
                       }
