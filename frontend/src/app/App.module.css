@@ -39,7 +39,7 @@
   margin: 0;
 
   font-family:
-    var(--drawer-font-display);
+    var(--font-brand);
 
   font-size:
     clamp(3rem, 11vw, 5.8rem);

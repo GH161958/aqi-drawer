@@ -6,12 +6,7 @@
   font-family:
     var(
       --inspect-original-font-reading,
-      -apple-system,
-      BlinkMacSystemFont,
-      "PingFang SC",
-      "PingFang TC",
-      system-ui,
-      sans-serif
+      var(--font-reading)
     );
 
   padding:
@@ -45,12 +40,7 @@
   font-family:
     var(
       --inspect-original-font-display,
-      -apple-system,
-      BlinkMacSystemFont,
-      "PingFang SC",
-      "PingFang TC",
-      system-ui,
-      sans-serif
+      var(--font-display)
     );
 
   font-size:
@@ -111,7 +101,7 @@
     var(--drawer-quiet-ink);
 
   font-family:
-    var(--drawer-font-meta);
+    var(--font-meta);
 
   font-size:
     clamp(
@@ -135,12 +125,7 @@
   font-family:
     var(
       --inspect-original-font-reading,
-      -apple-system,
-      BlinkMacSystemFont,
-      "PingFang SC",
-      "PingFang TC",
-      system-ui,
-      sans-serif
+      var(--font-reading)
     );
 
   font-size:
@@ -179,7 +164,7 @@
     var(--drawer-quiet-ink);
 
   font-family:
-    var(--drawer-font-meta);
+    var(--font-meta);
 
   font-size:
     clamp(
@@ -240,12 +225,7 @@
   font-family:
     var(
       --inspect-original-font-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      "PingFang SC",
-      "PingFang TC",
-      system-ui,
-      sans-serif
+      var(--font-ui)
     );
 
   font-size:
@@ -275,12 +255,7 @@
   font-family:
     var(
       --inspect-original-font-display,
-      -apple-system,
-      BlinkMacSystemFont,
-      "PingFang SC",
-      "PingFang TC",
-      system-ui,
-      sans-serif
+      var(--font-display)
     );
 
   font-size:
@@ -302,12 +277,7 @@
   font-family:
     var(
       --inspect-original-font-reading,
-      -apple-system,
-      BlinkMacSystemFont,
-      "PingFang SC",
-      "PingFang TC",
-      system-ui,
-      sans-serif
+      var(--font-reading)
     );
 
   font-size:
@@ -335,12 +305,7 @@
   font-family:
     var(
       --inspect-original-font-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      "PingFang SC",
-      "PingFang TC",
-      system-ui,
-      sans-serif
+      var(--font-ui)
     );
 
   font-size:

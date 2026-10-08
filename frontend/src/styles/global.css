@@ -37,7 +37,13 @@ button,
 input,
 textarea,
 select {
-  font: inherit;
+  font-family:
+    var(--font-ui);
+
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
 }
 
 button {

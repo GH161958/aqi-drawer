@@ -1,3 +1,13 @@
+@font-face {
+  font-family: "Aqi Brand Gloock";
+  src:
+    url("../assets/fonts/gloock/Gloock-Regular-latin.woff2")
+    format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   --drawer-paper: #f3eddf;
   --drawer-paper-soft: #e8decd;
@@ -20,21 +30,40 @@
   --drawer-page-inline:
     clamp(20px, 6vw, 48px);
 
-  --drawer-font-display:
-    Georgia,
-    "Times New Roman",
-    serif;
+  --font-ui:
+    -apple-system,
+    BlinkMacSystemFont,
+    "PingFang SC",
+    "PingFang TC",
+    system-ui,
+    sans-serif;
 
-  --drawer-font-body:
-    Georgia,
-    "Noto Serif SC",
-    serif;
+  --font-reading:
+    var(--font-ui);
 
-  --drawer-font-meta:
+  --font-display:
+    var(--font-ui);
+
+  --font-meta:
     ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
+
+  --font-brand:
+    "Aqi Brand Gloock",
+    Georgia,
+    "Times New Roman",
+    serif;
+
+  --drawer-font-display:
+    var(--font-display);
+
+  --drawer-font-body:
+    var(--font-reading);
+
+  --drawer-font-meta:
+    var(--font-meta);
 
   --paper-type-eyebrow-size: .50rem;
   --paper-type-eyebrow-line-height: normal;

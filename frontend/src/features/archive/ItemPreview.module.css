@@ -104,6 +104,9 @@
   color:
     rgba(52, 46, 39, .78);
 
+  font-family:
+    var(--font-reading);
+
   font-size: .9rem;
 
   line-height: 1.7;
