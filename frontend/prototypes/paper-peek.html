@@ -1,0 +1,1195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+
+  <title>Aqi Drawer · Paper Peek Lab</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    :root {
+      background: #f4eddf;
+      color: #51493d;
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      min-width: 320px;
+      min-height: 100svh;
+      background: #f4eddf;
+    }
+
+    /*
+      ==========================================================
+      REALISTIC CABINET CONTEXT
+      ==========================================================
+    */
+
+    .stage {
+      display: grid;
+      min-height: 100svh;
+      padding:
+        clamp(88px, 14svh, 130px)
+        0
+        100px;
+      place-items: start center;
+    }
+
+    .context {
+      width:
+        min(
+          92vw,
+          640px
+        );
+    }
+
+    .eyebrow {
+      margin:
+        0
+        0
+        8px;
+
+      color:
+        #9b7f59;
+
+      font-family:
+        Georgia,
+        "Times New Roman",
+        serif;
+
+      font-size:
+        13px;
+
+      letter-spacing:
+        .16em;
+
+      text-align:
+        center;
+    }
+
+    .title {
+      margin:
+        0
+        0
+        62px;
+
+      color:
+        #352f29;
+
+      font-family:
+        Georgia,
+        "Times New Roman",
+        serif;
+
+      font-size:
+        clamp(
+          54px,
+          11vw,
+          82px
+        );
+
+      font-weight:
+        400;
+
+      line-height:
+        .9;
+
+      letter-spacing:
+        -.055em;
+
+      text-align:
+        center;
+    }
+
+    .cabinet {
+      position: relative;
+
+      width: 100%;
+
+      padding:
+        11px;
+
+      border:
+        1px solid
+        rgba(65, 45, 33, .24);
+
+      background:
+        #846b59;
+
+      box-shadow:
+        0 18px 34px
+        rgba(65, 45, 33, .10);
+    }
+
+    .cabinet::before {
+      position: absolute;
+
+      top: -9px;
+      right: -8px;
+      left: -8px;
+
+      height: 9px;
+
+      background:
+        #876d5a;
+
+      box-shadow:
+        0 1px
+        rgba(255, 255, 255, .16);
+
+      content: "";
+    }
+
+    .cabinet-head {
+      position: relative;
+
+      display: flex;
+
+      align-items: center;
+
+      height: 58px;
+
+      padding:
+        10px
+        13px;
+
+      border:
+        1px solid
+        rgba(224, 198, 161, .10);
+    }
+
+    .plaque {
+      display:
+        inline-flex;
+
+      align-items:
+        center;
+
+      gap:
+        17px;
+
+      min-height:
+        27px;
+
+      padding:
+        4px
+        14px;
+
+      border:
+        1px solid
+        rgba(148, 115, 65, .48);
+
+      color:
+        #ebe0ce;
+
+      background:
+        rgba(94, 72, 60, .27);
+
+      font-family:
+        Georgia,
+        "Times New Roman",
+        serif;
+
+      font-size:
+        13px;
+    }
+
+    .plaque-count,
+    .label-count {
+      color:
+        rgba(117, 97, 70, .42);
+
+      font-variant-numeric:
+        tabular-nums;
+
+      letter-spacing:
+        .12em;
+    }
+
+    .grid {
+      display: grid;
+
+      grid-template-columns:
+        repeat(
+          2,
+          minmax(0, 1fr)
+        );
+
+      gap:
+        3px;
+
+      padding:
+        6px;
+
+      border:
+        1px solid
+        rgba(45, 31, 24, .24);
+
+      background:
+        #5d493e;
+
+      box-shadow:
+        inset 0 3px 5px
+        rgba(31, 21, 16, .12);
+    }
+
+    .cell {
+      position: relative;
+
+      min-width: 0;
+
+      height:
+        clamp(
+          170px,
+          29vw,
+          225px
+        );
+    }
+
+    /*
+      Paper belongs BEHIND the drawer face.
+
+      This is the important physical difference
+      from the current production strip.
+    */
+
+    .paper {
+      position: absolute;
+
+      z-index: 1;
+
+      top: 0;
+      right: 0;
+      left: 0;
+
+      height: 8px;
+
+      overflow: hidden;
+
+      background:
+        #46352d;
+
+      box-shadow:
+        inset 0 1px
+        rgba(25, 16, 12, .32);
+
+      pointer-events: none;
+    }
+
+    .paper::before,
+    .paper::after {
+      position: absolute;
+
+      height: 1px;
+
+      background:
+        rgba(242, 232, 214, .88);
+
+      content: "";
+    }
+
+    .drawer {
+      position: absolute;
+
+      z-index: 2;
+
+      inset: 0;
+
+      display: grid;
+
+      border-top:
+        1px solid
+        rgba(255, 255, 255, .42);
+
+      border-right:
+        1px solid
+        rgba(76, 50, 37, .16);
+
+      border-bottom:
+        2px solid
+        rgba(76, 50, 37, .26);
+
+      border-left:
+        1px solid
+        rgba(255, 255, 255, .20);
+
+      background:
+        #e8decd;
+
+      box-shadow:
+        inset 0 -4px 7px
+          rgba(76, 50, 37, .025),
+        0 1px
+          rgba(25, 16, 12, .14);
+
+      place-items: center;
+    }
+
+    .drawer-label {
+      display:
+        inline-flex;
+
+      align-items:
+        center;
+
+      gap:
+        15px;
+
+      min-height:
+        29px;
+
+      padding:
+        5px
+        15px;
+
+      border:
+        1px solid
+        rgba(137, 109, 69, .46);
+
+      color:
+        #51493d;
+
+      background:
+        #f1e9da;
+
+      box-shadow:
+        inset 0 0 0 1px
+        rgba(255, 255, 255, .28);
+
+      font-family:
+        Georgia,
+        "Times New Roman",
+        serif;
+
+      font-size:
+        14px;
+    }
+
+    .pull {
+      position: absolute;
+
+      bottom:
+        14px;
+
+      left:
+        50%;
+
+      width:
+        34px;
+
+      height:
+        9px;
+
+      border:
+        1px solid
+        #806536;
+
+      border-radius:
+        1px 1px 7px 7px;
+
+      background:
+        #897049;
+
+      box-shadow:
+        inset 0 1px
+          rgba(213, 185, 126, .42),
+        0 1px 1px
+          rgba(47, 33, 26, .24);
+
+      transform:
+        translateX(-50%);
+    }
+
+    .pull::after {
+      display:
+        block;
+
+      width:
+        20px;
+
+      height:
+        2px;
+
+      margin:
+        3px
+        auto
+        0;
+
+      border-radius:
+        0 0 3px 3px;
+
+      background:
+        rgba(47, 33, 26, .68);
+
+      content: "";
+    }
+
+    /*
+      ==========================================================
+      SHALLOW PULLED DRAWER · PHYSICAL MODEL V2
+
+      Real-world model:
+
+      the drawer moves toward the viewer,
+      not toward the row below.
+
+      In this nearly frontal interface,
+      depth is represented by:
+
+      - a narrow rear cavity
+      - a real card body inside the cavity
+      - the drawer front beginning below
+        the cavity while keeping its bottom fixed
+      - restrained near-edge shadow
+
+      Adjacent rows remain independent.
+      ==========================================================
+    */
+
+    .cabinet {
+      --pull-depth: 6px;
+
+      --card-left: 16%;
+      --card-width: 68%;
+
+      --card-top: 1px;
+      --card-body-height: 13px;
+    }
+
+    /*
+      Populated drawers remain inside their
+      original grid cells.
+    */
+
+    .cell[data-has-paper="true"] {
+      isolation: isolate;
+    }
+
+    /*
+      Rear cavity.
+
+      This is the inside of the drawer box,
+      visible because the front has been
+      pulled slightly toward the viewer.
+    */
+
+    .cell[data-has-paper="true"]::before {
+      position: absolute;
+
+      z-index: 0;
+
+      top: 0;
+      right: 0;
+      left: 0;
+
+      height:
+        var(--pull-depth);
+
+      background:
+        linear-gradient(
+          to bottom,
+          rgba(48, 34, 26, .34) 0%,
+          rgba(59, 42, 33, .25) 46%,
+          rgba(79, 59, 47, .15) 100%
+        );
+
+      box-shadow:
+        inset 3px 0 0
+          rgba(47, 32, 25, .12),
+
+        inset -3px 0 0
+          rgba(47, 32, 25, .12),
+
+        inset 0 1px 0
+          rgba(30, 20, 15, .24),
+
+        inset 0 -1px 0
+          rgba(255, 242, 223, .045);
+
+      content: "";
+
+      pointer-events: none;
+    }
+
+    /*
+      One real archival card body.
+
+      Its lower portion sits behind the
+      drawer front.
+
+      The card is content,
+      not a decorative strip.
+    */
+
+    .cell[data-has-paper="true"]
+    .paper {
+      position: absolute;
+
+      z-index: 1;
+
+      top:
+        var(--card-top);
+
+      right: auto;
+
+      left:
+        var(--card-left);
+
+      display: block;
+
+      width:
+        var(--card-width);
+
+      height:
+        var(--card-body-height);
+
+      overflow: hidden;
+
+      border: 0;
+      border-radius: 0;
+
+      background:
+        linear-gradient(
+          to bottom,
+          #f3eadb 0%,
+          #efe4d3 100%
+        );
+
+      box-shadow:
+        0 -1px 0
+          rgba(255, 250, 240, .26),
+
+        0 1px 2px
+          rgba(68, 50, 38, .055);
+
+      transform: none;
+
+      pointer-events: none;
+    }
+
+    /*
+      Quiet card thickness only.
+
+      No tab.
+      No fold.
+      No torn-paper effect.
+    */
+
+    .cell[data-has-paper="true"]
+    .paper::before {
+      position: absolute;
+
+      top: 0;
+      right: 0;
+      left: 0;
+
+      display: block;
+
+      height: 1px;
+
+      background:
+        rgba(255, 250, 241, .48);
+
+      content: "";
+    }
+
+    .cell[data-has-paper="true"]
+    .paper::after {
+      display: none;
+    }
+
+    /*
+      Drawer front.
+
+      The top edge reveals the interior box.
+      The bottom edge remains fixed.
+
+      Therefore the drawer does not intrude
+      into another row.
+    */
+
+    .cell[data-has-paper="true"]
+    .drawer {
+      top:
+        var(--pull-depth);
+
+      right: 0;
+      bottom: 0;
+      left: 0;
+
+      transform: none;
+
+      box-shadow:
+        inset 0 1px 0
+          rgba(255, 255, 255, .34),
+
+        inset 0 -4px 7px
+          rgba(76, 50, 37, .025),
+
+        0 -1px 0
+          rgba(46, 31, 24, .10),
+
+        0 2px 3px
+          rgba(38, 25, 19, .038);
+    }
+
+    /*
+      Same rule on every populated drawer.
+
+      Only an almost invisible lateral shift
+      avoids mechanical duplication.
+    */
+
+    .cell[data-has-paper="true"]:nth-child(even)
+    .paper {
+      left:
+        calc(
+          var(--card-left) + 1%
+        );
+    }
+
+    .variant-shallow-pull {
+      --pull-depth: 6px;
+
+      --card-left: 16%;
+      --card-width: 68%;
+
+      --card-top: 1px;
+      --card-body-height: 13px;
+    }
+
+    /*
+      ==========================================================
+      PICKER · FIXED PROTOTYPE CHROME
+      ==========================================================
+    */
+
+    .proto-picker {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 4px;
+      border-radius: 999px;
+      background: rgba(10, 10, 10, 0.82);
+      -webkit-backdrop-filter: blur(12px) saturate(1.4);
+      backdrop-filter: blur(12px) saturate(1.4);
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+        0 8px 24px rgba(0, 0, 0, 0.24),
+        0 2px 6px rgba(0, 0, 0, 0.12);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      line-height: 1;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .proto-picker-highlight {
+      position: absolute;
+      top: 4px;
+      left: 0;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      will-change: transform;
+    }
+
+    .proto-picker[data-ready] .proto-picker-highlight {
+      transition:
+        transform 250ms cubic-bezier(0.23, 1, 0.32, 1),
+        width 250ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .proto-picker[data-ready] .proto-picker-highlight {
+        transition: none;
+      }
+    }
+
+    .proto-picker-item {
+      position: relative;
+      display: flex;
+      align-items: center;
+      height: 28px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.55);
+      font: inherit;
+      cursor: pointer;
+      transition: color 150ms ease-out;
+    }
+
+    .proto-picker-item:hover {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .proto-picker-item:active {
+      transform: scale(0.97);
+    }
+
+    .proto-picker-item:focus-visible {
+      outline: 2px solid rgba(255, 255, 255, 0.4);
+      outline-offset: 2px;
+    }
+
+    .proto-picker-item[data-active] {
+      color: #fff;
+    }
+
+    @media (max-width: 520px) {
+      .stage {
+        padding:
+          78px
+          0
+          92px;
+      }
+
+      .context {
+        width:
+          min(
+            92vw,
+            410px
+          );
+      }
+
+      .title {
+        margin-bottom:
+          52px;
+
+        font-size:
+          clamp(
+            50px,
+            15vw,
+            66px
+          );
+      }
+
+      .cabinet {
+        padding:
+          9px;
+      }
+
+      .cabinet-head {
+        height:
+          49px;
+
+        padding:
+          9px
+          10px;
+      }
+
+      .grid {
+        gap:
+          3px;
+
+        padding:
+          5px;
+      }
+
+      .cell {
+        height:
+          156px;
+      }
+
+      .drawer-label {
+        min-height:
+          26px;
+
+        padding:
+          4px
+          12px;
+
+        font-size:
+          13px;
+      }
+
+      .pull {
+        bottom:
+          12px;
+
+        width:
+          30px;
+
+        height:
+          8px;
+      }
+
+      .proto-picker {
+        max-width:
+          calc(100vw - 20px);
+
+        overflow-x:
+          auto;
+      }
+
+      .proto-picker-item {
+        flex:
+          0 0 auto;
+
+        padding:
+          0
+          10px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="stage">
+    <div class="context">
+      <p class="eyebrow">
+        things EE left for Aqi
+      </p>
+
+      <h1 class="title">
+        Aqi Drawer
+      </h1>
+
+      <section
+        id="specimen"
+        class="cabinet variant-shallow-pull"
+      >
+        <div class="cabinet-head">
+          <span class="plaque">
+            <span>
+              都在这里
+            </span>
+
+            <span class="plaque-count">
+              13
+            </span>
+          </span>
+        </div>
+
+        <div class="grid">
+          <div class="cell" data-has-paper="true">
+            <span
+              class="paper"
+              aria-hidden="true"
+            ></span>
+
+            <div class="drawer">
+              <span class="drawer-label">
+                <span>
+                  刚放进来
+                </span>
+
+                <span class="label-count">
+                  11
+                </span>
+              </span>
+
+              <span
+                class="pull"
+                aria-hidden="true"
+              ></span>
+            </div>
+          </div>
+
+          <div class="cell">
+            <div class="drawer">
+              <span class="drawer-label">
+                今晚看看
+              </span>
+
+              <span
+                class="pull"
+                aria-hidden="true"
+              ></span>
+            </div>
+          </div>
+
+          <div class="cell" data-has-paper="true">
+            <span
+              class="paper"
+              aria-hidden="true"
+            ></span>
+            <div class="drawer">
+              <span class="drawer-label">
+                <span>
+                  聊过了
+                </span>
+
+                <span class="label-count">
+                  01
+                </span>
+              </span>
+
+              <span
+                class="pull"
+                aria-hidden="true"
+              ></span>
+            </div>
+          </div>
+
+          <div class="cell">
+            <div class="drawer">
+              <span class="drawer-label">
+                晚点再看
+              </span>
+
+              <span
+                class="pull"
+                aria-hidden="true"
+              ></span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <nav
+    class="proto-picker"
+    aria-label="Prototype direction"
+  >
+    <button
+      class="proto-picker-item"
+      data-active
+      aria-current="true"
+      type="button"
+    >
+      Shallow Pull</button>
+  </nav>
+
+  <script>
+    const specimen =
+      document.getElementById(
+        'specimen'
+      )
+
+    const picker =
+      document.querySelector(
+        '.proto-picker'
+      )
+
+    const highlight =
+      picker.querySelector(
+        '.proto-picker-highlight'
+      )
+
+    const items = [
+      ...picker.querySelectorAll(
+        '.proto-picker-item'
+      )
+    ]
+
+    const classes = [
+      'variant-shallow-pull'
+    ]
+
+    let current = 0
+
+    function moveHighlight() {
+      const item =
+        items[current]
+
+      highlight.style.width =
+        item.offsetWidth + 'px'
+
+      highlight.style.transform =
+        'translateX('
+        + item.offsetLeft
+        + 'px)'
+    }
+
+    function setActive(index) {
+      if (
+        index < 0
+        || index >= items.length
+      ) {
+        return
+      }
+
+      current = index
+
+      specimen.classList.remove(
+        ...classes
+      )
+
+      specimen.classList.add(
+        classes[current]
+      )
+
+      items.forEach(
+        (item, itemIndex) => {
+          const active =
+            itemIndex === current
+
+          item.toggleAttribute(
+            'data-active',
+            active
+          )
+
+          if (active) {
+            item.setAttribute(
+              'aria-current',
+              'true'
+            )
+          } else {
+            item.removeAttribute(
+              'aria-current'
+            )
+          }
+        }
+      )
+
+      const url =
+        new URL(
+          window.location.href
+        )
+
+      url.searchParams.set(
+        'v',
+        String(
+          current + 1
+        )
+      )
+
+      history.replaceState(
+        null,
+        '',
+        url
+      )
+
+      moveHighlight()
+    }
+
+    items.forEach(
+      (item, index) => {
+        item.addEventListener(
+          'click',
+          () => {
+            setActive(index)
+          }
+        )
+      }
+    )
+
+    document.addEventListener(
+      'keydown',
+      (event) => {
+        const target =
+          event.target
+
+        if (
+          target instanceof HTMLElement
+          && (
+            /^(INPUT|TEXTAREA|SELECT)$/
+              .test(target.tagName)
+            || target.isContentEditable
+          )
+        ) {
+          return
+        }
+
+        if (
+          event.metaKey
+          || event.ctrlKey
+          || event.altKey
+        ) {
+          return
+        }
+
+        const number =
+          Number(event.key)
+
+        if (
+          Number.isInteger(number)
+          && number >= 1
+          && number <= items.length
+        ) {
+          setActive(
+            number - 1
+          )
+
+          return
+        }
+
+        if (
+          event.key === 'ArrowRight'
+        ) {
+          setActive(
+            (
+              current + 1
+            )
+            % items.length
+          )
+        }
+
+        if (
+          event.key === 'ArrowLeft'
+        ) {
+          setActive(
+            (
+              current
+              - 1
+              + items.length
+            )
+            % items.length
+          )
+        }
+      }
+    )
+
+    window.addEventListener(
+      'resize',
+      moveHighlight
+    )
+
+    const initial =
+      Number(
+        new URLSearchParams(
+          window.location.search
+        ).get('v')
+      )
+
+    setActive(
+      Number.isInteger(initial)
+      && initial >= 1
+      && initial <= items.length
+        ? initial - 1
+        : 0
+    )
+
+    requestAnimationFrame(
+      () => {
+        requestAnimationFrame(
+          () => {
+            picker.setAttribute(
+              'data-ready',
+              ''
+            )
+          }
+        )
+      }
+    )
+  </script>
+</body>
+</html>\n
