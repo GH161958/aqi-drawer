@@ -114,13 +114,23 @@
   font-family:
     var(--drawer-font-body);
 
-  /*
-    Permanent iPhone Safari safety:
-    never lower form controls below 16px.
-  */
-  font-size: 16px;
+  font-size:
+    var(
+      --paper-type-body-size,
+      .69rem
+    );
 
-  line-height: 1.7;
+  font-weight:
+    var(--paper-type-body-weight);
+
+  line-height:
+    var(
+      --paper-type-body-line-height,
+      1.55
+    );
+
+  letter-spacing:
+    var(--paper-type-body-spacing);
 
   outline: 0;
 }
@@ -128,6 +138,8 @@
 .input::placeholder {
   color:
     rgba(52, 46, 39, .30);
+
+  font: inherit;
 }
 
 .input:focus {
@@ -239,10 +251,50 @@
     width: 76%;
 
     padding:
-      14px 12px 12px;
+      14px 14px 12px;
+  }
+
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .editorViewport {
+    --ee-editor-visual-scale: .69;
+    --ee-editor-size-compensation: 1.4492753623;
+
+    position: relative;
+
+    width: 100%;
+    height: 92px;
+
+    overflow: hidden;
   }
 
   .input {
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    width:
+      calc(
+        100%
+        * var(--ee-editor-size-compensation)
+      );
+
+    height:
+      calc(
+        100%
+        * var(--ee-editor-size-compensation)
+      );
+    min-height: 0;
+
+    /* Prevent iPhone Safari focus auto-zoom. */
     font-size: 16px;
+
+    transform:
+      scale(
+        var(--ee-editor-visual-scale)
+      );
+    transform-origin: top left;
   }
 }

@@ -143,31 +143,37 @@ export function EeNotePaper({
           EE Note
         </label>
 
-        <textarea
-          id={`ee-note-${item.id}`}
-          name="note"
-          className={styles.input}
-          value={draft}
-          rows={4}
-          disabled={
-            update.isPending
+        <div
+          className={
+            styles.editorViewport
           }
-          placeholder="在这里留一句……"
-          onChange={
-            (event) => {
-              setDraft(
-                event.target.value,
-              )
+        >
+          <textarea
+            id={`ee-note-${item.id}`}
+            name="note"
+            className={styles.input}
+            value={draft}
+            rows={4}
+            disabled={
+              update.isPending
+            }
+            placeholder="在这里留一句……"
+            onChange={
+              (event) => {
+                setDraft(
+                  event.target.value,
+                )
 
-              if (
-                update.isSuccess
-                || update.isError
-              ) {
-                update.reset()
+                if (
+                  update.isSuccess
+                  || update.isError
+                ) {
+                  update.reset()
+                }
               }
             }
-          }
-        />
+          />
+        </div>
 
         <div
           className={styles.actions}
