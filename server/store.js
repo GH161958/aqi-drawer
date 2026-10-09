@@ -362,6 +362,137 @@ export class PocketStore {
     }
   }
 
+  async removeAttachment(
+    id,
+    attachmentId,
+  ) {
+    /*
+      Commit the item update before touching media.
+      A cleanup failure may leave an orphaned file,
+      but can never leave an item pointing at a file
+      that was already removed.
+    */
+    const removal =
+      await this.#mutate((state) => {
+        const item =
+          state.items.find(
+            (entry) =>
+              entry.id === id
+              && !entry.deletedAt,
+          )
+
+        if (!item) {
+          throw httpError(
+            404,
+            'Pocket item not found.',
+          )
+        }
+
+        const attachments =
+          Array.isArray(item.attachments)
+            ? item.attachments
+            : []
+
+        const attachmentIndex =
+          attachments.findIndex(
+            (entry) =>
+              entry.id === attachmentId,
+          )
+
+        if (attachmentIndex < 0) {
+          throw httpError(
+            404,
+            'Attachment not found on this item.',
+          )
+        }
+
+        const [attachment] =
+          attachments.splice(
+            attachmentIndex,
+            1,
+          )
+
+        item.attachments = attachments
+        item.updatedAt =
+          new Date().toISOString()
+        item.syncState = 'synced'
+
+        const storageName =
+          clean(
+            attachment?.storageName,
+          )
+
+        const normalizedStorageName =
+          storageName
+            ? path.basename(storageName)
+            : ''
+
+        const stillReferenced =
+          normalizedStorageName
+          && state.items.some((entry) =>
+            (
+              Array.isArray(entry.attachments)
+                ? entry.attachments
+                : []
+            ).some(
+              (candidate) =>
+                path.basename(
+                  clean(
+                    candidate?.storageName,
+                  ),
+                ) === normalizedStorageName,
+            ),
+          )
+
+        return {
+          item: publicItem(item),
+          attachment:
+            publicAttachment(attachment),
+          orphanedStorageName:
+            normalizedStorageName
+            && !stillReferenced
+              ? normalizedStorageName
+              : '',
+        }
+      })
+
+    let mediaDeleted = 0
+    let mediaMissing = 0
+    const mediaCleanupFailed = []
+
+    if (removal.orphanedStorageName) {
+      try {
+        await unlink(
+          path.join(
+            this.mediaDir,
+            removal.orphanedStorageName,
+          ),
+        )
+        mediaDeleted = 1
+      } catch (error) {
+        if (error?.code === 'ENOENT') {
+          mediaMissing = 1
+        } else {
+          mediaCleanupFailed.push({
+            storageName:
+              removal.orphanedStorageName,
+            error:
+              error?.message
+              || 'Media cleanup failed.',
+          })
+        }
+      }
+    }
+
+    return {
+      item: removal.item,
+      attachment: removal.attachment,
+      mediaDeleted,
+      mediaMissing,
+      mediaCleanupFailed,
+    }
+  }
+
   /* TRASH LIFECYCLE V1 END */
 
   async getForContentRead(id) {

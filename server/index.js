@@ -398,6 +398,22 @@ export async function createBridgeApp(config = {}) {
     } catch (error) { next(error) }
   })
 
+  app.delete(
+    '/api/pocket/items/:id/attachments/:attachmentId',
+    async (req, res, next) => {
+      try {
+        res.json(
+          await store.removeAttachment(
+            req.params.id,
+            req.params.attachmentId,
+          ),
+        )
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
   app.patch('/api/pocket/items/:id/metadata', async (req, res, next) => {
     try {
       const metadata = {

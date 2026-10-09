@@ -21,6 +21,7 @@ export interface PocketAttachmentSummary {
   id: string
   name: string
   mimeType: string
+  size?: number
   url?: string
 }
 

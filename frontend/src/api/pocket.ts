@@ -135,6 +135,11 @@ function parseAttachment(
         'application/octet-stream',
       ),
 
+    ...(typeof value.size === 'number'
+      && Number.isFinite(value.size)
+      ? { size: value.size }
+      : {}),
+
     ...(typeof value.url === 'string'
       ? { url: value.url }
       : {}),
@@ -1513,6 +1518,61 @@ export async function permanentlyDeletePocketItem(
       'Drawer did not confirm permanent deletion.',
     )
   }
+}
+
+export async function removePocketAttachment(
+  itemId: string,
+  attachmentId: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await drawerFetch(
+      `/api/pocket/items/${
+        encodeURIComponent(itemId)
+      }/attachments/${
+        encodeURIComponent(attachmentId)
+      }`,
+      {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: {
+          accept: 'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `附件移除失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid attachment result.',
+    )
+  }
+
+  const item =
+    parsePocketItem(payload.item)
+
+  if (!item) {
+    throw new Error(
+      '移除附件后的纸暂时没有读回来。',
+    )
+  }
+
+  return item
 }
 
 

@@ -18,6 +18,10 @@ import {
   InspectMedia,
 } from './InspectMedia'
 
+import {
+  InspectAttachments,
+} from './InspectAttachments'
+
 import styles from './OriginalPaper.module.css'
 
 interface InspectOriginalPaperProps {
@@ -99,6 +103,11 @@ export function InspectOriginalPaper({
         onInitialReady={
           onInitialMediaReady
         }
+      />
+
+      <InspectAttachments
+        key={item.id}
+        item={item}
       />
 
       {item.sourceUrl && (

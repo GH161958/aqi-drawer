@@ -606,6 +606,240 @@ try {
     docxBytes,
   )
 
+  /*
+    Single-attachment removal regression.
+
+    Model the real XHS shape without copying any
+    private content: one Clipboard text attachment
+    plus fifteen distinct image attachments.
+  */
+  const attachmentRemovalItem =
+    await bridge.store.upsert({
+      id: 'attachment-removal-item',
+      title: 'Synthetic photo set',
+      text: 'Synthetic attachment removal fixture',
+      sourceApp: '小红书',
+      sourceUrl: 'https://www.xiaohongshu.com/explore/synthetic',
+    })
+
+  const removalState =
+    JSON.parse(
+      await readFile(storePath, 'utf8'),
+    )
+  const removalStoredItem =
+    removalState.items.find(
+      (item) =>
+        item.id === attachmentRemovalItem.id,
+    )
+  assert.ok(removalStoredItem)
+
+  const clipboardStorageName =
+    'synthetic-clipboard.txt'
+  await writeFile(
+    path.join(mediaDir, clipboardStorageName),
+    Buffer.from('synthetic clipboard', 'utf8'),
+  )
+
+  const clipboardAttachment = {
+    id: 'synthetic-clipboard-attachment',
+    name: 'Clipboard 2026-10-10.txt',
+    mimeType: 'text/plain',
+    size: Buffer.byteLength('synthetic clipboard'),
+    storageName: clipboardStorageName,
+  }
+
+  const imageAttachments = []
+  for (let index = 0; index < 15; index += 1) {
+    const storageName =
+      `synthetic-photo-${index}.jpeg`
+    const bytes =
+      Buffer.from(`synthetic-photo-${index}`)
+    await writeFile(
+      path.join(mediaDir, storageName),
+      bytes,
+    )
+    imageAttachments.push({
+      id: `synthetic-photo-${index}`,
+      name: `${index + 1}.jpeg`,
+      mimeType: 'image/jpeg',
+      size: bytes.length,
+      storageName,
+    })
+  }
+
+  removalStoredItem.attachments = [
+    clipboardAttachment,
+    ...imageAttachments,
+  ]
+  await writeFile(
+    storePath,
+    JSON.stringify(removalState, null, 2),
+    'utf8',
+  )
+
+  const removedClipboard =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${attachmentRemovalItem.id}/attachments/${clipboardAttachment.id}`,
+      { method: 'DELETE' },
+    ).then(checkJson)
+
+  assert.equal(
+    removedClipboard.item.attachments.length,
+    15,
+  )
+  assert.deepEqual(
+    removedClipboard.item.attachments.map(
+      (attachment) => attachment.id,
+    ),
+    imageAttachments.map(
+      (attachment) => attachment.id,
+    ),
+  )
+  assert.equal(removedClipboard.mediaDeleted, 1)
+  await assert.rejects(
+    readFile(
+      path.join(mediaDir, clipboardStorageName),
+    ),
+    (error) => error?.code === 'ENOENT',
+  )
+  for (const attachment of imageAttachments) {
+    assert.equal(
+      (await readFile(
+        path.join(
+          mediaDir,
+          attachment.storageName,
+        ),
+      )).length,
+      attachment.size,
+    )
+  }
+
+  const repeatedRemoval =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${attachmentRemovalItem.id}/attachments/${clipboardAttachment.id}`,
+      { method: 'DELETE' },
+    )
+  assert.equal(repeatedRemoval.status, 404)
+  assert.equal(
+    (await bridge.store.get(
+      attachmentRemovalItem.id,
+    )).attachments.length,
+    15,
+  )
+
+  /*
+    A physical media file shared by two stored
+    attachment records must survive the first
+    reference removal and disappear only after
+    the final reference is committed away.
+  */
+  const sharedStorageName =
+    'shared-attachment.bin'
+  await writeFile(
+    path.join(mediaDir, sharedStorageName),
+    Buffer.from('shared-media', 'utf8'),
+  )
+
+  const sharedFirst =
+    await bridge.store.upsert({
+      id: 'shared-attachment-first',
+      text: 'first shared reference',
+    })
+  const sharedSecond =
+    await bridge.store.upsert({
+      id: 'shared-attachment-second',
+      text: 'second shared reference',
+    })
+  const sharedState =
+    JSON.parse(
+      await readFile(storePath, 'utf8'),
+    )
+  for (const [itemId, suffix] of [
+    [sharedFirst.id, 'first'],
+    [sharedSecond.id, 'second'],
+  ]) {
+    const storedItem =
+      sharedState.items.find(
+        (item) => item.id === itemId,
+      )
+    assert.ok(storedItem)
+    storedItem.attachments = [{
+      id: `shared-${suffix}`,
+      name: `shared-${suffix}.bin`,
+      mimeType: 'application/octet-stream',
+      size: Buffer.byteLength('shared-media'),
+      storageName: sharedStorageName,
+    }]
+  }
+  await writeFile(
+    storePath,
+    JSON.stringify(sharedState, null, 2),
+    'utf8',
+  )
+
+  const firstSharedRemoval =
+    await bridge.store.removeAttachment(
+      sharedFirst.id,
+      'shared-first',
+    )
+  assert.equal(firstSharedRemoval.mediaDeleted, 0)
+  assert.equal(
+    (await readFile(
+      path.join(mediaDir, sharedStorageName),
+    )).toString('utf8'),
+    'shared-media',
+  )
+
+  const secondSharedRemoval =
+    await bridge.store.removeAttachment(
+      sharedSecond.id,
+      'shared-second',
+    )
+  assert.equal(secondSharedRemoval.mediaDeleted, 1)
+  await assert.rejects(
+    readFile(
+      path.join(mediaDir, sharedStorageName),
+    ),
+    (error) => error?.code === 'ENOENT',
+  )
+
+  const missingMediaItem =
+    await bridge.store.upsert({
+      id: 'missing-media-item',
+      text: 'missing media cleanup fixture',
+    })
+  const missingMediaState =
+    JSON.parse(
+      await readFile(storePath, 'utf8'),
+    )
+  const missingMediaStoredItem =
+    missingMediaState.items.find(
+      (item) => item.id === missingMediaItem.id,
+    )
+  assert.ok(missingMediaStoredItem)
+  missingMediaStoredItem.attachments = [{
+    id: 'missing-media-attachment',
+    name: 'already-missing.txt',
+    mimeType: 'text/plain',
+    size: 12,
+    storageName: 'already-missing.txt',
+  }]
+  await writeFile(
+    storePath,
+    JSON.stringify(missingMediaState, null, 2),
+    'utf8',
+  )
+  const missingMediaRemoval =
+    await bridge.store.removeAttachment(
+      missingMediaItem.id,
+      'missing-media-attachment',
+    )
+  assert.equal(missingMediaRemoval.mediaMissing, 1)
+  assert.equal(
+    missingMediaRemoval.item.attachments.length,
+    0,
+  )
+
   for (let index = 0; index < 2; index += 1) {
     await client.callTool({
       name: 'pocket_reply',
