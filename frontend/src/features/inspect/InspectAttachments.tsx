@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import type {
   PocketAttachmentSummary,
@@ -14,6 +14,10 @@ import {
 } from './useRemoveAttachment'
 
 import {
+  useAppendAttachments,
+} from './useAppendAttachments'
+
+import {
   attachmentRemovalMessage,
   isImageAttachment,
 } from './inspectAttachmentLogic'
@@ -22,6 +26,11 @@ import styles from './InspectAttachments.module.css'
 
 interface InspectAttachmentsProps {
   item: PocketItemSummary
+}
+
+function createAttachmentRequestId(): string {
+  return globalThis.crypto?.randomUUID?.()
+    ?? `attachment-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 function attachmentKind(
@@ -70,25 +79,27 @@ export function InspectAttachments({
   const [removalNotice, setRemovalNotice] =
     useState('')
 
+  const [adding, setAdding] = useState(false)
+  const [selectedFiles, setSelectedFiles] =
+    useState<File[]>([])
+  const [uploadNotice, setUploadNotice] =
+    useState('')
+  const [requestId, setRequestId] =
+    useState('')
+  const fileInputRef =
+    useRef<HTMLInputElement | null>(null)
+
   const remove =
     useRemoveAttachment(item.id)
+
+  const append =
+    useAppendAttachments(item.id)
 
   const attachments =
     item.attachments.filter(
       (attachment) =>
         !isImageAttachment(attachment),
     )
-
-  if (attachments.length === 0) {
-    return removalNotice ? (
-      <p
-        className={`${styles.feedback} ${styles.standaloneFeedback}`}
-        role="status"
-      >
-        {removalNotice}
-      </p>
-    ) : null
-  }
 
   const visibleAttachments =
     expanded
@@ -131,7 +142,88 @@ export function InspectAttachments({
         其他附件 · {attachments.length}
       </h2>
 
-      <ul>
+      <button
+        type="button"
+        className={styles.addToggle}
+        aria-expanded={adding}
+        disabled={append.isPending}
+        onClick={() => {
+          append.reset()
+          setUploadNotice('')
+          setAdding((current) => !current)
+        }}
+      >
+        补充附件
+      </button>
+
+      {adding && (
+        <div className={styles.uploader}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            aria-label="选择要补充的附件"
+            disabled={append.isPending}
+            onChange={(event) => {
+              const files = Array.from(event.currentTarget.files ?? [])
+              append.reset()
+              setUploadNotice('')
+              if (files.length > 5) {
+                setSelectedFiles([])
+                setUploadNotice('一次最多补充 5 个附件。')
+                return
+              }
+              setSelectedFiles(files)
+              setRequestId(createAttachmentRequestId())
+            }}
+          />
+
+          {selectedFiles.length > 0 && (
+            <ul className={styles.selectedFiles}>
+              {selectedFiles.map((file, index) => (
+                <li key={`${file.name}-${file.size}-${file.lastModified}-${index}`}>
+                  <span>{file.name}</span>
+                  <button
+                    type="button"
+                    disabled={append.isPending}
+                    onClick={() => {
+                      setSelectedFiles((current) =>
+                        current.filter((_, fileIndex) => fileIndex !== index),
+                      )
+                      setRequestId(createAttachmentRequestId())
+                    }}
+                  >
+                    移除
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="button"
+            className={styles.uploadAction}
+            disabled={append.isPending || selectedFiles.length === 0}
+            onClick={() => {
+              append.mutate(
+                { files: selectedFiles, requestId },
+                {
+                  onSuccess: () => {
+                    setSelectedFiles([])
+                    setUploadNotice('附件已补充。')
+                    setAdding(false)
+                    if (fileInputRef.current) fileInputRef.current.value = ''
+                  },
+                },
+              )
+            }}
+          >
+            {append.isPending ? '正在补充…' : '添加所选附件'}
+          </button>
+        </div>
+      )}
+
+      {attachments.length > 0 && <ul>
         {visibleAttachments.map((attachment) => {
           const confirming =
             confirmingId === attachment.id
@@ -232,7 +324,7 @@ export function InspectAttachments({
             </li>
           )
         })}
-      </ul>
+      </ul>}
 
       {(hiddenCount > 0 || expanded) && (
         <button
@@ -256,6 +348,18 @@ export function InspectAttachments({
         >
           {remove.error.message
             || '这个附件暂时没有移除。'}
+        </p>
+      )}
+
+      {append.isError && (
+        <p className={styles.feedback} role="alert">
+          {append.error.message || '附件暂时没有补充。'}
+        </p>
+      )}
+
+      {uploadNotice && (
+        <p className={styles.feedback} role="status">
+          {uploadNotice}
         </p>
       )}
 

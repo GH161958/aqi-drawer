@@ -127,6 +127,27 @@ try {
   assert.equal(fourth.attachments.length, 3)
   assert.equal(downloads, 4, 'only a newly added image should be downloaded')
 
+  await store.appendAttachments(
+    fourth.id,
+    [{
+      id: 'manual-xhs-attachment',
+      name: '手动补充.pdf',
+      mimeType: 'application/pdf',
+      size: 12,
+      url: 'https://example.com/manual.pdf',
+    }],
+    { requestId: 'manual-xhs-append' },
+  )
+  const refreshedWithManual = await store.upsertXhs(
+    { text: `第五次分享 ${FINAL_URL}`, sourceUrl: FINAL_URL, xhs: withNewImage },
+    { loadImage },
+  )
+  assert.equal(
+    refreshedWithManual.attachments.at(-1).id,
+    'manual-xhs-attachment',
+    'XHS refresh must preserve manually appended attachments',
+  )
+
   let failSecondImage = true
   let partialDownloads = 0
   const partialXhs = { ...parsed, noteId: 'partial-note-id', externalId: 'partial-note-id' }
@@ -155,7 +176,7 @@ try {
   await restartedStore.init()
   const persisted = await restartedStore.get(first.id)
   assert.equal(persisted.sourceData.noteId, NOTE_ID)
-  assert.equal(persisted.attachments.length, 3)
+  assert.equal(persisted.attachments.length, 4)
   assert.equal((await restartedStore.readAttachment(persisted.attachments[0].id)).data.length, PIXEL.length)
 } finally {
   await rm(dataDir, { recursive: true, force: true })

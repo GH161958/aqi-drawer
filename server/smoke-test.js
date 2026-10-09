@@ -407,8 +407,97 @@ try {
   const imageItem = await client.callTool({ name: 'pocket_get', arguments: { id: 'image-item' } })
   assert.equal(imageItem.content.some((entry) => entry.type === 'image'), true)
 
+  const appendTextBytes = Buffer.from('manual attachment text', 'utf8')
+  const appendPdfBytes = Buffer.from('%PDF manual attachment', 'utf8')
+  const appendRequestId = 'manual-attachment-smoke-request'
+  const appendForm = new FormData()
+  appendForm.set('payload', JSON.stringify({
+    expectedFileCount: 2,
+    requestId: appendRequestId,
+  }))
+  appendForm.append(
+    'files',
+    new Blob([appendTextBytes], { type: 'text/plain' }),
+    '补充说明.txt',
+  )
+  appendForm.append(
+    'files',
+    new Blob([appendPdfBytes], { type: 'application/pdf' }),
+    '补充资料.pdf',
+  )
+  const appended = await fetch(
+    `${baseUrl}/api/pocket/items/${source.id}/attachments`,
+    { method: 'POST', body: appendForm },
+  ).then(checkJson)
+  assert.equal(appended.duplicate, false)
+  assert.equal(appended.item.id, source.id)
+  assert.deepEqual(
+    appended.item.attachments.map((entry) => entry.name),
+    ['补充说明.txt', '补充资料.pdf'],
+  )
+  assert.equal(
+    appended.item.activity.filter((entry) => entry.type === 'attachment_added').length,
+    2,
+  )
+  assert.equal(
+    'storageName' in appended.item.attachments[0],
+    false,
+  )
+  const appendedDownload = await fetch(
+    `${baseUrl}/api/pocket/items/${source.id}/attachments/${appended.item.attachments[0].id}/download`,
+  )
+  assert.deepEqual(
+    Buffer.from(await appendedDownload.arrayBuffer()),
+    appendTextBytes,
+  )
+
+  const mediaBeforeDuplicateAppend =
+    (await readdir(path.join(dataDir, 'media'))).sort()
+  const duplicateAppendForm = new FormData()
+  duplicateAppendForm.set('payload', JSON.stringify({
+    expectedFileCount: 1,
+    requestId: appendRequestId,
+  }))
+  duplicateAppendForm.append(
+    'files',
+    new Blob([Buffer.from('duplicate request')], { type: 'text/plain' }),
+    'duplicate.txt',
+  )
+  const duplicateAppend = await fetch(
+    `${baseUrl}/api/pocket/items/${source.id}/attachments`,
+    { method: 'POST', body: duplicateAppendForm },
+  ).then(checkJson)
+  assert.equal(duplicateAppend.duplicate, true)
+  assert.equal(duplicateAppend.item.attachments.length, 2)
+  assert.deepEqual(
+    (await readdir(path.join(dataDir, 'media'))).sort(),
+    mediaBeforeDuplicateAppend,
+    'duplicate append request must clean its redundant upload',
+  )
+
   const mediaDir = path.join(dataDir, 'media')
   const listMediaFiles = async () => (await readdir(mediaDir)).sort()
+  const mediaBeforeFailedAppend = await listMediaFiles()
+  const failedAppendForm = new FormData()
+  failedAppendForm.set('payload', JSON.stringify({
+    expectedFileCount: 1,
+    requestId: 'missing-item-append-request',
+  }))
+  failedAppendForm.append(
+    'files',
+    new Blob([Buffer.from('must be cleaned')], { type: 'text/plain' }),
+    'cleanup.txt',
+  )
+  const failedAppend = await fetch(
+    `${baseUrl}/api/pocket/items/missing-item/attachments`,
+    { method: 'POST', body: failedAppendForm },
+  )
+  assert.equal(failedAppend.status, 404)
+  assert.deepEqual(
+    await listMediaFiles(),
+    mediaBeforeFailedAppend,
+    'failed item-scoped append must remove temporary media',
+  )
   const docxBytes = Buffer.from('PK\u0003\u0004aqi-drawer-docx-shaped-smoke-test')
   const docxFilename = '抽屉笔记.docx'
   const docxPayload = {

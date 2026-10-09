@@ -167,6 +167,20 @@ function activityLabel(
   }
 
   if (
+    entry.type === 'attachment_added'
+  ) {
+    const name =
+      typeof entry.detail.name === 'string'
+        ? entry.detail.name
+        : ''
+
+    return (
+      `${actor} ADDED AN ATTACHMENT`
+      + (name ? ` · ${name}` : '')
+    )
+  }
+
+  if (
     entry.type === 'attachment_removed'
   ) {
     const name =

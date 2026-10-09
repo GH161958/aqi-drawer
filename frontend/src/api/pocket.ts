@@ -1613,6 +1613,47 @@ export async function removePocketAttachment(
   }
 }
 
+export async function appendPocketAttachments(
+  itemId: string,
+  files: File[],
+  requestId: string,
+): Promise<PocketItemSummary> {
+  const body = new FormData()
+  body.set(
+    'payload',
+    JSON.stringify({
+      expectedFileCount: files.length,
+      requestId,
+    }),
+  )
+  for (const file of files) body.append('files', file)
+
+  const response = await drawerFetch(
+    `/api/pocket/items/${encodeURIComponent(itemId)}/attachments`,
+    {
+      method: 'POST',
+      body,
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
+    },
+  )
+  const payload: unknown = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload) && typeof payload.error === 'string'
+        ? payload.error
+        : `附件补充失败（${response.status}）`,
+    )
+  }
+
+  const item = isRecord(payload)
+    ? parsePocketItem(payload.item)
+    : null
+  if (!item) throw new Error('补充附件后的纸暂时没有读回来。')
+  return item
+}
+
 
 function parseContentSnapshot(
   value: unknown,

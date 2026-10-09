@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
-import { unlink } from 'node:fs/promises'
+import { stat, unlink } from 'node:fs/promises'
 import express from 'express'
 import multer from 'multer'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
@@ -604,6 +604,103 @@ export async function createBridgeApp(config = {}) {
 
   app.post('/api/pocket/items/upload', acceptUpload, handleUpload())
   app.post(`/drop/${settings.dropSecret}`, acceptUpload, handleUpload({ defaultText: true }))
+
+  app.post(
+    '/api/pocket/items/:id/attachments',
+    acceptUpload,
+    async (req, res, next) => {
+      const files = normalizeMultipartFiles(req.files)
+      let result = null
+      let uploadedAttachments = []
+
+      try {
+        let payload = parseRequestPayload(req.body)
+        if (typeof req.body?.payload === 'string' && req.body.payload.trim()) {
+          payload = {
+            ...payload,
+            ...parseRequestPayload(JSON.parse(req.body.payload)),
+          }
+        }
+
+        const expectedFileCount = parseExpectedFileCount(payload)
+        const requestId = String(payload.requestId || '').trim()
+        if (!requestId || requestId.length > 160) {
+          throw httpError(422, 'requestId must be a non-empty string up to 160 characters.')
+        }
+        if (!files.length) {
+          throw httpError(400, 'At least one attachment is required.')
+        }
+        if (
+          expectedFileCount !== null
+          && files.length !== expectedFileCount
+        ) {
+          const error = httpError(
+            422,
+            `Expected ${expectedFileCount} uploaded file(s), but received ${files.length}.`,
+          )
+          error.code = 'EXPECTED_FILE_COUNT_MISMATCH'
+          error.expectedFileCount = expectedFileCount
+          error.receivedFileCount = files.length
+          throw error
+        }
+
+        await Promise.all(
+          files.map(async (file) => {
+            const stored = await stat(file.path)
+            if (!stored.isFile() || stored.size !== file.size) {
+              throw httpError(500, 'Uploaded attachment was not persisted completely.')
+            }
+          }),
+        )
+
+        uploadedAttachments = files.map((file) => ({
+          file,
+          attachment: {
+            id: randomUUID(),
+            name: normalizeUploadedFilename(file.originalname),
+            mimeType: file.mimetype,
+            size: file.size,
+            storageName: file.filename,
+          },
+        }))
+        const attachments = uploadedAttachments.map(
+          (entry) => entry.attachment,
+        )
+
+        result = await store.appendAttachments(
+          req.params.id,
+          attachments,
+          {
+            actor: 'EE',
+            requestId,
+          },
+        )
+
+        const retained = new Set(result.addedAttachmentIds)
+        await removeUploadedFiles(
+          uploadedAttachments
+            .filter(({ attachment }) => !retained.has(attachment.id))
+            .map(({ file }) => file),
+        )
+
+        res.status(result.duplicate ? 200 : 201).json({
+          item: result.item,
+          addedAttachmentIds: result.addedAttachmentIds,
+          duplicate: result.duplicate,
+        })
+      } catch (error) {
+        const retained = new Set(result?.addedAttachmentIds ?? [])
+        await removeUploadedFiles(
+          uploadedAttachments.length
+            ? uploadedAttachments
+                .filter(({ attachment }) => !retained.has(attachment.id))
+                .map(({ file }) => file)
+            : files,
+        )
+        next(error)
+      }
+    },
+  )
 
   app.get('/api/pocket/media/:attachmentId', async (req, res, next) => {
     try {

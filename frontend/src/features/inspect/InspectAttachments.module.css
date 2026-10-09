@@ -24,7 +24,7 @@
   list-style: none;
 }
 
-.attachments li {
+.attachments > ul > li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
@@ -125,13 +125,6 @@
   line-height: 1.5;
 }
 
-.standaloneFeedback {
-  margin-top: 18px;
-  padding-top: 12px;
-  border-top: 1px solid var(--drawer-rule);
-  font-family: var(--font-ui);
-}
-
 .disclosure {
   display: inline-flex;
   align-items: center;
@@ -147,13 +140,87 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.addToggle,
+.uploadAction,
+.selectedFiles button {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--drawer-sage);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.addToggle {
+  margin: -8px 0 4px;
+  padding: 0;
+}
+
+.uploader {
+  margin: 0 0 10px;
+  padding: 10px 0;
+  border-block: 1px solid rgba(126, 104, 81, .14);
+}
+
+.uploader input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+}
+
+.selectedFiles {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.selectedFiles li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 11px;
+}
+
+.selectedFiles span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uploadAction {
+  padding: 0 12px;
+  background: rgba(98, 115, 88, .08);
+}
+
+.addToggle:focus-visible,
+.uploadAction:focus-visible,
+.selectedFiles button:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+}
+
+.uploadAction:disabled,
+.addToggle:disabled,
+.selectedFiles button:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
 .disclosure:focus-visible {
   outline: 1px solid currentColor;
   outline-offset: 3px;
 }
 
 @media (max-width: 430px) {
-  .attachments li {
+  .attachments > ul > li {
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
   }

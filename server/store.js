@@ -14,7 +14,7 @@ const STATUSES = new Set(['inbox', 'tonight', 'discussed', 'deferred', 'memory_c
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000
 const MAX_XHS_IMAGES = 30
 const MAX_XHS_DOWNLOAD_BYTES = 80 * 1024 * 1024
-const ACTIVITY_TYPES = new Set(['received', 'seen_by_aqi', 'content_read', 'reply_added', 'status_changed', 'metadata_changed', 'source_refreshed', 'attachment_removed', 'trashed', 'restored'])
+const ACTIVITY_TYPES = new Set(['received', 'seen_by_aqi', 'content_read', 'reply_added', 'status_changed', 'metadata_changed', 'source_refreshed', 'attachment_added', 'attachment_removed', 'trashed', 'restored'])
 
 export class PocketStore {
   constructor(dataDir) {
@@ -523,6 +523,76 @@ export class PocketStore {
     return this.queue
   }
 
+  async appendAttachments(
+    id,
+    attachments,
+    { actor = 'EE', requestId = '' } = {},
+  ) {
+    const incoming = Array.isArray(attachments)
+      ? attachments.map(normalizeAttachment)
+      : []
+    const normalizedRequestId = clean(requestId).slice(0, 160)
+
+    if (!incoming.length) {
+      throw httpError(400, 'At least one attachment is required.')
+    }
+
+    return this.#mutate((state) => {
+      const item = state.items.find(
+        (entry) => entry.id === id && !entry.deletedAt,
+      )
+      if (!item) throw httpError(404, 'Pocket item not found.')
+
+      if (
+        normalizedRequestId
+        && normalizeActivity(item.activity).some(
+          (entry) =>
+            entry.type === 'attachment_added'
+            && entry.detail.requestId === normalizedRequestId,
+        )
+      ) {
+        return {
+          item: publicItem(item),
+          addedAttachmentIds: [],
+          duplicate: true,
+        }
+      }
+
+      const existingIds = new Set(
+        item.attachments.map((entry) => entry.id),
+      )
+      if (incoming.some((entry) => existingIds.has(entry.id))) {
+        throw httpError(409, 'Attachment ID already exists on this item.')
+      }
+
+      item.attachments = [...item.attachments, ...incoming]
+      item.updatedAt = new Date().toISOString()
+      item.syncState = 'synced'
+
+      for (const attachment of incoming) {
+        appendActivity(
+          item,
+          'attachment_added',
+          actor,
+          {
+            attachmentId: attachment.id,
+            name: attachment.name,
+            mimeType: attachment.mimeType,
+            size: attachment.size,
+            requestId: normalizedRequestId,
+          },
+          item.updatedAt,
+        )
+      }
+
+      return {
+        item: publicItem(item),
+        addedAttachmentIds: incoming.map((entry) => entry.id),
+        duplicate: false,
+      }
+    })
+  }
+
   /* TRASH LIFECYCLE V1 END */
 
   async getForContentRead(id) {
@@ -648,7 +718,29 @@ export class PocketStore {
         }
       }
 
-      const attachments = [...nonXhsAttachments, ...imageAttachments]
+      const firstExistingXhsIndex =
+        existing?.attachments.findIndex(
+          (attachment) =>
+            attachment.sourceImage?.provider === 'xiaohongshu',
+        ) ?? -1
+      const existingAttachmentIds = new Set(
+        (existing?.attachments ?? []).map((attachment) => attachment.id),
+      )
+      const newNonXhsAttachments = nonXhsAttachments.filter(
+        (attachment) => !existingAttachmentIds.has(attachment.id),
+      )
+      const attachments = firstExistingXhsIndex >= 0
+        ? [
+            ...existing.attachments
+              .slice(0, firstExistingXhsIndex)
+              .filter((attachment) => attachment.sourceImage?.provider !== 'xiaohongshu'),
+            ...imageAttachments,
+            ...existing.attachments
+              .slice(firstExistingXhsIndex)
+              .filter((attachment) => attachment.sourceImage?.provider !== 'xiaohongshu'),
+            ...newNonXhsAttachments,
+          ]
+        : [...nonXhsAttachments, ...imageAttachments]
       const failedImages = imageRecords.filter((image) => image.status === 'failed').length
       const sourceData = normalizeSourceData({
         ...xhs,
@@ -1708,6 +1800,13 @@ function normalizeActivityDetail(type, detail = {}) {
     attachmentId: clean(detail.attachmentId).slice(0, 160),
     name: clean(detail.name).slice(0, 240),
     mimeType: clean(detail.mimeType).slice(0, 160),
+  }
+  if (type === 'attachment_added') return {
+    attachmentId: clean(detail.attachmentId).slice(0, 160),
+    name: clean(detail.name).slice(0, 240),
+    mimeType: clean(detail.mimeType).slice(0, 160),
+    size: Math.max(0, Number(detail.size) || 0),
+    requestId: clean(detail.requestId).slice(0, 160),
   }
   return {}
 }
