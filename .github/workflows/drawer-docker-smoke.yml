@@ -10,44 +10,69 @@ permissions:
 
 jobs:
   docker-smoke:
+    name: docker-smoke (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default-8787
+            port: 8787
+            explicit_port: false
+          - name: explicit-8080
+            port: 8080
+            explicit_port: true
+
+    env:
+      CONTAINER_NAME: aqi-drawer-ci-${{ matrix.name }}
+      VOLUME_NAME: aqi-drawer-ci-data-${{ matrix.name }}
+      IMAGE_TAG: aqi-drawer:ci-${{ matrix.name }}
+      TEST_PORT: ${{ matrix.port }}
+      EXPLICIT_PORT: ${{ matrix.explicit_port }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Build production image
-        run: docker build --tag aqi-drawer:ci .
+        run: docker build --tag "$IMAGE_TAG" .
 
       - name: Start isolated production container
         run: |
-          docker volume create aqi-drawer-ci-data
+          docker volume create "$VOLUME_NAME"
 
           bridge_token="$(openssl rand -hex 32)"
           drawer_secret="$(openssl rand -hex 32)"
           drop_secret="$(openssl rand -hex 32)"
           mcp_suffix="$(openssl rand -hex 32)"
+          port_option=()
+
+          if [ "$EXPLICIT_PORT" = "true" ]; then
+            port_option=(--env "PORT=${TEST_PORT}")
+          fi
 
           docker run --detach \
-            --name aqi-drawer-ci \
-            --publish 127.0.0.1:8787:8787 \
-            --mount type=volume,source=aqi-drawer-ci-data,target=/app/data \
+            --name "$CONTAINER_NAME" \
+            --publish "127.0.0.1:${TEST_PORT}:${TEST_PORT}" \
+            --mount "type=volume,source=${VOLUME_NAME},target=/app/data" \
             --env "C_POCKET_BRIDGE_TOKEN=${bridge_token}" \
             --env "C_POCKET_DRAWER_SECRET=${drawer_secret}" \
             --env "C_POCKET_DROP_SECRET=${drop_secret}" \
             --env "C_POCKET_MCP_PATH=/mcp/${mcp_suffix}" \
-            aqi-drawer:ci
+            "${port_option[@]}" \
+            "$IMAGE_TAG"
 
       - name: Wait for Docker health check
         run: |
           for attempt in $(seq 1 45); do
-            running="$(docker inspect --format '{{.State.Running}}' aqi-drawer-ci)"
-            health="$(docker inspect --format '{{.State.Health.Status}}' aqi-drawer-ci)"
+            running="$(docker inspect --format '{{.State.Running}}' "$CONTAINER_NAME")"
+            health="$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME")"
             printf 'attempt=%s running=%s health=%s\n' "$attempt" "$running" "$health"
 
             if [ "$running" != "true" ]; then
-              docker logs aqi-drawer-ci
+              docker logs "$CONTAINER_NAME"
               exit 1
             fi
 
@@ -56,14 +81,14 @@ jobs:
             fi
 
             if [ "$health" = "unhealthy" ]; then
-              docker logs aqi-drawer-ci
+              docker logs "$CONTAINER_NAME"
               exit 1
             fi
 
             sleep 2
           done
 
-          docker logs aqi-drawer-ci
+          docker logs "$CONTAINER_NAME"
           echo 'Container did not become healthy before the timeout.' >&2
           exit 1
 
@@ -72,7 +97,7 @@ jobs:
           check_route() {
             label="$1"
             path="$2"
-            status="$(curl --silent --show-error --output /tmp/aqi-drawer-response --write-out '%{http_code}' "http://127.0.0.1:8787${path}")"
+            status="$(curl --silent --show-error --output /tmp/aqi-drawer-response --write-out '%{http_code}' "http://127.0.0.1:${TEST_PORT}${path}")"
             printf '%s %s -> HTTP %s\n' "$label" "$path" "$status"
 
             if [ "$status" != "200" ]; then
@@ -85,12 +110,12 @@ jobs:
           check_route legacy-drawer /drawer
           check_route react-drawer /drawer-next
 
-          test "$(docker inspect --format '{{.State.Running}}' aqi-drawer-ci)" = "true"
-          test "$(docker inspect --format '{{.State.Health.Status}}' aqi-drawer-ci)" = "healthy"
+          test "$(docker inspect --format '{{.State.Running}}' "$CONTAINER_NAME")" = "true"
+          test "$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME")" = "healthy"
           echo 'Container remains running and healthy after route smoke tests.'
 
       - name: Clean up isolated container and data
         if: always()
         run: |
-          docker rm --force aqi-drawer-ci 2>/dev/null || true
-          docker volume rm aqi-drawer-ci-data 2>/dev/null || true
+          docker rm --force "$CONTAINER_NAME" 2>/dev/null || true
+          docker volume rm "$VOLUME_NAME" 2>/dev/null || true
