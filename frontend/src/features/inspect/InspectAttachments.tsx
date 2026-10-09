@@ -14,6 +14,7 @@ import {
 } from './useRemoveAttachment'
 
 import {
+  attachmentRemovalMessage,
   isImageAttachment,
 } from './inspectAttachmentLogic'
 
@@ -66,8 +67,8 @@ export function InspectAttachments({
   const [expanded, setExpanded] =
     useState(false)
 
-  const [cleanupWarning, setCleanupWarning] =
-    useState(false)
+  const [removalNotice, setRemovalNotice] =
+    useState('')
 
   const remove =
     useRemoveAttachment(item.id)
@@ -79,7 +80,14 @@ export function InspectAttachments({
     )
 
   if (attachments.length === 0) {
-    return null
+    return removalNotice ? (
+      <p
+        className={`${styles.feedback} ${styles.standaloneFeedback}`}
+        role="status"
+      >
+        {removalNotice}
+      </p>
+    ) : null
   }
 
   const visibleAttachments =
@@ -104,8 +112,10 @@ export function InspectAttachments({
       {
         onSuccess: (result) => {
           setConfirmingId(null)
-          setCleanupWarning(
-            result.cleanupStatus === 'failed',
+          setRemovalNotice(
+            attachmentRemovalMessage(
+              result.cleanupStatus,
+            ),
           )
         },
       },
@@ -179,6 +189,7 @@ export function InspectAttachments({
                     disabled={remove.isPending}
                     onClick={() => {
                       remove.reset()
+                      setRemovalNotice('')
                       setConfirmingId(attachment.id)
                     }}
                   >
@@ -248,12 +259,12 @@ export function InspectAttachments({
         </p>
       )}
 
-      {cleanupWarning && (
+      {removalNotice && (
         <p
           className={styles.feedback}
-          aria-live="polite"
+          role="status"
         >
-          附件已从这张纸移除，但原文件清理没有完成。系统已留下排查记录。
+          {removalNotice}
         </p>
       )}
     </section>

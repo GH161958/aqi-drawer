@@ -12,9 +12,14 @@ import type {
 } from '../src/types/pocket.ts'
 
 import {
+  attachmentRemovalMessage,
   isImageAttachment,
   photoIndexAfterRemoval,
 } from '../src/features/inspect/inspectAttachmentLogic.ts'
+
+import {
+  safeAttachmentUrl,
+} from '../src/api/attachmentUrls.ts'
 
 function attachment(
   name: string,
@@ -173,4 +178,45 @@ test('selects the nearest surviving photo and closes after the last removal', ()
   assert.equal(photoIndexAfterRemoval(0, 3), 0)
   assert.equal(photoIndexAfterRemoval(1, 3), 1)
   assert.equal(photoIndexAfterRemoval(2, 3), 1)
+})
+
+test('keeps a terminal attachment removal result available after the last file disappears', () => {
+  assert.equal(
+    attachmentRemovalMessage('ok'),
+    '附件已移除。',
+  )
+  assert.equal(
+    attachmentRemovalMessage('missing'),
+    '附件已从这张纸移除；原文件此前已不存在。',
+  )
+  assert.equal(
+    attachmentRemovalMessage('failed'),
+    '附件已从这张纸移除，但原文件清理没有完成。系统已留下排查记录。',
+  )
+})
+
+test('accepts only local attachment routes and external HTTP URLs', () => {
+  assert.equal(
+    safeAttachmentUrl(
+      '/api/pocket/items/item-1/attachments/file-1/preview',
+    ),
+    '/api/pocket/items/item-1/attachments/file-1/preview',
+  )
+  assert.equal(
+    safeAttachmentUrl('/api/pocket/media/file-1'),
+    '/api/pocket/media/file-1',
+  )
+  assert.equal(
+    safeAttachmentUrl('https://example.com/file.pdf'),
+    'https://example.com/file.pdf',
+  )
+  assert.equal(
+    safeAttachmentUrl('http://example.com/file.txt'),
+    'http://example.com/file.txt',
+  )
+  assert.equal(safeAttachmentUrl('javascript:alert(1)'), undefined)
+  assert.equal(safeAttachmentUrl('data:text/html,<script>1</script>'), undefined)
+  assert.equal(safeAttachmentUrl('blob:https://example.com/id'), undefined)
+  assert.equal(safeAttachmentUrl('//example.com/file.pdf'), undefined)
+  assert.equal(safeAttachmentUrl('/untrusted/relative/file.pdf'), undefined)
 })

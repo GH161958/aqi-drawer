@@ -1737,11 +1737,29 @@ function summarizeContentSnapshot(snapshot) {
   }
 }
 
+function safeExternalAttachmentUrl(value) {
+  if (typeof value !== 'string') return ''
+
+  try {
+    const parsed = new URL(value)
+    return ['http:', 'https:'].includes(parsed.protocol)
+      ? parsed.href
+      : ''
+  } catch {
+    return ''
+  }
+}
+
 function publicAttachment(
   attachment,
   itemId = '',
 ) {
   const { storageName, ...safe } = clone(attachment)
+  if (safe.url) {
+    const externalUrl = safeExternalAttachmentUrl(safe.url)
+    if (externalUrl) safe.url = externalUrl
+    else delete safe.url
+  }
   if (safe.sourceImage) {
     const { remoteUrl, sourceKey, ...visibleSourceImage } = safe.sourceImage
     void remoteUrl

@@ -8,6 +8,10 @@ import {
   pocketStatuses,
 } from '../types/pocket'
 
+import {
+  safeAttachmentUrl,
+} from './attachmentUrls'
+
 import type {
   PocketActivityEntry,
   PocketContentReadResult,
@@ -120,6 +124,8 @@ function parseAttachment(
     return null
   }
 
+  const url = safeAttachmentUrl(value.url)
+
   return {
     id: value.id,
 
@@ -140,8 +146,8 @@ function parseAttachment(
       ? { size: value.size }
       : {}),
 
-    ...(typeof value.url === 'string'
-      ? { url: value.url }
+    ...(url
+      ? { url }
       : {}),
   }
 }

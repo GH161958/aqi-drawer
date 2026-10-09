@@ -34,3 +34,17 @@ export function photoIndexAfterRemoval(
     remainingCount - 1,
   )
 }
+
+export function attachmentRemovalMessage(
+  cleanupStatus: 'ok' | 'missing' | 'failed',
+): string {
+  if (cleanupStatus === 'failed') {
+    return '附件已从这张纸移除，但原文件清理没有完成。系统已留下排查记录。'
+  }
+
+  if (cleanupStatus === 'missing') {
+    return '附件已从这张纸移除；原文件此前已不存在。'
+  }
+
+  return '附件已移除。'
+}

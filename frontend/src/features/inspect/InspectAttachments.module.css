@@ -125,6 +125,13 @@
   line-height: 1.5;
 }
 
+.standaloneFeedback {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--drawer-rule);
+  font-family: var(--font-ui);
+}
+
 .disclosure {
   display: inline-flex;
   align-items: center;

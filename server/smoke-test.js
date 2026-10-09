@@ -1379,6 +1379,47 @@ try {
 
   /* TRASH LIFECYCLE SMOKE V1 END */
 
+  await bridge.store.upsert({
+    id: 'attachment-url-scheme-fixture',
+    title: 'Attachment URL scheme fixture',
+    attachments: [
+      {
+        id: 'safe-external-attachment',
+        name: 'safe.pdf',
+        mimeType: 'application/pdf',
+        url: 'https://example.com/safe.pdf',
+      },
+      {
+        id: 'javascript-attachment',
+        name: 'active.html',
+        mimeType: 'text/html',
+        url: 'javascript:alert(1)',
+      },
+      {
+        id: 'data-attachment',
+        name: 'active.svg',
+        mimeType: 'image/svg+xml',
+        url: 'data:image/svg+xml,<svg onload=alert(1)>',
+      },
+    ],
+  })
+  const attachmentUrlSchemes =
+    await fetch(
+      `${baseUrl}/api/pocket/items/attachment-url-scheme-fixture`,
+    ).then(checkJson)
+  assert.equal(
+    attachmentUrlSchemes.item.attachments[0].url,
+    'https://example.com/safe.pdf',
+  )
+  assert.equal(
+    'url' in attachmentUrlSchemes.item.attachments[1],
+    false,
+  )
+  assert.equal(
+    'url' in attachmentUrlSchemes.item.attachments[2],
+    false,
+  )
+
   await client.close()
 
   const publicDrawerSource = await readFile(path.join(process.cwd(), 'public', 'drawer.js'), 'utf8')
