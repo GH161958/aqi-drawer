@@ -157,6 +157,17 @@
   margin-bottom: 0;
 }
 
+.attachmentFeedback {
+  margin: 14px 0 0;
+
+  color: rgba(132, 70, 57, .95);
+
+  font-family: var(--font-ui);
+
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .footer {
   margin-top: 26px;
 

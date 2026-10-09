@@ -14,7 +14,7 @@ const STATUSES = new Set(['inbox', 'tonight', 'discussed', 'deferred', 'memory_c
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000
 const MAX_XHS_IMAGES = 30
 const MAX_XHS_DOWNLOAD_BYTES = 80 * 1024 * 1024
-const ACTIVITY_TYPES = new Set(['received', 'seen_by_aqi', 'content_read', 'reply_added', 'status_changed', 'metadata_changed', 'source_refreshed', 'trashed', 'restored'])
+const ACTIVITY_TYPES = new Set(['received', 'seen_by_aqi', 'content_read', 'reply_added', 'status_changed', 'metadata_changed', 'source_refreshed', 'attachment_removed', 'trashed', 'restored'])
 
 export class PocketStore {
   constructor(dataDir) {
@@ -372,8 +372,9 @@ export class PocketStore {
       but can never leave an item pointing at a file
       that was already removed.
     */
-    const removal =
-      await this.#mutate((state) => {
+    const run = async () => {
+      const state = await this.#read()
+
         const item =
           state.items.find(
             (entry) =>
@@ -417,6 +418,21 @@ export class PocketStore {
           new Date().toISOString()
         item.syncState = 'synced'
 
+        appendActivity(
+          item,
+          'attachment_removed',
+          'EE',
+          {
+            attachmentId:
+              attachment.id,
+            name:
+              attachment.name,
+            mimeType:
+              attachment.mimeType,
+          },
+          item.updatedAt,
+        )
+
         const storageName =
           clean(
             attachment?.storageName,
@@ -444,53 +460,67 @@ export class PocketStore {
             ),
           )
 
-        return {
+        const removal = {
           item: publicItem(item),
           attachment:
-            publicAttachment(attachment),
+            publicAttachment(
+              attachment,
+              item.id,
+            ),
           orphanedStorageName:
             normalizedStorageName
             && !stillReferenced
               ? normalizedStorageName
               : '',
         }
-      })
 
-    let mediaDeleted = 0
-    let mediaMissing = 0
-    const mediaCleanupFailed = []
+      /*
+        Keep cleanup inside this Store queue turn.
+        The JSON update is committed first, while no
+        later mutation can add a new reference before
+        the final reference check and unlink finish.
+      */
+      await this.#write(state)
 
-    if (removal.orphanedStorageName) {
-      try {
-        await unlink(
-          path.join(
-            this.mediaDir,
-            removal.orphanedStorageName,
-          ),
-        )
-        mediaDeleted = 1
-      } catch (error) {
-        if (error?.code === 'ENOENT') {
-          mediaMissing = 1
-        } else {
-          mediaCleanupFailed.push({
-            storageName:
+      let mediaDeleted = 0
+      let mediaMissing = 0
+      const mediaCleanupFailed = []
+
+      if (removal.orphanedStorageName) {
+        try {
+          await unlink(
+            path.join(
+              this.mediaDir,
               removal.orphanedStorageName,
-            error:
-              error?.message
-              || 'Media cleanup failed.',
-          })
+            ),
+          )
+          mediaDeleted = 1
+        } catch (error) {
+          if (error?.code === 'ENOENT') {
+            mediaMissing = 1
+          } else {
+            mediaCleanupFailed.push({
+              storageName:
+                removal.orphanedStorageName,
+              error:
+                error?.message
+                || 'Media cleanup failed.',
+            })
+          }
         }
+      }
+
+      return {
+        item: removal.item,
+        attachment: removal.attachment,
+        mediaDeleted,
+        mediaMissing,
+        mediaCleanupFailed,
       }
     }
 
-    return {
-      item: removal.item,
-      attachment: removal.attachment,
-      mediaDeleted,
-      mediaMissing,
-      mediaCleanupFailed,
-    }
+    this.queue = this.queue.then(run, run)
+    return this.queue
   }
 
   /* TRASH LIFECYCLE V1 END */
@@ -1225,6 +1255,51 @@ export class PocketStore {
     return null
   }
 
+  async readItemAttachment(
+    itemId,
+    attachmentId,
+    maxBytes = 25 * 1024 * 1024,
+  ) {
+    const state = await this.#read()
+    const item = state.items.find(
+      (entry) =>
+        entry.id === itemId
+        && !entry.deletedAt,
+    )
+    if (!item) return null
+
+    const attachment =
+      item.attachments.find(
+        (entry) =>
+          entry.id === attachmentId
+          && entry.storageName,
+      )
+    if (!attachment) return null
+    if (attachment.size > maxBytes) {
+      throw httpError(
+        413,
+        'Attachment is too large to return.',
+      )
+    }
+
+    return {
+      attachment:
+        publicAttachment(
+          attachment,
+          item.id,
+        ),
+      data:
+        await readFile(
+          path.join(
+            this.mediaDir,
+            path.basename(
+              attachment.storageName,
+            ),
+          ),
+        ),
+    }
+  }
+
   async readAttachment(attachmentId, maxBytes = 5 * 1024 * 1024) {
     const state = await this.#read()
     for (const item of state.items) {
@@ -1551,7 +1626,13 @@ function publicItem(item, { includeContentSnapshot = false } = {}) {
     replies: visibleReplies,
     hiddenReplies,
     hiddenReplyCount: hiddenReplies.length,
-    attachments: item.attachments.map(publicAttachment),
+    attachments: item.attachments.map(
+      (attachment) =>
+        publicAttachment(
+          attachment,
+          item.id,
+        ),
+    ),
     ...(contentSnapshot && !includeContentSnapshot ? { contentRead: summarizeContentSnapshot(contentSnapshot) } : {}),
   }
 }
@@ -1623,6 +1704,11 @@ function normalizeActivityDetail(type, detail = {}) {
     tagsAdded: normalizeTags(detail.tagsAdded),
     tagsRemoved: normalizeTags(detail.tagsRemoved),
   }
+  if (type === 'attachment_removed') return {
+    attachmentId: clean(detail.attachmentId).slice(0, 160),
+    name: clean(detail.name).slice(0, 240),
+    mimeType: clean(detail.mimeType).slice(0, 160),
+  }
   return {}
 }
 
@@ -1651,7 +1737,10 @@ function summarizeContentSnapshot(snapshot) {
   }
 }
 
-function publicAttachment(attachment) {
+function publicAttachment(
+  attachment,
+  itemId = '',
+) {
   const { storageName, ...safe } = clone(attachment)
   if (safe.sourceImage) {
     const { remoteUrl, sourceKey, ...visibleSourceImage } = safe.sourceImage
@@ -1661,7 +1750,13 @@ function publicAttachment(attachment) {
   }
   return {
     ...safe,
-    ...(storageName && !safe.url ? { url: `/api/pocket/media/${encodeURIComponent(attachment.id)}` } : {}),
+    ...(storageName && !safe.url
+      ? {
+          url: itemId
+            ? `/api/pocket/items/${encodeURIComponent(itemId)}/attachments/${encodeURIComponent(attachment.id)}/preview`
+            : `/api/pocket/media/${encodeURIComponent(attachment.id)}`,
+        }
+      : {}),
   }
 }
 

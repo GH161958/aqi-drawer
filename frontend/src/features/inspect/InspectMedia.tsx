@@ -17,12 +17,27 @@ import type {
   PocketAttachmentSummary,
 } from '../../types/pocket'
 
+import {
+  pocketAttachmentDownloadUrl,
+} from '../../api/pocket'
+
+import {
+  useRemoveAttachment,
+} from './useRemoveAttachment'
+
+import {
+  isImageAttachment,
+  photoIndexAfterRemoval,
+} from './inspectAttachmentLogic'
+
 import styles from './InspectMedia.module.css'
 
 interface InspectMediaProps {
+  itemId: string
   attachments: PocketAttachmentSummary[]
   title: string
   onInitialReady: () => void
+  onCleanupWarning: () => void
 }
 
 function imageAlt(
@@ -64,16 +79,20 @@ function getBackingImages(
 }
 
 export function InspectMedia({
+  itemId,
   attachments,
   title,
   onInitialReady,
+  onCleanupWarning,
 }: InspectMediaProps) {
+  const remove =
+    useRemoveAttachment(itemId)
+
   const images =
     attachments.filter(
       (attachment) =>
         Boolean(attachment.url)
-        && attachment.mimeType
-          .startsWith('image/'),
+        && isImageAttachment(attachment),
     )
 
   const imageIdentity =
@@ -95,10 +114,27 @@ export function InspectMedia({
     setRequestedIndex,
   ] = useState(0)
 
+  const selectedImageId =
+    images[
+      Math.min(
+        requestedIndex,
+        Math.max(0, images.length - 1),
+      )
+    ]?.id
+
   const [
     viewerOpen,
     setViewerOpen,
   ] = useState(false)
+
+  const [viewerMenuOpen, setViewerMenuOpen] =
+    useState(false)
+
+  const [confirmingRemoval, setConfirmingRemoval] =
+    useState(false)
+
+  const [cleanupWarning, setCleanupWarning] =
+    useState(false)
 
   const viewerRef =
     useRef<HTMLElement | null>(null)
@@ -345,9 +381,26 @@ export function InspectMedia({
   )
 
   useEffect(() => {
-    setRequestedIndex(0)
-    setViewerOpen(false)
-  }, [imageIdentity])
+    setRequestedIndex((current) =>
+      Math.max(
+        0,
+        Math.min(
+          Math.max(0, images.length - 1),
+          current,
+        ),
+      ),
+    )
+
+    if (images.length === 0) {
+      setViewerOpen(false)
+    }
+  }, [imageIdentity, images.length])
+
+  useEffect(() => {
+    setViewerMenuOpen(false)
+    setConfirmingRemoval(false)
+    setCleanupWarning(false)
+  }, [selectedImageId])
 
   useEffect(
     () => {
@@ -397,6 +450,14 @@ export function InspectMedia({
                 trigger.focus({
                   preventScroll: true,
                 })
+              } else {
+                stage?.node
+                  .querySelector<HTMLElement>(
+                    'button:not(:disabled)',
+                  )
+                  ?.focus({
+                    preventScroll: true,
+                  })
               }
             },
           )
@@ -481,10 +542,14 @@ export function InspectMedia({
         : null
 
     setViewerOpen(true)
+    setViewerMenuOpen(false)
+    setConfirmingRemoval(false)
   }
 
   function closeViewer() {
     setViewerOpen(false)
+    setViewerMenuOpen(false)
+    setConfirmingRemoval(false)
   }
 
   function handleKeyDown(
@@ -549,7 +614,7 @@ export function InspectMedia({
     const controls =
       Array.from(
         viewer.querySelectorAll<HTMLElement>(
-          'button:not(:disabled)',
+          'button:not(:disabled), a[href]',
         ),
       )
 
@@ -575,6 +640,39 @@ export function InspectMedia({
       event.preventDefault()
       first.focus()
     }
+  }
+
+  function removeActivePhoto() {
+    if (remove.isPending) return
+
+    const nextIndex =
+      photoIndexAfterRemoval(
+        activeIndex,
+        images.length,
+      )
+
+    remove.mutate(
+      activeImage.id,
+      {
+        onSuccess: (result) => {
+          setCleanupWarning(
+            result.cleanupStatus === 'failed',
+          )
+          if (result.cleanupStatus === 'failed') {
+            onCleanupWarning()
+          }
+          setConfirmingRemoval(false)
+          setViewerMenuOpen(false)
+
+          if (nextIndex === null) {
+            closeViewer()
+            return
+          }
+
+          setRequestedIndex(nextIndex)
+        },
+      },
+    )
   }
 
   function handlePointerDown(
@@ -647,15 +745,112 @@ export function InspectMedia({
               aria-label="查看完整照片"
               onKeyDown={handleViewerKeyDown}
             >
-              <button
-                ref={viewerCloseRef}
-                type="button"
-                className={styles.viewerClose}
-                aria-label="关闭完整照片"
-                onClick={closeViewer}
-              >
-                ×
-              </button>
+              <div className={styles.viewerToolbar}>
+                <div className={styles.viewerMenuSlot}>
+                  <button
+                    type="button"
+                    className={styles.viewerMenuButton}
+                    aria-label="照片操作"
+                    aria-expanded={viewerMenuOpen}
+                    onClick={() => {
+                      setConfirmingRemoval(false)
+                      setCleanupWarning(false)
+                      remove.reset()
+                      setViewerMenuOpen(
+                        (current) => !current,
+                      )
+                    }}
+                  >
+                    ···
+                  </button>
+
+                  {viewerMenuOpen && (
+                    <div className={styles.viewerMenu}>
+                      <a
+                        href={
+                          activeImage.url?.startsWith(
+                            '/api/pocket/',
+                          )
+                            ? pocketAttachmentDownloadUrl(
+                                itemId,
+                                activeImage.id,
+                              )
+                            : activeImage.url
+                        }
+                        {...(
+                          activeImage.url?.startsWith(
+                            '/api/pocket/',
+                          )
+                            ? {}
+                            : {
+                                target: '_blank',
+                                rel: 'noreferrer',
+                              }
+                        )}
+                      >
+                        保存原图
+                      </a>
+
+                      {!confirmingRemoval ? (
+                        <button
+                          type="button"
+                          className={styles.viewerRemove}
+                          onClick={() =>
+                            setConfirmingRemoval(true)
+                          }
+                        >
+                          移除这张照片
+                        </button>
+                      ) : (
+                        <div className={styles.viewerConfirmation}>
+                          <span>只移除当前照片？</span>
+                          <button
+                            type="button"
+                            disabled={remove.isPending}
+                            onClick={removeActivePhoto}
+                          >
+                            {remove.isPending
+                              ? '正在移除…'
+                              : '确认移除'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={remove.isPending}
+                            onClick={() =>
+                              setConfirmingRemoval(false)
+                            }
+                          >
+                            取消
+                          </button>
+                        </div>
+                      )}
+
+                      {remove.isError && (
+                        <p role="status">
+                          {remove.error.message
+                            || '这张照片暂时没有移除。'}
+                        </p>
+                      )}
+
+                      {cleanupWarning && (
+                        <p role="status">
+                          照片已移除，但原文件清理没有完成。系统已留下排查记录。
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  ref={viewerCloseRef}
+                  type="button"
+                  className={styles.viewerClose}
+                  aria-label="关闭完整照片"
+                  onClick={closeViewer}
+                >
+                  ×
+                </button>
+              </div>
 
               <div
                 className={

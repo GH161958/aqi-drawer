@@ -166,6 +166,20 @@ function activityLabel(
     return 'SOURCE REFRESHED'
   }
 
+  if (
+    entry.type === 'attachment_removed'
+  ) {
+    const name =
+      typeof entry.detail.name === 'string'
+        ? entry.detail.name
+        : ''
+
+    return (
+      `${actor} REMOVED AN ATTACHMENT`
+      + (name ? ` · ${name}` : '')
+    )
+  }
+
   return entry.type
 }
 

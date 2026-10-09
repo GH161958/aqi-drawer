@@ -402,12 +402,40 @@ export async function createBridgeApp(config = {}) {
     '/api/pocket/items/:id/attachments/:attachmentId',
     async (req, res, next) => {
       try {
-        res.json(
+        const result =
           await store.removeAttachment(
             req.params.id,
             req.params.attachmentId,
-          ),
-        )
+          )
+
+        if (result.mediaCleanupFailed.length) {
+          for (const failure of result.mediaCleanupFailed) {
+            console.error(
+              'Attachment media cleanup failed.',
+              {
+                itemId: req.params.id,
+                attachmentId:
+                  req.params.attachmentId,
+                storageName:
+                  failure.storageName,
+                error: failure.error,
+              },
+            )
+          }
+        }
+
+        res.json({
+          item: result.item,
+          attachment: result.attachment,
+          cleanup: {
+            status:
+              result.mediaCleanupFailed.length
+                ? 'failed'
+                : result.mediaMissing
+                  ? 'missing'
+                  : 'ok',
+          },
+        })
       } catch (error) {
         next(error)
       }
@@ -581,11 +609,66 @@ export async function createBridgeApp(config = {}) {
     try {
       const found = await store.readAttachment(req.params.attachmentId, 25 * 1024 * 1024)
       if (!found) return res.status(404).json({ error: 'Attachment not found.' })
-      res.type(found.attachment.mimeType)
-      res.setHeader('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(found.attachment.name)}`)
+      setAttachmentResponseHeaders(
+        res,
+        found.attachment,
+        { forceDownload: false },
+      )
       res.send(found.data)
     } catch (error) { next(error) }
   })
+
+  app.get(
+    '/api/pocket/items/:id/attachments/:attachmentId/preview',
+    async (req, res, next) => {
+      try {
+        const found =
+          await store.readItemAttachment(
+            req.params.id,
+            req.params.attachmentId,
+          )
+        if (!found) {
+          return res.status(404).json({
+            error: 'Attachment not found on this item.',
+          })
+        }
+        setAttachmentResponseHeaders(
+          res,
+          found.attachment,
+          { forceDownload: false },
+        )
+        res.send(found.data)
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.get(
+    '/api/pocket/items/:id/attachments/:attachmentId/download',
+    async (req, res, next) => {
+      try {
+        const found =
+          await store.readItemAttachment(
+            req.params.id,
+            req.params.attachmentId,
+          )
+        if (!found) {
+          return res.status(404).json({
+            error: 'Attachment not found on this item.',
+          })
+        }
+        setAttachmentResponseHeaders(
+          res,
+          found.attachment,
+          { forceDownload: true },
+        )
+        res.send(found.data)
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
 
   app.post('/api/pocket/items/:id/replies', async (req, res, next) => {
     try {
@@ -933,6 +1016,86 @@ function normalizeUploadedFilename(value) {
 
   const candidate = Buffer.from(original, 'latin1').toString('utf8')
   return (candidate.includes('\uFFFD') ? original : candidate).normalize('NFC')
+}
+
+const SAFE_INLINE_ATTACHMENT_TYPES =
+  new Set([
+    'application/pdf',
+    'image/avif',
+    'image/gif',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'text/plain',
+  ])
+
+function attachmentDisposition(
+  name,
+  disposition,
+) {
+  const normalized =
+    String(name || 'attachment')
+      .replace(/[\r\n]/gu, '')
+      .normalize('NFC')
+  const encoded =
+    encodeURIComponent(normalized)
+      .replace(/['()*]/gu, (character) =>
+        `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+      )
+
+  return (
+    `${disposition}; filename="attachment"; `
+    + `filename*=UTF-8''${encoded}`
+  )
+}
+
+function setAttachmentResponseHeaders(
+  res,
+  attachment,
+  { forceDownload },
+) {
+  const mimeType =
+    String(
+      attachment.mimeType
+      || 'application/octet-stream',
+    )
+      .trim()
+      .toLowerCase()
+
+  const inline =
+    !forceDownload
+    && SAFE_INLINE_ATTACHMENT_TYPES.has(
+      mimeType,
+    )
+
+  res.type(mimeType)
+  res.setHeader(
+    'content-disposition',
+    attachmentDisposition(
+      attachment.name,
+      inline ? 'inline' : 'attachment',
+    ),
+  )
+  res.setHeader(
+    'x-content-type-options',
+    'nosniff',
+  )
+  res.setHeader(
+    'content-security-policy',
+    "sandbox; default-src 'none'",
+  )
+  res.setHeader(
+    'cross-origin-resource-policy',
+    'same-origin',
+  )
+  res.setHeader(
+    'referrer-policy',
+    'no-referrer',
+  )
+  res.setHeader(
+    'cache-control',
+    'private, max-age=3600',
+  )
 }
 
 function normalizeMultipartFiles(value) {

@@ -11,6 +11,11 @@ import type {
   PocketItemSummary,
 } from '../src/types/pocket.ts'
 
+import {
+  isImageAttachment,
+  photoIndexAfterRemoval,
+} from '../src/features/inspect/inspectAttachmentLogic.ts'
+
 function attachment(
   name: string,
   mimeType: string,
@@ -140,4 +145,32 @@ test('does not special-case Clipboard files without photos or outside XHS', () =
     ).kind,
     'text',
   )
+})
+
+test('keeps image and non-image attachment ownership separate', () => {
+  assert.equal(
+    isImageAttachment(
+      attachment('photo.jpeg', 'image/jpeg'),
+    ),
+    true,
+  )
+  assert.equal(
+    isImageAttachment(
+      attachment('active.svg', 'image/svg+xml'),
+    ),
+    false,
+  )
+  assert.equal(
+    isImageAttachment(
+      attachment('notes.txt', 'text/plain'),
+    ),
+    false,
+  )
+})
+
+test('selects the nearest surviving photo and closes after the last removal', () => {
+  assert.equal(photoIndexAfterRemoval(0, 1), null)
+  assert.equal(photoIndexAfterRemoval(0, 3), 0)
+  assert.equal(photoIndexAfterRemoval(1, 3), 1)
+  assert.equal(photoIndexAfterRemoval(2, 3), 1)
 })

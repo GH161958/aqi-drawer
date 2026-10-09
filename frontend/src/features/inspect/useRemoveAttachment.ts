@@ -29,7 +29,7 @@ export function useRemoveAttachment(
           attachmentId,
         ),
 
-    onSuccess: (item) => {
+    onSuccess: ({ item }) => {
       queryClient.setQueryData(
         pocketQueryKeys.item(itemId),
         item,

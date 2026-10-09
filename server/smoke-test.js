@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -391,6 +391,19 @@ try {
   const uploaded = await fetch(`${baseUrl}/api/pocket/items/upload`, { method: 'POST', body: form }).then(checkJson)
   assert.equal(uploaded.item.attachments[0].name, 'pixel.png')
   assert.equal('storageName' in uploaded.item.attachments[0], false)
+  const imagePreview =
+    await fetch(
+      `${baseUrl}${uploaded.item.attachments[0].url}`,
+    )
+  assert.equal(imagePreview.status, 200)
+  assert.match(
+    imagePreview.headers.get('content-disposition') ?? '',
+    /^inline;/,
+  )
+  assert.equal(
+    imagePreview.headers.get('x-content-type-options'),
+    'nosniff',
+  )
   const imageItem = await client.callTool({ name: 'pocket_get', arguments: { id: 'image-item' } })
   assert.equal(imageItem.content.some((entry) => entry.type === 'image'), true)
 
@@ -430,9 +443,135 @@ try {
     `${baseUrl}${docxUpload.item.attachments[0].url}`,
   )
   assert.equal(downloadedDocx.status, 200)
+  assert.match(
+    downloadedDocx.headers.get('content-disposition') ?? '',
+    /^attachment;/,
+  )
+  assert.match(
+    downloadedDocx.headers.get('content-disposition') ?? '',
+    /filename\*=UTF-8''%E6%8A%BD%E5%B1%89%E7%AC%94%E8%AE%B0\.docx/u,
+  )
   assert.deepEqual(
     Buffer.from(await downloadedDocx.arrayBuffer()),
     docxBytes,
+  )
+
+  const originalDocxDownload =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${docxUpload.item.id}/attachments/${docxUpload.item.attachments[0].id}/download`,
+    )
+  assert.equal(originalDocxDownload.status, 200)
+  assert.match(
+    originalDocxDownload.headers.get('content-disposition') ?? '',
+    /^attachment;/,
+  )
+  assert.deepEqual(
+    Buffer.from(
+      await originalDocxDownload.arrayBuffer(),
+    ),
+    docxBytes,
+  )
+
+  const wrongOwnerDownload =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${source.id}/attachments/${docxUpload.item.attachments[0].id}/download`,
+    )
+  assert.equal(wrongOwnerDownload.status, 404)
+
+  const activeContentForm = new FormData()
+  activeContentForm.set(
+    'payload',
+    JSON.stringify({
+      id: 'active-content-item',
+      title: 'Active content attachment regression',
+      expectedFileCount: 3,
+    }),
+  )
+  const htmlBytes =
+    Buffer.from(
+      '<script>globalThis.compromised=true</script>',
+      'utf8',
+    )
+  const svgBytes =
+    Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+      'utf8',
+    )
+  const pdfBytes =
+    Buffer.from(
+      '%PDF-1.4\n% synthetic safe preview fixture',
+      'utf8',
+    )
+  activeContentForm.append(
+    'file1',
+    new Blob([htmlBytes], { type: 'text/html' }),
+    'active.html',
+  )
+  activeContentForm.append(
+    'file2',
+    new Blob([svgBytes], { type: 'image/svg+xml' }),
+    'active.svg',
+  )
+  activeContentForm.append(
+    'file3',
+    new Blob([pdfBytes], { type: 'application/pdf' }),
+    'preview.pdf',
+  )
+  const activeContentUpload =
+    await fetch(
+      `${baseUrl}/api/pocket/items/upload`,
+      { method: 'POST', body: activeContentForm },
+    ).then(checkJson)
+  for (const [index, bytes] of [
+    htmlBytes,
+    svgBytes,
+  ].entries()) {
+    const attachment =
+      activeContentUpload.item.attachments[index]
+    const response =
+      await fetch(
+        `${baseUrl}${attachment.url}`,
+      )
+    assert.equal(response.status, 200)
+    assert.match(
+      response.headers.get('content-disposition') ?? '',
+      /^attachment;/,
+    )
+    assert.equal(
+      response.headers.get('x-content-type-options'),
+      'nosniff',
+    )
+    assert.equal(
+      response.headers.get('content-security-policy'),
+      "sandbox; default-src 'none'",
+    )
+    assert.deepEqual(
+      Buffer.from(await response.arrayBuffer()),
+      bytes,
+    )
+
+    const legacyResponse =
+      await fetch(
+        `${baseUrl}/api/pocket/media/${attachment.id}`,
+      )
+    assert.match(
+      legacyResponse.headers.get('content-disposition') ?? '',
+      /^attachment;/,
+    )
+  }
+
+  const pdfAttachment =
+    activeContentUpload.item.attachments[2]
+  const pdfPreview =
+    await fetch(`${baseUrl}${pdfAttachment.url}`)
+  assert.equal(pdfPreview.status, 200)
+  assert.match(
+    pdfPreview.headers.get('content-disposition') ?? '',
+    /^inline;/,
+  )
+  assert.deepEqual(
+    Buffer.from(await pdfPreview.arrayBuffer()),
+    pdfBytes,
   )
 
   const indexedFirstBytes = Buffer.from('indexed-first-file')
@@ -695,7 +834,11 @@ try {
       (attachment) => attachment.id,
     ),
   )
-  assert.equal(removedClipboard.mediaDeleted, 1)
+  assert.equal(removedClipboard.cleanup.status, 'ok')
+  assert.equal(
+    JSON.stringify(removedClipboard).includes('storageName'),
+    false,
+  )
   await assert.rejects(
     readFile(
       path.join(mediaDir, clipboardStorageName),
@@ -725,6 +868,12 @@ try {
       attachmentRemovalItem.id,
     )).attachments.length,
     15,
+  )
+  assert.equal(
+    (await bridge.store.get(
+      attachmentRemovalItem.id,
+    )).activity.at(-1).type,
+    'attachment_removed',
   )
 
   /*
@@ -838,6 +987,63 @@ try {
   assert.equal(
     missingMediaRemoval.item.attachments.length,
     0,
+  )
+
+  const failedCleanupItem =
+    await bridge.store.upsert({
+      id: 'failed-cleanup-item',
+      text: 'failed cleanup fixture',
+    })
+  const failedCleanupStorageName =
+    'cleanup-failure-directory'
+  await mkdir(
+    path.join(
+      mediaDir,
+      failedCleanupStorageName,
+    ),
+  )
+  const failedCleanupState =
+    JSON.parse(
+      await readFile(storePath, 'utf8'),
+    )
+  const failedCleanupStoredItem =
+    failedCleanupState.items.find(
+      (item) => item.id === failedCleanupItem.id,
+    )
+  assert.ok(failedCleanupStoredItem)
+  failedCleanupStoredItem.attachments = [{
+    id: 'failed-cleanup-attachment',
+    name: 'cleanup-failure.txt',
+    mimeType: 'text/plain',
+    size: 1,
+    storageName: failedCleanupStorageName,
+  }]
+  await writeFile(
+    storePath,
+    JSON.stringify(failedCleanupState, null, 2),
+    'utf8',
+  )
+  const failedCleanupResponse =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${failedCleanupItem.id}/attachments/failed-cleanup-attachment`,
+      { method: 'DELETE' },
+    )
+  const failedCleanupPayload =
+    await failedCleanupResponse.json()
+  assert.equal(failedCleanupResponse.status, 200)
+  assert.equal(
+    failedCleanupPayload.cleanup.status,
+    'failed',
+  )
+  assert.equal(
+    failedCleanupPayload.item.attachments.length,
+    0,
+  )
+  assert.equal(
+    JSON.stringify(failedCleanupPayload).includes(
+      failedCleanupStorageName,
+    ),
+    false,
   )
 
   for (let index = 0; index < 2; index += 1) {

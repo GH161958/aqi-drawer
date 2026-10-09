@@ -1520,10 +1520,29 @@ export async function permanentlyDeletePocketItem(
   }
 }
 
+export interface RemovePocketAttachmentResult {
+  item: PocketItemSummary
+  cleanupStatus:
+    | 'ok'
+    | 'missing'
+    | 'failed'
+}
+
+export function pocketAttachmentDownloadUrl(
+  itemId: string,
+  attachmentId: string,
+): string {
+  return `/api/pocket/items/${
+    encodeURIComponent(itemId)
+  }/attachments/${
+    encodeURIComponent(attachmentId)
+  }/download`
+}
+
 export async function removePocketAttachment(
   itemId: string,
   attachmentId: string,
-): Promise<PocketItemSummary> {
+): Promise<RemovePocketAttachmentResult> {
   const response =
     await drawerFetch(
       `/api/pocket/items/${
@@ -1572,7 +1591,20 @@ export async function removePocketAttachment(
     )
   }
 
-  return item
+  const cleanupStatus =
+    isRecord(payload.cleanup)
+    && (
+      payload.cleanup.status === 'ok'
+      || payload.cleanup.status === 'missing'
+      || payload.cleanup.status === 'failed'
+    )
+      ? payload.cleanup.status
+      : 'failed'
+
+  return {
+    item,
+    cleanupStatus,
+  }
 }
 
 

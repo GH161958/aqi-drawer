@@ -22,6 +22,8 @@ import {
   InspectAttachments,
 } from './InspectAttachments'
 
+import { useState } from 'react'
+
 import styles from './OriginalPaper.module.css'
 
 interface InspectOriginalPaperProps {
@@ -59,6 +61,9 @@ export function InspectOriginalPaper({
   item,
   onInitialMediaReady,
 }: InspectOriginalPaperProps) {
+  const [cleanupWarningItemId, setCleanupWarningItemId] =
+    useState<string | null>(null)
+
   const presentation =
     classifyPresentation(item)
 
@@ -98,12 +103,25 @@ export function InspectOriginalPaper({
 
       <InspectMedia
         key={item.id}
+        itemId={item.id}
         attachments={item.attachments}
         title={item.title}
         onInitialReady={
           onInitialMediaReady
         }
+        onCleanupWarning={() =>
+          setCleanupWarningItemId(item.id)
+        }
       />
+
+      {cleanupWarningItemId === item.id && (
+        <p
+          className={styles.attachmentFeedback}
+          role="status"
+        >
+          附件已从这张纸移除，但原文件清理没有完成。系统已留下排查记录。
+        </p>
+      )}
 
       <InspectAttachments
         key={item.id}

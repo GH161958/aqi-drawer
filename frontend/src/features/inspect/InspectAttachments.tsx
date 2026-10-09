@@ -6,8 +6,16 @@ import type {
 } from '../../types/pocket'
 
 import {
+  pocketAttachmentDownloadUrl,
+} from '../../api/pocket'
+
+import {
   useRemoveAttachment,
 } from './useRemoveAttachment'
+
+import {
+  isImageAttachment,
+} from './inspectAttachmentLogic'
 
 import styles from './InspectAttachments.module.css'
 
@@ -55,12 +63,36 @@ export function InspectAttachments({
   const [confirmingId, setConfirmingId] =
     useState<string | null>(null)
 
+  const [expanded, setExpanded] =
+    useState(false)
+
+  const [cleanupWarning, setCleanupWarning] =
+    useState(false)
+
   const remove =
     useRemoveAttachment(item.id)
 
-  if (item.attachments.length === 0) {
+  const attachments =
+    item.attachments.filter(
+      (attachment) =>
+        !isImageAttachment(attachment),
+    )
+
+  if (attachments.length === 0) {
     return null
   }
+
+  const visibleAttachments =
+    expanded
+      ? attachments
+      : attachments.slice(0, 3)
+
+  const hiddenCount =
+    Math.max(
+      0,
+      attachments.length
+        - visibleAttachments.length,
+    )
 
   function confirmRemoval(
     attachmentId: string,
@@ -70,8 +102,11 @@ export function InspectAttachments({
     remove.mutate(
       attachmentId,
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           setConfirmingId(null)
+          setCleanupWarning(
+            result.cleanupStatus === 'failed',
+          )
         },
       },
     )
@@ -83,16 +118,21 @@ export function InspectAttachments({
       aria-labelledby={`attachment-title-${item.id}`}
     >
       <h2 id={`attachment-title-${item.id}`}>
-        附件 · {item.attachments.length}
+        其他附件 · {attachments.length}
       </h2>
 
       <ul>
-        {item.attachments.map((attachment) => {
+        {visibleAttachments.map((attachment) => {
           const confirming =
             confirmingId === attachment.id
 
           const size =
             formatSize(attachment.size)
+
+          const storedAttachment =
+            attachment.url?.startsWith(
+              '/api/pocket/',
+            ) === true
 
           return (
             <li key={attachment.id}>
@@ -119,12 +159,18 @@ export function InspectAttachments({
                         打开
                       </a>
 
-                      <a
-                        href={attachment.url}
-                        download={attachment.name}
-                      >
-                        下载
-                      </a>
+                      {storedAttachment && (
+                        <a
+                          href={
+                            pocketAttachmentDownloadUrl(
+                              item.id,
+                              attachment.id,
+                            )
+                          }
+                        >
+                          下载
+                        </a>
+                      )}
                     </>
                   )}
 
@@ -177,6 +223,21 @@ export function InspectAttachments({
         })}
       </ul>
 
+      {(hiddenCount > 0 || expanded) && (
+        <button
+          type="button"
+          className={styles.disclosure}
+          aria-expanded={expanded}
+          onClick={() =>
+            setExpanded((current) => !current)
+          }
+        >
+          {expanded
+            ? '收起附件'
+            : `展开另外 ${hiddenCount} 个`}
+        </button>
+      )}
+
       {remove.isError && (
         <p
           className={styles.feedback}
@@ -184,6 +245,15 @@ export function InspectAttachments({
         >
           {remove.error.message
             || '这个附件暂时没有移除。'}
+        </p>
+      )}
+
+      {cleanupWarning && (
+        <p
+          className={styles.feedback}
+          aria-live="polite"
+        >
+          附件已从这张纸移除，但原文件清理没有完成。系统已留下排查记录。
         </p>
       )}
     </section>
