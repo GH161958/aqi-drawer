@@ -118,9 +118,34 @@ export function CollectionEditor({
   }
 
   return (
-    <div className={styles.field}>
-      <div className={styles.label}>
-        COLLECTION
+    <div
+      className={styles.field}
+      data-busy={
+        busy
+          ? 'true'
+          : undefined
+      }
+    >
+      <div className={styles.fieldHead}>
+        <div className={styles.label}>
+          COLLECTION
+        </div>
+
+        <button
+          type="button"
+          className={styles.editToggle}
+          aria-expanded={editing}
+          onClick={() =>
+            setEditing(
+              (value) =>
+                !value,
+            )
+          }
+        >
+          {editing
+            ? '完成'
+            : '整理'}
+        </button>
       </div>
 
       <div className={styles.content}>
@@ -129,22 +154,6 @@ export function CollectionEditor({
             {item.collection
               || '未归档'}
           </span>
-
-          <button
-            type="button"
-            className={styles.editToggle}
-            aria-expanded={editing}
-            onClick={() =>
-              setEditing(
-                (value) =>
-                  !value,
-              )
-            }
-          >
-            {editing
-              ? '完成'
-              : '整理'}
-          </button>
         </div>
 
         {editing && (
@@ -225,32 +234,38 @@ export function CollectionEditor({
               </label>
 
               <div className={styles.newRow}>
-                <input
-                  id={
-                    `new-collection-${item.id}`
+                <div
+                  className={
+                    styles.inputViewport
                   }
-                  className={styles.newInput}
-                  value={newName}
-                  disabled={busy}
-                  placeholder="新的分类"
-                  onChange={
-                    (event) =>
-                      setNewName(
-                        event.target.value,
-                      )
-                  }
-                  onKeyDown={
-                    (event) => {
-                      if (
-                        event.key
-                        === 'Enter'
-                      ) {
-                        event.preventDefault()
-                        createNew()
+                >
+                  <input
+                    id={
+                      `new-collection-${item.id}`
+                    }
+                    className={styles.newInput}
+                    value={newName}
+                    disabled={busy}
+                    placeholder="新的分类"
+                    onChange={
+                      (event) =>
+                        setNewName(
+                          event.target.value,
+                        )
+                    }
+                    onKeyDown={
+                      (event) => {
+                        if (
+                          event.key
+                          === 'Enter'
+                        ) {
+                          event.preventDefault()
+                          createNew()
+                        }
                       }
                     }
-                  }
-                />
+                  />
+                </div>
 
                 <button
                   type="button"
@@ -320,31 +335,24 @@ export function CollectionEditor({
                 </div>
               )}
 
-            {(update.isPending
-              || create.isPending
-              || remove.isPending) && (
-              <p className={styles.feedback}>
-                正在记下……
-              </p>
-            )}
-
-            {update.isError && (
-              <p className={styles.feedback}>
-                {update.error.message}
-              </p>
-            )}
-
-            {create.isError && (
-              <p className={styles.feedback}>
-                {create.error.message}
-              </p>
-            )}
-
-            {remove.isError && (
-              <p className={styles.feedback}>
-                {remove.error.message}
-              </p>
-            )}
+            <p
+              className={
+                styles.feedback
+              }
+              aria-live="polite"
+            >
+              {update.isPending
+                || create.isPending
+                || remove.isPending
+                ? '正在记下……'
+                : update.isError
+                  ? update.error.message
+                  : create.isError
+                    ? create.error.message
+                    : remove.isError
+                      ? remove.error.message
+                      : '\u00A0'}
+            </p>
           </div>
         )}
 

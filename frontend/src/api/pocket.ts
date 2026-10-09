@@ -1,3 +1,5 @@
+import { drawerFetch } from './http'
+
 import type {
   PocketItemsResponse,
 } from './contracts'
@@ -8,12 +10,51 @@ import {
 
 import type {
   PocketActivityEntry,
+  PocketContentReadResult,
+  PocketContentSnapshot,
   PocketAttachmentSummary,
   PocketItemSummary,
+  PocketIntakeReceipt,
+  PocketIntakeResult,
   PocketKind,
   PocketReplySummary,
   PocketStatus,
 } from '../types/pocket'
+
+export class DrawerIntakeError extends Error {
+  readonly status: number
+  readonly code: string
+  readonly field: string
+  readonly expectedFileCount?: number
+  readonly receivedFileCount?: number
+
+  constructor(
+    message: string,
+    {
+      status,
+      code = '',
+      field = '',
+      expectedFileCount,
+      receivedFileCount,
+    }: {
+      status: number
+      code?: string
+      field?: string
+      expectedFileCount?: number
+      receivedFileCount?: number
+    },
+  ) {
+    super(message)
+    this.name = 'DrawerIntakeError'
+    this.status = status
+    this.code = code
+    this.field = field
+    this.expectedFileCount =
+      expectedFileCount
+    this.receivedFileCount =
+      receivedFileCount
+  }
+}
 
 const pocketKinds =
   new Set<PocketKind>([
@@ -103,23 +144,69 @@ function parseAttachment(
 function parseReply(
   value: unknown,
 ): PocketReplySummary | null {
-  if (!isRecord(value)) return null
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const author =
+    value.author === 'EE'
+      ? 'EE'
+      : value.author === 'Aqi'
+        ? 'Aqi'
+        : undefined
 
   return {
-    ...(typeof value.id === 'string'
-      ? { id: value.id }
-      : {}),
+    ...(
+      typeof value.id === 'string'
+        ? {
+            id: value.id,
+          }
+        : {}
+    ),
 
-    ...(typeof value.text === 'string'
-      ? { text: value.text }
-      : {}),
+    ...(
+      author
+        ? {
+            author,
+          }
+        : {}
+    ),
 
-    ...(typeof value.content === 'string'
-      ? { content: value.content }
-      : {}),
+    ...(
+      typeof value.text === 'string'
+        ? {
+            text: value.text,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.content === 'string'
+        ? {
+            content: value.content,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.createdAt === 'string'
+        ? {
+            createdAt:
+              value.createdAt,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.source === 'string'
+        ? {
+            source:
+              value.source,
+          }
+        : {}
+    ),
   }
 }
-
 
 function parseActivityEntry(
   value: unknown,
@@ -257,6 +344,40 @@ function parsePocketItem(
           )
       : []
 
+  const hiddenReplies =
+
+
+    Array.isArray(value.hiddenReplies)
+
+
+      ? value.hiddenReplies
+
+
+          .map(parseReply)
+
+
+          .filter(
+
+
+            (
+
+
+              reply,
+
+
+            ): reply is PocketReplySummary =>
+
+
+              reply !== null,
+
+
+          )
+
+
+      : []
+
+
+
   const tags =
     Array.isArray(value.tags)
       ? value.tags.filter(
@@ -303,6 +424,17 @@ function parsePocketItem(
     attachments,
     replies,
 
+    hiddenReplies,
+
+    hiddenReplyCount:
+
+      typeof value.hiddenReplyCount === 'number'
+
+        ? value.hiddenReplyCount
+
+        : hiddenReplies.length,
+
+
     collection:
       typeof value.collection === 'string'
         ? value.collection
@@ -333,7 +465,7 @@ async function readItemList(
   path: string,
 ): Promise<PocketItemsResponse> {
   const response =
-    await fetch(path, {
+    await drawerFetch(path, {
       credentials: 'same-origin',
 
       headers: {
@@ -400,7 +532,7 @@ export async function getPocketItem(
   id: string,
 ): Promise<PocketItemSummary> {
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }`,
@@ -452,7 +584,7 @@ export async function updatePocketItemStatus(
   status: PocketStatus,
 ): Promise<PocketItemSummary> {
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }/review`,
@@ -525,7 +657,7 @@ export interface DeleteCollectionResult {
 export async function listCollections():
   Promise<string[]> {
   const response =
-    await fetch(
+    await drawerFetch(
       '/api/pocket/collections',
       {
         credentials: 'same-origin',
@@ -595,7 +727,7 @@ export async function createCollection(
   }
 
   const response =
-    await fetch(
+    await drawerFetch(
       '/api/pocket/collections',
       {
         method: 'POST',
@@ -664,7 +796,7 @@ export async function deleteCollection(
   }
 
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/collections/${
         encodeURIComponent(
           collection,
@@ -726,7 +858,7 @@ export async function updatePocketItemCollection(
     collection?.trim() || null
 
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }/metadata`,
@@ -836,7 +968,7 @@ export async function updatePocketItemTags(
     )
 
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/items/${
         encodeURIComponent(id)
       }/metadata`,
@@ -902,7 +1034,7 @@ export async function updatePocketItemTags(
 export async function listTagVocabulary():
   Promise<string[]> {
   const response =
-    await fetch(
+    await drawerFetch(
       '/api/pocket/tags',
       {
         credentials:
@@ -966,7 +1098,7 @@ export async function deleteTagEverywhere(
   }
 
   const response =
-    await fetch(
+    await drawerFetch(
       `/api/pocket/tags/${
         encodeURIComponent(tag)
       }`,
@@ -1009,5 +1141,846 @@ export async function deleteTagEverywhere(
       && typeof payload.changedCount === 'number'
         ? payload.changedCount
         : 0,
+  }
+}
+
+export async function updatePocketItemNote(
+  id: string,
+  note: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await drawerFetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }/note`,
+      {
+        method: 'PATCH',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            note,
+          }),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `附言保存失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid note item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      'Updated Drawer note could not be read.',
+    )
+  }
+
+  return item
+}
+
+export async function hidePocketReply(
+  itemId: string,
+  replyId: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await drawerFetch(
+      `/api/pocket/items/${
+        encodeURIComponent(itemId)
+      }/replies/${
+        encodeURIComponent(replyId)
+      }`,
+      {
+        method: 'PATCH',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            hidden: true,
+          }),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error
+        === 'string'
+        ? payload.error
+        : `回条收起失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid reply item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      'Updated Drawer replies could not be read.',
+    )
+  }
+
+  return item
+}
+
+
+
+export async function restorePocketReply(
+  itemId: string,
+  replyId: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await drawerFetch(
+      `/api/pocket/items/${
+        encodeURIComponent(itemId)
+      }/replies/${
+        encodeURIComponent(replyId)
+      }`,
+      {
+        method: 'PATCH',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            hidden: false,
+          }),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error
+        === 'string'
+        ? payload.error
+        : `回条放回失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid restored reply item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      'Restored Drawer reply could not be read.',
+    )
+  }
+
+  return item
+}
+
+
+export async function trashPocketItem(
+  id: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await drawerFetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }/trash`,
+      {
+        method: 'POST',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          accept:
+            'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `放进废纸槽失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid trashed item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      '这张废纸暂时没有读回来。',
+    )
+  }
+
+  return item
+}
+
+export async function restorePocketItem(
+  id: string,
+): Promise<PocketItemSummary> {
+  const response =
+    await drawerFetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }/restore`,
+      {
+        method: 'POST',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          accept:
+            'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `恢复失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid restored item.',
+    )
+  }
+
+  const item =
+    parsePocketItem(
+      payload.item,
+    )
+
+  if (!item) {
+    throw new Error(
+      '恢复后的纸暂时没有读回来。',
+    )
+  }
+
+  return item
+}
+
+export async function permanentlyDeletePocketItem(
+  id: string,
+): Promise<void> {
+  const response =
+    await drawerFetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }`,
+      {
+        method: 'DELETE',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          accept:
+            'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `永久删除失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || payload.deleted !== true
+  ) {
+    throw new Error(
+      'Drawer did not confirm permanent deletion.',
+    )
+  }
+}
+
+
+function parseContentSnapshot(
+  value: unknown,
+): PocketContentSnapshot | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const images =
+    Array.isArray(value.images)
+      ? value.images
+          .filter(
+            (entry) =>
+              isRecord(entry)
+              && typeof entry.url
+                === 'string',
+          )
+          .map(
+            (entry) => ({
+              url:
+                String(entry.url),
+
+              ...(
+                typeof entry.alt === 'string'
+                  ? {
+                      alt:
+                        entry.alt,
+                    }
+                  : {}
+              ),
+            }),
+          )
+      : []
+
+  const browserCapturePlan =
+    isRecord(
+      value.browserCapturePlan,
+    )
+      ? {
+          needed:
+            value.browserCapturePlan
+              .needed === true,
+        }
+      : undefined
+
+  const video =
+    isRecord(value.video)
+      ? {
+          detected:
+            value.video.detected
+              === true,
+
+          ...(
+            typeof value.video
+              .durationSeconds
+              === 'number'
+              ? {
+                  durationSeconds:
+                    value.video
+                      .durationSeconds,
+                }
+              : {}
+          ),
+        }
+      : undefined
+
+  const frameExtraction =
+    isRecord(
+      value.frameExtraction,
+    )
+      ? {
+          ...(
+            typeof value.frameExtraction
+              .requested
+              === 'number'
+              ? {
+                  requested:
+                    value.frameExtraction
+                      .requested,
+                }
+              : {}
+          ),
+
+          ...(
+            typeof value.frameExtraction
+              .extracted
+              === 'number'
+              ? {
+                  extracted:
+                    value.frameExtraction
+                      .extracted,
+                }
+              : {}
+          ),
+        }
+      : undefined
+
+  return {
+    ...(
+      typeof value.siteName
+        === 'string'
+        ? {
+            siteName:
+              value.siteName,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.title
+        === 'string'
+        ? {
+            title:
+              value.title,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.author
+        === 'string'
+        ? {
+            author:
+              value.author,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.publishedAt
+        === 'string'
+        ? {
+            publishedAt:
+              value.publishedAt,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.description
+        === 'string'
+        ? {
+            description:
+              value.description,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.text
+        === 'string'
+        ? {
+            text:
+              value.text,
+          }
+        : {}
+    ),
+
+    ...(
+      value.detail === 'full'
+      || value.detail === 'compact'
+        ? {
+            detail:
+              value.detail,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.textTruncated
+        === 'boolean'
+        ? {
+            textTruncated:
+              value.textTruncated,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.finalUrl
+        === 'string'
+        ? {
+            finalUrl:
+              value.finalUrl,
+          }
+        : {}
+    ),
+
+    ...(
+      typeof value.canonicalUrl
+        === 'string'
+        ? {
+            canonicalUrl:
+              value.canonicalUrl,
+          }
+        : {}
+    ),
+
+    images,
+
+    ...(
+      browserCapturePlan
+        ? {
+            browserCapturePlan,
+          }
+        : {}
+    ),
+
+    ...(
+      video
+        ? {
+            video,
+          }
+        : {}
+    ),
+
+    ...(
+      frameExtraction
+        ? {
+            frameExtraction,
+          }
+        : {}
+    ),
+  }
+}
+
+export async function readPocketItemContent(
+  id: string,
+  {
+    detail = 'compact',
+    maxImages = 2,
+    videoFrames = 0,
+  }: {
+    detail?: 'compact' | 'full'
+    maxImages?: number
+    videoFrames?: number
+  } = {},
+): Promise<PocketContentReadResult> {
+  const response =
+    await drawerFetch(
+      `/api/pocket/items/${
+        encodeURIComponent(id)
+      }/read-content`,
+      {
+        method: 'POST',
+
+        credentials:
+          'same-origin',
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          accept:
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            detail,
+            maxImages,
+            videoFrames,
+            refresh: false,
+          }),
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `来源读取失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('snapshot' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid source snapshot.',
+    )
+  }
+
+  const snapshot =
+    parseContentSnapshot(
+      payload.snapshot,
+    )
+
+  if (!snapshot) {
+    throw new Error(
+      '这张剪报暂时没有成功展开。',
+    )
+  }
+
+  return {
+    snapshot,
+
+    cache:
+      isRecord(payload.cache)
+        ? {
+            hit:
+              payload.cache.hit
+                === true,
+          }
+        : {},
+  }
+}
+
+function parseIntakeReceipt(
+  value: unknown,
+): PocketIntakeReceipt | null {
+  if (!isRecord(value)) return null
+
+  const status = value.status
+  if (
+    status !== 'saved'
+    && status !== 'merged'
+  ) {
+    return null
+  }
+
+  if (
+    typeof value.itemId !== 'string'
+    || typeof value.message !== 'string'
+  ) {
+    return null
+  }
+
+  return {
+    status,
+    itemId: value.itemId,
+    title: stringValue(value.title),
+    sourceApp: stringValue(value.sourceApp),
+    receivedCount:
+      typeof value.receivedCount === 'number'
+        ? value.receivedCount
+        : 1,
+    message: value.message,
+  }
+}
+
+export async function capturePocketItem({
+  text,
+  files,
+}: {
+  text: string
+  files: File[]
+}): Promise<PocketIntakeResult> {
+  const cleanText = text.trim()
+
+  if (!cleanText && files.length === 0) {
+    throw new DrawerIntakeError(
+      '先放进一段文字、一个链接，或至少一个文件。',
+      {
+        status: 400,
+        code: 'EMPTY_CAPTURE_DRAFT',
+      },
+    )
+  }
+
+  const request =
+    files.length > 0
+      ? (() => {
+          const body = new FormData()
+          body.set(
+            'payload',
+            JSON.stringify({
+              ...(cleanText
+                ? { share: cleanText }
+                : {}),
+              expectedFileCount:
+                files.length,
+            }),
+          )
+          for (const file of files) {
+            body.append('files', file)
+          }
+          return { method: 'POST', body }
+        })()
+      : {
+          method: 'POST',
+          headers: {
+            'content-type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            share: cleanText,
+            expectedFileCount: 0,
+          }),
+        }
+
+  const response =
+    await drawerFetch(
+      '/api/pocket/items/upload',
+      {
+        ...request,
+        credentials: 'same-origin',
+        headers: {
+          ...('headers' in request
+            ? request.headers
+            : {}),
+          accept: 'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response.json().catch(() => null)
+
+  if (!response.ok) {
+    const detail = isRecord(payload)
+      ? payload
+      : {}
+
+    throw new DrawerIntakeError(
+      stringValue(
+        detail.error,
+        `Drawer intake returned ${response.status}`,
+      ),
+      {
+        status: response.status,
+        code: stringValue(detail.code),
+        field: stringValue(detail.field),
+        expectedFileCount:
+          typeof detail.expectedFileCount
+            === 'number'
+            ? detail.expectedFileCount
+            : undefined,
+        receivedFileCount:
+          typeof detail.receivedFileCount
+            === 'number'
+            ? detail.receivedFileCount
+            : undefined,
+      },
+    )
+  }
+
+  if (!isRecord(payload)) {
+    throw new Error(
+      'Drawer intake returned an invalid response.',
+    )
+  }
+
+  const item = parsePocketItem(payload.item)
+  const receipt =
+    parseIntakeReceipt(payload.receipt)
+
+  if (!item || !receipt) {
+    throw new Error(
+      'Drawer intake returned an invalid receipt.',
+    )
+  }
+
+  return {
+    item,
+    receipt,
+    message: stringValue(
+      payload.message,
+      receipt.message,
+    ),
   }
 }

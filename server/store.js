@@ -595,18 +595,35 @@ export class PocketStore {
     })
   }
 
-  async hideReply(id, replyId) {
+  async setReplyHidden(id, replyId, hidden) {
     return this.#mutate((state) => {
       const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
       if (!item) throw httpError(404, 'Pocket item not found.')
       const reply = item.replies.find((entry) => entry.id === replyId)
       if (!reply) throw httpError(404, 'Pocket reply not found.')
-      if (reply.hiddenAt) return { item: publicItem(item), changed: false }
-      reply.hiddenAt = new Date().toISOString()
-      item.updatedAt = reply.hiddenAt
+
+      const isHidden = Boolean(reply.hiddenAt)
+      if (isHidden === hidden) {
+        return { item: publicItem(item), changed: false }
+      }
+
+      const now = new Date().toISOString()
+
+      if (hidden) {
+        reply.hiddenAt = now
+      } else {
+        delete reply.hiddenAt
+      }
+
+      item.updatedAt = now
       item.syncState = 'synced'
+
       return { item: publicItem(item), changed: true }
     })
+  }
+
+  async hideReply(id, replyId) {
+    return this.setReplyHidden(id, replyId, true)
   }
 
   async review(id, action, candidateResult, { actor = 'system' } = {}) {
@@ -1379,6 +1396,18 @@ function publicItem(item, { includeContentSnapshot = false } = {}) {
   delete visible.fingerprint
   const contentSnapshot = visible.contentSnapshot
   if (!includeContentSnapshot) delete visible.contentSnapshot
+
+  const normalizedReplies =
+    (Array.isArray(item.replies) ? item.replies : [])
+      .map(normalizeReply)
+      .filter(Boolean)
+
+  const visibleReplies =
+    normalizedReplies.filter((reply) => !reply.hiddenAt)
+
+  const hiddenReplies =
+    normalizedReplies.filter((reply) => Boolean(reply.hiddenAt))
+
   return {
     ...visible,
     receivedCount: Math.max(1, Number(item.receivedCount) || 1),
@@ -1388,7 +1417,9 @@ function publicItem(item, { includeContentSnapshot = false } = {}) {
     collection: item.collection || null,
     tags: normalizeTags(item.tags),
     activity: normalizeActivity(item.activity),
-    replies: (Array.isArray(item.replies) ? item.replies : []).filter((reply) => !reply.hiddenAt).map(normalizeReply).filter(Boolean),
+    replies: visibleReplies,
+    hiddenReplies,
+    hiddenReplyCount: hiddenReplies.length,
     attachments: item.attachments.map(publicAttachment),
     ...(contentSnapshot && !includeContentSnapshot ? { contentRead: summarizeContentSnapshot(contentSnapshot) } : {}),
   }

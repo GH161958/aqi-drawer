@@ -1,0 +1,300 @@
+.paper {
+  width:
+    min(74%, 320px);
+
+  margin:
+    18px auto 0;
+
+  padding:
+    15px 14px 13px;
+
+  border:
+    1px solid
+    var(
+      --ee-paper-border,
+      rgba(103, 118, 96, .26)
+    );
+
+  background:
+    var(
+      --ee-paper-color,
+      #efeade
+    );
+
+  color:
+    var(--drawer-ink);
+
+  box-shadow:
+    var(
+      --ee-paper-shadow,
+      1px 3px 7px
+      rgba(55, 39, 29, .045)
+    );
+
+  opacity: 1;
+}
+
+.header {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+
+  align-items: start;
+
+  column-gap: 12px;
+
+  margin-bottom: 4px;
+}
+
+.kicker {
+  grid-column: 1;
+
+  margin: 0;
+
+  color:
+    var(--drawer-brass);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    var(--paper-type-eyebrow-size);
+
+  font-weight:
+    var(--paper-type-eyebrow-weight);
+
+  line-height:
+    var(--paper-type-eyebrow-line-height);
+
+  letter-spacing:
+    var(--paper-type-eyebrow-spacing);
+}
+
+.returnSlot {
+  grid-column: 2;
+
+  justify-self: end;
+}
+
+.form {
+  margin: 0;
+}
+
+.input {
+  display: block;
+
+  width: 100%;
+
+  min-height: 92px;
+
+  padding:
+    8px 2px;
+
+  resize: vertical;
+
+  border: 0;
+
+  border-top:
+    1px dotted
+    rgba(126, 104, 81, .20);
+
+  border-bottom:
+    1px dotted
+    rgba(126, 104, 81, .24);
+
+  border-radius: 0;
+
+  background:
+    transparent;
+
+  color:
+    rgba(52, 46, 39, .84);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    var(
+      --paper-type-body-size,
+      .69rem
+    );
+
+  font-weight:
+    var(--paper-type-body-weight);
+
+  line-height:
+    var(
+      --paper-type-body-line-height,
+      1.55
+    );
+
+  letter-spacing:
+    var(--paper-type-body-spacing);
+
+  outline: 0;
+}
+
+.input::placeholder {
+  color:
+    rgba(52, 46, 39, .30);
+
+  font: inherit;
+}
+
+.input:focus {
+  border-bottom-color:
+    rgba(83, 96, 78, .34);
+}
+
+.actions {
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+    flex-end;
+
+  gap: 15px;
+
+  margin-top: 10px;
+}
+
+.saveAction,
+.removeAction {
+  appearance: none;
+
+  padding:
+    3px 0 2px;
+
+  border: 0;
+
+  border-bottom:
+    1px solid
+    var(--paper-type-action-underline);
+
+  background:
+    transparent;
+
+  color:
+    var(--paper-type-action-color);
+
+  font-family:
+    var(--paper-type-action-family);
+
+  font-size:
+    var(--paper-type-action-size);
+
+  font-weight:
+    var(--paper-type-action-weight);
+
+  line-height:
+    var(--paper-type-action-line-height);
+
+  letter-spacing:
+    var(--paper-type-action-spacing);
+
+  cursor: pointer;
+
+}
+
+.saveAction:disabled,
+.removeAction:disabled {
+  cursor: default;
+
+  opacity: .52;
+}
+
+.feedback {
+  min-height: 1.4em;
+
+  margin:
+    8px 0 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-size:
+    var(--paper-type-meta-size);
+
+  font-weight:
+    var(--paper-type-meta-weight);
+
+  line-height:
+    var(--paper-type-meta-line-height);
+
+  letter-spacing:
+    var(--paper-type-meta-spacing);
+}
+
+.visuallyHidden {
+  position: absolute;
+
+  width: 1px;
+  height: 1px;
+
+  padding: 0;
+  margin: -1px;
+
+  overflow: hidden;
+
+  clip:
+    rect(0 0 0 0);
+
+  white-space: nowrap;
+
+  border: 0;
+}
+
+@media (max-width: 520px) {
+  .paper {
+    width: 76%;
+
+    padding:
+      14px 14px 12px;
+  }
+
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .editorViewport {
+    --ee-editor-visual-scale: .69;
+    --ee-editor-size-compensation: 1.4492753623;
+
+    position: relative;
+
+    width: 100%;
+    height: 92px;
+
+    overflow: hidden;
+  }
+
+  .input {
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    width:
+      calc(
+        100%
+        * var(--ee-editor-size-compensation)
+      );
+
+    height:
+      calc(
+        100%
+        * var(--ee-editor-size-compensation)
+      );
+    min-height: 0;
+
+    /* Prevent iPhone Safari focus auto-zoom. */
+    font-size: 16px;
+
+    transform:
+      scale(
+        var(--ee-editor-visual-scale)
+      );
+    transform-origin: top left;
+  }
+}

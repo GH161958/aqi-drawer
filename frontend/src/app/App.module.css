@@ -39,7 +39,7 @@
   margin: 0;
 
   font-family:
-    var(--drawer-font-display);
+    var(--font-brand);
 
   font-size:
     clamp(3rem, 11vw, 5.8rem);
@@ -85,4 +85,39 @@
   margin-left: auto;
   margin-right: auto;
   text-align: center;
+}
+
+
+/* TYPE CABINET ENTRY V1 BEGIN */
+
+.header {
+  position: relative;
+}
+
+/* TYPE CABINET ENTRY V1 END */
+
+
+/* ==========================================
+   CABINET HOME · MOBILE HEADER RHYTHM
+
+   Home only.
+   Archive / Inspect retain their spacing.
+
+   Physical Cabinet geometry is untouched.
+========================================== */
+
+@media (max-width: 520px) {
+  .header[data-cabinet-home='true'],
+  .header[data-archive-home='true'] {
+    /*
+      Cabinet and Archive share the same
+      mobile Header → scene landing rhythm.
+    */
+    margin-bottom:
+      clamp(
+        16px,
+        4vw,
+        20px
+      );
+  }
 }

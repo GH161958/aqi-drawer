@@ -1,0 +1,80 @@
+.action {
+  width:
+    min(76%, 328px);
+
+  margin:
+    18px auto 30px;
+
+  padding-top:
+    13px;
+
+  border-top:
+    1px solid
+    rgba(107, 85, 66, .12);
+}
+
+.open,
+.actions button {
+  appearance: none;
+
+  border: 0;
+  border-bottom:
+    1px solid
+    rgba(111, 75, 61, .22);
+
+  padding:
+    3px 0;
+
+  background: transparent;
+
+  color:
+    rgba(109, 72, 59, .70);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .55rem;
+
+  cursor: pointer;
+}
+
+.confirmation p {
+  margin:
+    0 0 9px;
+
+  color:
+    rgba(68, 58, 49, .68);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .62rem;
+
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+
+  gap: 14px;
+}
+
+.actions button:last-child {
+  color:
+    rgba(66, 81, 64, .72);
+}
+
+.actions button:disabled {
+  cursor: default;
+  opacity: .45;
+}
+
+.feedback {
+  margin:
+    8px 0 0;
+
+  color:
+    rgba(112, 65, 57, .78);
+
+  font-size: .56rem;
+}

@@ -1,18 +1,20 @@
 .field {
-  display: grid;
+  display: block;
 
-  grid-template-columns:
-    minmax(86px, .65fr)
-    minmax(0, 1fr);
+  margin: 0;
 
-  gap: 14px;
+  padding: 0;
 
-  padding:
-    8px 0;
+  border: 0;
+}
 
-  border-bottom:
-    1px dotted
-    rgba(126, 104, 81, .25);
+.fieldHead {
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 12px;
 }
 
 .label,
@@ -23,9 +25,17 @@
   font-family:
     var(--drawer-font-meta);
 
-  font-size: .53rem;
+  font-size:
+    var(--paper-type-label-size);
 
-  letter-spacing: .06em;
+  font-weight:
+    var(--paper-type-label-weight);
+
+  line-height:
+    var(--paper-type-label-line-height);
+
+  letter-spacing:
+    var(--paper-type-label-spacing);
 }
 
 .content {
@@ -33,25 +43,32 @@
 }
 
 .current {
-  display: flex;
-
-  align-items: baseline;
-  justify-content: space-between;
-
-  gap: 10px;
+  display: block;
 
   color:
     rgba(52, 46, 39, .82);
 
-  font-size: .69rem;
+  font-size:
+    var(--paper-type-body-size);
 
-  line-height: 1.5;
+  font-weight:
+    var(--paper-type-body-weight);
+
+  line-height:
+    var(--paper-type-body-line-height);
+
+  letter-spacing:
+    var(--paper-type-body-spacing);
+
+  margin-top: 8px;
 }
 
 .editToggle,
 .createAction,
 .managerRow button,
 .confirmActions button {
+  flex: none;
+
   appearance: none;
 
   padding:
@@ -61,14 +78,23 @@
 
   border-bottom:
     1px solid
-    rgba(83, 96, 78, .28);
+    var(--paper-type-action-underline);
 
   background: transparent;
 
   color:
-    var(--drawer-sage);
+    var(--paper-type-action-color);
 
-  font-size: .57rem;
+  font-family:
+    var(--paper-type-action-family);
+  line-height:
+    var(--paper-type-action-line-height);
+  font-size:
+    var(--paper-type-action-size);
+  font-weight:
+    var(--paper-type-action-weight);
+  letter-spacing:
+    var(--paper-type-action-spacing);
 
   cursor: pointer;
 }
@@ -116,7 +142,14 @@
   color:
     rgba(52, 46, 39, .72);
 
-  font-size: .64rem;
+  font-size:
+    var(--paper-type-body-size);
+  font-weight:
+    var(--paper-type-body-weight);
+  line-height:
+    var(--paper-type-body-line-height);
+  letter-spacing:
+    var(--paper-type-body-spacing);
 
   cursor: pointer;
 }
@@ -152,19 +185,37 @@
   gap: 10px;
 }
 
-.newInput {
-  width: 100%;
+.inputViewport {
+  position: relative;
 
+  width: 100%;
   min-width: 0;
+
+  height: 34px;
+
+  border-bottom:
+    1px solid
+    rgba(126, 104, 81, .28);
+}
+
+.inputViewport:focus-within {
+  border-bottom-color:
+    var(--drawer-sage);
+}
+
+.newInput {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+
+  box-sizing: border-box;
 
   padding:
     5px 0;
 
   border: 0;
-
-  border-bottom:
-    1px solid
-    rgba(126, 104, 81, .28);
 
   border-radius: 0;
 
@@ -173,17 +224,31 @@
   color:
     var(--drawer-ink);
 
-  /*
-    Permanent iPhone Safari safety.
-  */
-  font-size: 16px;
+  font-family:
+    var(--drawer-font-body);
+
+  line-height:
+    var(--paper-type-body-line-height);
+
+  font-size:
+    var(--paper-type-body-size);
+
+  font-weight:
+    var(--paper-type-body-weight);
+
+  letter-spacing:
+    var(--paper-type-body-spacing);
 
   outline: 0;
 }
 
-.newInput:focus {
-  border-bottom-color:
-    var(--drawer-sage);
+.newInput::placeholder {
+  font: inherit;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  opacity: .55;
 }
 
 .hint,
@@ -194,9 +259,17 @@
   color:
     var(--drawer-quiet-ink);
 
-  font-size: .56rem;
+  font-size:
+    var(--paper-type-meta-size);
 
-  line-height: 1.5;
+  font-weight:
+    var(--paper-type-meta-weight);
+
+  line-height:
+    var(--paper-type-meta-line-height);
+
+  letter-spacing:
+    var(--paper-type-meta-spacing);
 }
 
 .manager {
@@ -216,7 +289,17 @@
   color:
     rgba(52, 46, 39, .70);
 
-  font-size: .61rem;
+  font-size:
+    var(--paper-type-body-size);
+
+  font-weight:
+    var(--paper-type-body-weight);
+
+  line-height:
+    var(--paper-type-body-line-height);
+
+  letter-spacing:
+    var(--paper-type-body-spacing);
 }
 
 .managerRow button {
@@ -245,7 +328,17 @@
   margin:
     0 0 6px;
 
-  font-size: .68rem;
+  font-size:
+    var(--paper-type-body-size);
+
+  font-weight:
+    var(--paper-type-body-weight);
+
+  line-height:
+    var(--paper-type-body-line-height);
+
+  letter-spacing:
+    var(--paper-type-body-spacing);
 }
 
 .confirmCopy {
@@ -255,9 +348,17 @@
   color:
     var(--drawer-quiet-ink);
 
-  font-size: .58rem;
+  font-size:
+    var(--paper-type-body-size);
 
-  line-height: 1.55;
+  font-weight:
+    var(--paper-type-body-weight);
+
+  line-height:
+    var(--paper-type-body-line-height);
+
+  letter-spacing:
+    var(--paper-type-body-spacing);
 }
 
 .confirmActions {
@@ -280,15 +381,71 @@ button:disabled {
   cursor: default;
 }
 
-@media (max-width: 520px) {
-  .field {
-    grid-template-columns:
-      80px minmax(0, 1fr);
+@media (hover: none) and (pointer: coarse) {
+  .inputViewport {
+    --editor-input-visual-scale: .69;
+    --editor-input-size-compensation:
+      1.4492753623;
 
-    gap: 10px;
+    height: 44px;
+
+    overflow: hidden;
   }
 
   .newInput {
-    font-size: 16px;
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    width:
+      calc(
+        100%
+        * var(--editor-input-size-compensation)
+      );
+
+    height:
+      calc(
+        100%
+        * var(--editor-input-size-compensation)
+      );
+
+    padding:
+      calc(
+        5px
+        * var(--editor-input-size-compensation)
+      )
+      0;
+
+    font-size:
+      var(--paper-type-input-size);
+
+    transform:
+      scale(
+        var(--editor-input-visual-scale)
+      );
+    transform-origin: top left;
   }
+
+  .createAction {
+    min-height: 44px;
+  }
+}
+
+
+/*
+  Mutation feedback owns a permanent line.
+  Text may change; surrounding paper must not jump.
+*/
+.feedback {
+  min-height: 1.5em;
+}
+
+/*
+  Pending mutations still disable controls,
+  but must not visually flash the whole editor.
+*/
+.field[data-busy='true'] button:disabled,
+.field[data-busy='true'] input:disabled {
+  opacity: 1;
 }

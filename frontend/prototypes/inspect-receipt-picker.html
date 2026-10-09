@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Aqi Drawer · Receipt Layout Picker</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --room: #cbc2b3;
+      --original: #f7f0e3;
+      --record: #e7dcc9;
+      --ink: #342e27;
+      --quiet: #746b60;
+      --rule: rgba(126, 104, 81, .24);
+      --sage: #53604e;
+      font-family: Georgia, "Songti SC", "Noto Serif CJK TC", serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { min-height: 100%; }
+
+    body {
+      margin: 0;
+      background: #e8e2d8;
+      color: var(--ink);
+    }
+
+    body.mobile-preview {
+      width: 100%;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      background: var(--room);
+    }
+
+    button { font: inherit; }
+
+    .controls {
+      position: sticky;
+      z-index: 20;
+      top: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(52, 46, 39, .14);
+      background: rgba(246, 242, 235, .97);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .controls fieldset {
+      display: flex;
+      gap: 4px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    .controls button {
+      min-height: 34px;
+      padding: 5px 9px;
+      border: 1px solid rgba(52, 46, 39, .22);
+      background: transparent;
+      color: #4e473f;
+      cursor: pointer;
+    }
+
+    .controls button[aria-pressed="true"] {
+      background: #ded7ca;
+      border-color: rgba(52, 46, 39, .45);
+    }
+
+    .readout {
+      margin-left: auto;
+      color: #625a51;
+      white-space: nowrap;
+    }
+
+    .artboard {
+      min-height: calc(100dvh - 56px);
+      padding: 52px 12px 72px;
+      overflow: auto;
+      background: var(--room);
+    }
+
+    .inspect {
+      position: relative;
+      width: min(100%, 390px);
+      min-height: 690px;
+      margin: 0 auto;
+      isolation: isolate;
+    }
+
+    .original {
+      position: absolute;
+      z-index: 4;
+      top: 110px;
+      left: 50%;
+      width: 88%;
+      height: 535px;
+      padding: 35px 28px;
+      border: 1px solid rgba(126, 104, 81, .18);
+      background: var(--original);
+      box-shadow: 2px 9px 22px rgba(52, 39, 30, .10), 4px 5px 0 rgba(236, 225, 207, .60);
+      transform: translateX(-50%);
+    }
+
+    .original h1 {
+      margin: 0 0 22px;
+      font-size: 27px;
+      font-weight: 400;
+    }
+
+    .original p {
+      margin: 0;
+      color: #5f574e;
+      font-size: 15px;
+      line-height: 1.8;
+    }
+
+    .receipt {
+      position: absolute;
+      z-index: 2;
+      top: 77px;
+      left: 12%;
+      width: var(--receipt-width);
+      height: var(--receipt-height);
+      overflow: hidden;
+      border: 1px solid var(--rule);
+      background: var(--record);
+      box-shadow: 1px 5px 14px rgba(52, 39, 30, .06);
+      opacity: 1;
+    }
+
+    .receipt.is-expanded {
+      z-index: 10;
+      top: 58px;
+      height: 575px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+
+    .receipt:not(.is-expanded) .record-body { display: none; }
+
+    .receipt-tab {
+      height: 33px;
+      padding: 9px 11px;
+      color: var(--quiet);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 9px;
+      letter-spacing: .10em;
+    }
+
+    .tab-return {
+      display: none;
+      min-width: 58px;
+      min-height: 44px;
+      margin: -14px -4px -10px 8px;
+      padding: 10px 0;
+      border: 0;
+      border-bottom: 1px solid rgba(83, 96, 78, .26);
+      background: transparent;
+      color: var(--sage);
+      font-family: Georgia, "Songti SC", serif;
+      font-size: 9px;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .return-label { display: inline-block; }
+
+    .record-body { padding: 15px 15px 28px; }
+
+    .record-topline,
+    .record-titleline,
+    .field-head,
+    .checkout-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .record-topline,
+    .micro,
+    .field-label,
+    .event time,
+    .event span {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-transform: uppercase;
+    }
+
+    .record-topline,
+    .micro {
+      color: var(--quiet);
+      font-size: 8px;
+      letter-spacing: .10em;
+    }
+
+    .return {
+      padding: 4px 0;
+      border: 0;
+      border-bottom: 1px solid rgba(83, 96, 78, .26);
+      background: transparent;
+      color: var(--sage);
+      font-size: 9px;
+    }
+
+    .record-title {
+      margin: 7px 0 0;
+      font-size: 15px;
+      font-weight: 400;
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+
+    .rule {
+      height: 1px;
+      margin: 10px 0 16px;
+      background: var(--rule);
+    }
+
+    .field { margin-top: 16px; }
+
+    .field-label {
+      margin: 0;
+      color: var(--quiet);
+      font-size: 8px;
+      letter-spacing: .10em;
+    }
+
+    .field-value {
+      margin: 5px 0 0;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .manage {
+      border: 0;
+      border-bottom: 1px solid rgba(83, 96, 78, .20);
+      padding: 2px 0;
+      background: transparent;
+      color: var(--sage);
+      font-size: 8px;
+    }
+
+    .terms { word-spacing: 5px; }
+
+    .living { margin-top: 28px; }
+
+    .event {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(126, 104, 81, .18);
+    }
+
+    .event time,
+    .event span {
+      display: block;
+      color: var(--quiet);
+      font-size: 8px;
+      letter-spacing: .055em;
+    }
+
+    .event span {
+      margin-top: 5px;
+      color: #554e46;
+      line-height: 1.45;
+    }
+
+    .candidate-a { --receipt-width: 67%; --receipt-height: 50px; }
+    .candidate-b { --receipt-width: 64%; --receipt-height: 50px; }
+    .candidate-c { --receipt-width: 70%; --receipt-height: 50px; }
+
+    .candidate-b .record-title { font-size: 12px; }
+    .candidate-b .receipt-tab {
+      position: relative;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .candidate-b .b-return {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      min-width: 58px;
+      min-height: 44px;
+      padding: 0;
+      border: 0;
+      border-bottom: 0;
+      background: transparent;
+      color: var(--sage);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 9px;
+      font-weight: 400;
+      line-height: normal;
+      letter-spacing: 0;
+    }
+    .candidate-b .b-return .return-label {
+      width: max-content;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(83, 96, 78, .26);
+      line-height: normal;
+    }
+    .candidate-b .identity-row {
+      position: relative;
+      min-height: 10px;
+    }
+    .candidate-b .identity-row .b-return {
+      position: absolute;
+      top: -17px;
+      right: 0;
+      align-items: flex-start;
+      padding-top: 17px;
+    }
+    .candidate-b .title-row {
+      position: relative;
+    }
+    .candidate-b .title-row .b-return {
+      position: absolute;
+      top: -16px;
+      right: 0;
+      align-items: flex-start;
+      padding-top: 16px;
+    }
+    .candidate-b .record-body { padding-top: 12px; }
+    .candidate-b .record-title { margin-top: 0; }
+    .candidate-b .micro { margin: 5px 0 0; }
+    .candidate-b .field {
+      margin-top: 32px;
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+    .candidate-b .rule + .field { margin-top: 18px; }
+    .candidate-b .field-value {
+      margin-top: 8px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .candidate-b .terms {
+      font-size: 10px;
+      font-weight: 400;
+      line-height: 1.45;
+    }
+    .candidate-b .manage {
+      flex: none;
+      padding: 2px 0;
+      color: var(--sage);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 9px;
+      font-weight: 400;
+      letter-spacing: .01em;
+    }
+    .candidate-b .living { margin-top: 38px; }
+    .candidate-b .rule { margin-top: 13px; margin-bottom: 12px; }
+    .candidate-b.header-mode-air-gap .rule { margin-top: 19px; }
+    .candidate-b.header-mode-air-gap .rule + .field { margin-top: 12px; }
+    .candidate-b.header-mode-no-divider .rule { display: none; }
+    .candidate-b.header-mode-no-divider .rule + .field { margin-top: 32px; }
+    .candidate-b .event { border-bottom-color: rgba(126, 104, 81, .28); }
+    .candidate-b .term { display: inline-block; white-space: nowrap; }
+
+    .candidate-c .record-title { font-size: 16px; }
+    .candidate-c .field { margin-top: 19px; }
+    .candidate-c .record-body { padding-right: 18px; padding-left: 18px; }
+    .candidate-c .event { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; }
+    .candidate-c .event span { margin-top: 0; }
+
+    .mobile-preview .controls { display: none; }
+
+    .mobile-preview .artboard {
+      width: 100%;
+      min-height: 100dvh;
+      padding:
+        calc(env(safe-area-inset-top, 0px) + 20px)
+        max(7px, env(safe-area-inset-right, 0px))
+        calc(env(safe-area-inset-bottom, 0px) + 24px)
+        max(7px, env(safe-area-inset-left, 0px));
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .mobile-preview .inspect {
+      width: 100%;
+      max-width: none;
+      min-height: max(650px, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 44px));
+    }
+
+    @media (max-width: 360px) {
+      .artboard { padding-right: 7px; padding-left: 7px; }
+      .inspect { min-height: 650px; }
+      .original { height: 500px; padding-right: 22px; padding-left: 22px; }
+      .receipt.is-expanded { height: 540px; }
+      .record-body { padding-right: 12px; padding-left: 12px; }
+      .candidate-c .record-body { padding-right: 14px; padding-left: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="controls" aria-label="Receipt comparison controls">
+    <fieldset aria-label="Candidate">
+      <button type="button" data-candidate="a" aria-pressed="true">A</button>
+      <button type="button" data-candidate="b" aria-pressed="false">B</button>
+      <button type="button" data-candidate="c" aria-pressed="false">C</button>
+    </fieldset>
+    <fieldset aria-label="Dataset">
+      <button type="button" data-dataset="simple" aria-pressed="true">Simple</button>
+      <button type="button" data-dataset="stress" aria-pressed="false">Stress</button>
+    </fieldset>
+    <fieldset aria-label="State">
+      <button type="button" data-state="closed" aria-pressed="true">Closed</button>
+      <button type="button" data-state="expanded" aria-pressed="false">Expanded</button>
+    </fieldset>
+    <fieldset aria-label="Variant B header comparison">
+      <button type="button" data-header-mode="original" aria-pressed="true">Original</button>
+      <button type="button" data-header-mode="air-gap" aria-pressed="false">Air Gap</button>
+      <button type="button" data-header-mode="no-divider" aria-pressed="false">No Divider</button>
+      <button type="button" data-header-mode="title-return" aria-pressed="false">Title Return</button>
+    </fieldset>
+    <output class="readout" aria-live="polite"></output>
+  </div>
+
+  <main class="artboard">
+    <section class="inspect candidate-a" aria-label="Receipt layout comparison">
+      <article class="receipt" aria-label="Record paper">
+        <div class="receipt-tab">
+          <span>RECEIPT · 01</span>
+          <button class="tab-return" type="button"><span class="return-label">放回这张</span></button>
+        </div>
+        <div class="record-body"></div>
+      </article>
+      <article class="original" aria-label="Original paper context">
+        <h1>纸张参考</h1>
+        <p>Original paper remains the largest and most stable object. The Record is visibly pulled from behind it.</p>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const candidates = {
+      a: { name: 'Quiet Ledger', width: '67%' },
+      b: { name: 'Library Checkout Card', width: '64%' },
+      c: { name: 'Editorial Filing Register', width: '70%' },
+    };
+
+    const datasets = {
+      simple: {
+        source: 'Aqi Drawer',
+        collection: '未归档',
+        terms: '暂无标签',
+        events: [
+          ['21 SEPT · 02:19', 'SYSTEM LEFT THIS HERE'],
+        ],
+      },
+      stress: {
+        source: 'Safari',
+        collection: 'Presentation Lab',
+        terms: '#STAGING  #设计  #视觉  #排版  #纸张  #长标签测试  #Archive',
+        events: [
+          ['28 AUG · 01:45', 'SYSTEM LEFT THIS HERE'],
+          ['03 SEPT · 18:20', 'EE UPDATED THE INDEX TERMS'],
+          ['21 SEPT · 02:19', 'AQI READ THE SOURCE AND LEFT A NOTE'],
+        ],
+      },
+    };
+
+    // FINAL LOCK: Candidate B / Air Gap / Stress / Expanded / 64%
+    // Human iPhone Safari QA passed on 2026-09-26
+    const isMobilePreview = new URLSearchParams(window.location.search).get('preview') === 'mobile';
+    document.body.classList.toggle('mobile-preview', isMobilePreview);
+
+    const state = isMobilePreview
+      ? { candidate: 'b', dataset: 'stress', view: 'expanded', headerMode: 'air-gap' }
+      : { candidate: 'a', dataset: 'simple', view: 'closed', headerMode: 'original' };
+    const inspect = document.querySelector('.inspect');
+    const receipt = document.querySelector('.receipt');
+    const receiptTab = document.querySelector('.receipt-tab');
+    const body = document.querySelector('.record-body');
+    const readout = document.querySelector('.readout');
+
+    function field(label, value, manageable = false) {
+      const renderedValue = label === 'INDEX TERMS'
+        ? value.split(/\s+/).filter(Boolean).map((term) => `<span class="term">${term}</span>`).join(' ')
+        : value;
+      return `<section class="field"><div class="field-head"><p class="field-label">${label}</p>${manageable ? '<button class="manage" type="button">整理</button>' : ''}</div><p class="field-value${label === 'INDEX TERMS' ? ' terms' : ''}">${renderedValue}</p></section>`;
+    }
+
+    function renderBody() {
+      const data = datasets[state.dataset];
+      const candidate = state.candidate;
+      const bReturn = '<button class="b-return" type="button"><span class="return-label">放回这张</span></button>';
+      const title = candidate === 'b'
+        ? state.headerMode === 'title-return'
+          ? `<div class="title-row"><h2 class="record-title">ITEM RECORD</h2>${bReturn}</div><div class="identity-row"><p class="micro">AQI DRAWER</p></div>`
+          : `<h2 class="record-title">ITEM RECORD</h2><div class="identity-row"><p class="micro">AQI DRAWER</p>${bReturn}</div>`
+        : '<div class="record-topline"><span>AQI DRAWER</span><button class="return" type="button">放回这张</button></div><h2 class="record-title">ITEM RECORD · 01</h2>';
+      const events = data.events.map(([date, action]) => `<li class="event"><time>${date}</time><span>${action}</span></li>`).join('');
+      body.innerHTML = `${title}<div class="rule"></div>${field('SOURCE', data.source)}${field('COLLECTION', data.collection, true)}${field('INDEX TERMS', data.terms, true)}<section class="living"><p class="field-label">LIVING RECORD</p><ol style="list-style:none;margin:8px 0 0;padding:0">${events}</ol></section>`;
+      body.querySelectorAll('.b-return, .return').forEach((button) => { button.onclick = () => setView('closed'); });
+    }
+
+    function renderReceiptTab() {
+      if (state.candidate !== 'b') {
+        receiptTab.innerHTML = '<span>RECEIPT · 01</span><button class="tab-return" type="button"><span class="return-label">放回这张</span></button>';
+        return;
+      }
+      receiptTab.innerHTML = '<span>RECEIPT · 01</span>';
+    }
+
+    function update() {
+      inspect.className = `inspect candidate-${state.candidate} header-mode-${state.headerMode}`;
+      receipt.classList.toggle('is-expanded', state.view === 'expanded');
+      renderReceiptTab();
+      renderBody();
+      document.querySelectorAll('[data-candidate]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.candidate === state.candidate)));
+      document.querySelectorAll('[data-dataset]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.dataset === state.dataset)));
+      document.querySelectorAll('[data-state]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.state === state.view)));
+      document.querySelectorAll('[data-header-mode]').forEach((button) => {
+        button.disabled = state.candidate !== 'b';
+        button.setAttribute('aria-pressed', String(button.dataset.headerMode === state.headerMode));
+      });
+      const meta = candidates[state.candidate];
+      const headerStatus = state.candidate === 'b' ? ` · ${state.headerMode}` : '';
+      readout.textContent = `${state.candidate.toUpperCase()} · ${meta.name} · ${meta.width} · ${state.dataset} · ${state.view}${headerStatus}`;
+    }
+
+    function setCandidate(value) { state.candidate = value; update(); }
+    function setDataset(value) { state.dataset = value; update(); }
+    function setView(value) { state.view = value; update(); }
+    function setHeaderMode(value) { state.headerMode = value; update(); }
+
+    document.querySelectorAll('[data-candidate]').forEach((button) => button.addEventListener('click', () => setCandidate(button.dataset.candidate)));
+    document.querySelectorAll('[data-dataset]').forEach((button) => button.addEventListener('click', () => setDataset(button.dataset.dataset)));
+    document.querySelectorAll('[data-state]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.state)));
+    document.querySelectorAll('[data-header-mode]').forEach((button) => button.addEventListener('click', () => setHeaderMode(button.dataset.headerMode)));
+
+    inspect.addEventListener('click', (event) => {
+      if (state.candidate === 'b' && state.view === 'expanded' && !event.target.closest('.receipt')) {
+        setView('closed');
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === '1') setCandidate('a');
+      if (event.key === '2') setCandidate('b');
+      if (event.key === '3') setCandidate('c');
+      if (event.key.toLowerCase() === 's') setDataset(state.dataset === 'simple' ? 'stress' : 'simple');
+      if (event.key.toLowerCase() === 'o') setView(state.view === 'closed' ? 'expanded' : 'closed');
+      if (event.key === 'Escape' && state.candidate === 'b' && state.view === 'expanded') setView('closed');
+    });
+
+    update();
+  </script>
+</body>
+</html>

@@ -1,0 +1,227 @@
+.view {
+  width: 100%;
+  min-height: 100%;
+}
+
+.toolbar {
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  margin-bottom: 18px;
+}
+
+.back {
+  appearance: none;
+
+  padding: 0;
+
+  border: 0;
+
+  background: transparent;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .58rem;
+
+  cursor: pointer;
+}
+
+.label {
+  margin: 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .54rem;
+
+  letter-spacing: .09em;
+}
+
+.list {
+  display: grid;
+
+  gap: 12px;
+}
+
+.paper,
+.emptyPaper,
+.state {
+  padding:
+    16px 15px;
+
+  border:
+    1px solid
+    rgba(121, 99, 78, .18);
+
+  background:
+    rgba(238, 229, 211, .82);
+
+  box-shadow:
+    1px 3px 8px
+    rgba(52, 38, 28, .04);
+}
+
+.kicker {
+  margin: 0;
+
+  color:
+    rgba(120, 86, 68, .62);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .50rem;
+
+  letter-spacing: .09em;
+}
+
+.title {
+  margin:
+    9px 0 0;
+
+  color:
+    var(--drawer-ink);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .82rem;
+
+  font-weight: 500;
+}
+
+.preview {
+  display: -webkit-box;
+
+  overflow: hidden;
+
+  margin:
+    9px 0 0;
+
+  color:
+    rgba(55, 49, 42, .70);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .64rem;
+
+  line-height: 1.6;
+
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.meta {
+  margin:
+    11px 0 0;
+
+  color:
+    var(--drawer-quiet-ink);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .49rem;
+
+  letter-spacing: .04em;
+}
+
+.actions {
+  display: flex;
+
+  gap: 14px;
+
+  margin-top: 13px;
+}
+
+.actions button {
+  appearance: none;
+
+  padding:
+    3px 0;
+
+  border: 0;
+
+  border-bottom:
+    1px solid
+    rgba(112, 76, 61, .20);
+
+  background: transparent;
+
+  color:
+    rgba(70, 82, 65, .78);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .54rem;
+
+  cursor: pointer;
+}
+
+.actions button:nth-child(2),
+.dangerBox .actions button:first-child {
+  color:
+    rgba(117, 67, 58, .76);
+}
+
+.actions button:disabled {
+  cursor: default;
+
+  opacity: .45;
+}
+
+.dangerBox {
+  margin-top: 13px;
+
+  padding-top: 11px;
+
+  border-top:
+    1px solid
+    rgba(117, 67, 58, .16);
+}
+
+.dangerBox p,
+.emptyPaper p,
+.state {
+  color:
+    rgba(65, 56, 48, .68);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .62rem;
+
+  line-height: 1.6;
+}
+
+.dangerBox p,
+.emptyPaper p {
+  margin: 0;
+}
+
+.emptyPaper p + p {
+  margin-top: 7px;
+}
+
+.feedback {
+  margin:
+    9px 0 0;
+
+  color:
+    rgba(117, 67, 58, .80);
+
+  font-size: .56rem;
+}

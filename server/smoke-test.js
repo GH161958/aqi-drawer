@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -394,6 +394,218 @@ try {
   const imageItem = await client.callTool({ name: 'pocket_get', arguments: { id: 'image-item' } })
   assert.equal(imageItem.content.some((entry) => entry.type === 'image'), true)
 
+  const mediaDir = path.join(dataDir, 'media')
+  const listMediaFiles = async () => (await readdir(mediaDir)).sort()
+  const docxBytes = Buffer.from('PK\u0003\u0004aqi-drawer-docx-shaped-smoke-test')
+  const docxFilename = '抽屉笔记.docx'
+  const docxPayload = {
+    title: 'DOCX multipart intake regression',
+    text: 'DOCX multipart intake regression payload',
+    expectedFileCount: 1,
+  }
+  const docxForm = new FormData()
+  docxForm.set('payload', JSON.stringify(docxPayload))
+  docxForm.append(
+    'files',
+    new Blob(
+      [docxBytes],
+      { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+    ),
+    docxFilename,
+  )
+  const docxUpload = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: docxForm },
+  ).then(checkJson)
+  assert.equal(docxUpload.item.attachments.length, 1)
+  assert.equal(docxUpload.item.attachments[0].name, docxFilename)
+  assert.equal(
+    docxUpload.item.attachments[0].mimeType,
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  )
+  assert.equal(docxUpload.item.attachments[0].size, docxBytes.length)
+  const storedDocxUpload = await bridge.store.get(docxUpload.item.id)
+  assert.equal(storedDocxUpload.attachments[0].name, docxFilename)
+  const downloadedDocx = await fetch(
+    `${baseUrl}${docxUpload.item.attachments[0].url}`,
+  )
+  assert.equal(downloadedDocx.status, 200)
+  assert.deepEqual(
+    Buffer.from(await downloadedDocx.arrayBuffer()),
+    docxBytes,
+  )
+
+  const indexedFirstBytes = Buffer.from('indexed-first-file')
+  const indexedSecondBytes = Buffer.from('indexed-second-file')
+  const indexedForm = new FormData()
+  indexedForm.set('payload', JSON.stringify({
+    title: 'Indexed multipart intake regression',
+    text: 'Two indexed files belong to one item',
+    expectedFileCount: 2,
+  }))
+  indexedForm.append(
+    'file1',
+    new Blob([indexedFirstBytes], { type: 'text/plain' }),
+    '第一份.txt',
+  )
+  indexedForm.append(
+    'file2',
+    new Blob([indexedSecondBytes], { type: 'text/plain' }),
+    '第二份.txt',
+  )
+  const indexedUpload = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: indexedForm },
+  ).then(checkJson)
+  assert.deepEqual(
+    indexedUpload.item.attachments.map((attachment) => attachment.name),
+    ['第一份.txt', '第二份.txt'],
+  )
+  assert.deepEqual(
+    indexedUpload.item.attachments.map((attachment) => attachment.size),
+    [indexedFirstBytes.length, indexedSecondBytes.length],
+  )
+
+  const beforeMissingIndexedItems = await bridge.store.list({ limit: 500 })
+  const beforeMissingIndexedMedia = await listMediaFiles()
+  const missingIndexedForm = new FormData()
+  missingIndexedForm.set('payload', JSON.stringify({
+    title: 'Must not keep a partial indexed upload',
+    expectedFileCount: 2,
+  }))
+  missingIndexedForm.append(
+    'file1',
+    new Blob([Buffer.from('only-one-indexed-file')], { type: 'text/plain' }),
+    'only-one.txt',
+  )
+  const missingIndexedResponse = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: missingIndexedForm },
+  )
+  const missingIndexedError = await missingIndexedResponse.json()
+  assert.equal(missingIndexedResponse.status, 422)
+  assert.equal(missingIndexedError.code, 'EXPECTED_FILE_COUNT_MISMATCH')
+  assert.equal(missingIndexedError.expectedFileCount, 2)
+  assert.equal(missingIndexedError.receivedFileCount, 1)
+  assert.equal(
+    (await bridge.store.list({ limit: 500 })).length,
+    beforeMissingIndexedItems.length,
+  )
+  assert.deepEqual(await listMediaFiles(), beforeMissingIndexedMedia)
+
+  const beforeTooManyItems = await bridge.store.list({ limit: 500 })
+  const beforeTooManyMedia = await listMediaFiles()
+  const tooManyFilesForm = new FormData()
+  tooManyFilesForm.set('title', 'Must reject more than five total files')
+  tooManyFilesForm.append(
+    'files',
+    new Blob([Buffer.from('legacy-field-file')], { type: 'text/plain' }),
+    'legacy.txt',
+  )
+  for (let index = 1; index <= 5; index += 1) {
+    tooManyFilesForm.append(
+      `file${index}`,
+      new Blob([Buffer.from(`indexed-${index}`)], { type: 'text/plain' }),
+      `indexed-${index}.txt`,
+    )
+  }
+  const tooManyFilesResponse = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: tooManyFilesForm },
+  )
+  const tooManyFilesError = await tooManyFilesResponse.json()
+  assert.equal(tooManyFilesResponse.ok, false)
+  assert.equal(tooManyFilesError.code, 'LIMIT_FILE_COUNT')
+  assert.equal(
+    (await bridge.store.list({ limit: 500 })).length,
+    beforeTooManyItems.length,
+  )
+  assert.deepEqual(await listMediaFiles(), beforeTooManyMedia)
+
+  const beforeUnexpectedFieldItems = await bridge.store.list({ limit: 500 })
+  const beforeUnexpectedFieldMedia = await listMediaFiles()
+  const unexpectedFieldForm = new FormData()
+  unexpectedFieldForm.set('title', 'Must reject the wrong file field')
+  unexpectedFieldForm.append(
+    'shortcutFile',
+    new Blob([Buffer.from('wrong-field')], { type: 'application/octet-stream' }),
+    'wrong-field.bin',
+  )
+  const unexpectedFieldResponse = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: unexpectedFieldForm },
+  )
+  const unexpectedFieldError = await unexpectedFieldResponse.json()
+  assert.equal(unexpectedFieldError.code, 'LIMIT_UNEXPECTED_FILE')
+  assert.equal(unexpectedFieldError.field, 'shortcutFile')
+  assert.equal(
+    (await bridge.store.list({ limit: 500 })).length,
+    beforeUnexpectedFieldItems.length,
+  )
+  assert.deepEqual(await listMediaFiles(), beforeUnexpectedFieldMedia)
+
+  const beforeMissingFileItems = await bridge.store.list({ limit: 500 })
+  const beforeMissingFileMedia = await listMediaFiles()
+  const missingFileForm = new FormData()
+  missingFileForm.set('title', 'Must not become a title-only item')
+  missingFileForm.set('expectedFileCount', '1')
+  const missingFileResponse = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: missingFileForm },
+  )
+  const missingFileError = await missingFileResponse.json()
+  assert.equal(missingFileResponse.status, 422)
+  assert.equal(missingFileError.code, 'EXPECTED_FILE_COUNT_MISMATCH')
+  assert.equal(missingFileError.expectedFileCount, 1)
+  assert.equal(missingFileError.receivedFileCount, 0)
+  assert.equal(
+    (await bridge.store.list({ limit: 500 })).length,
+    beforeMissingFileItems.length,
+  )
+  assert.deepEqual(await listMediaFiles(), beforeMissingFileMedia)
+
+  const beforeFailedUploadMedia = await listMediaFiles()
+  const failedUploadForm = new FormData()
+  failedUploadForm.set('payload', '{malformed-json')
+  failedUploadForm.append(
+    'files',
+    new Blob([Buffer.from('orphan-me-not')], { type: 'application/octet-stream' }),
+    'failed-upload.bin',
+  )
+  const failedUploadResponse = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: failedUploadForm },
+  )
+  assert.equal(failedUploadResponse.status, 500)
+  assert.deepEqual(await listMediaFiles(), beforeFailedUploadMedia)
+
+  const beforeDuplicateMedia = await listMediaFiles()
+  const repeatedDocxForm = new FormData()
+  repeatedDocxForm.set('payload', JSON.stringify(docxPayload))
+  repeatedDocxForm.append(
+    'files',
+    new Blob(
+      [docxBytes],
+      { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+    ),
+    docxFilename,
+  )
+  const repeatedDocx = await fetch(
+    `${baseUrl}/api/pocket/items/upload`,
+    { method: 'POST', body: repeatedDocxForm },
+  ).then(checkJson)
+  assert.equal(repeatedDocx.item.id, docxUpload.item.id)
+  assert.equal(repeatedDocx.item.attachments.length, 1)
+  assert.deepEqual(await listMediaFiles(), beforeDuplicateMedia)
+  const originalDocxStillPresent = await fetch(
+    `${baseUrl}${docxUpload.item.attachments[0].url}`,
+  )
+  assert.equal(originalDocxStillPresent.status, 200)
+  assert.deepEqual(
+    Buffer.from(await originalDocxStillPresent.arrayBuffer()),
+    docxBytes,
+  )
+
   for (let index = 0; index < 2; index += 1) {
     await client.callTool({
       name: 'pocket_reply',
@@ -411,9 +623,46 @@ try {
   }).then(checkJson)
   assert.equal(hiddenReply.changed, true)
   assert.deepEqual(hiddenReply.item.replies, [])
+
+  assert.equal(hiddenReply.item.hiddenReplies.length, 1)
+  assert.equal(hiddenReply.item.hiddenReplyCount, 1)
   const afterReplyHide = await bridge.store.get(source.id)
   assert.deepEqual(afterReplyHide.replies, [])
+
+  assert.equal(afterReplyHide.hiddenReplies.length, 1)
+  assert.equal(afterReplyHide.hiddenReplyCount, 1)
   assert.equal(afterReplyHide.activity.length, activityCountBeforeReplyHide)
+
+  const restoredReply = await fetch(
+    `${baseUrl}/api/pocket/items/${source.id}/replies/same-reply`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ hidden: false }),
+    },
+  ).then(checkJson)
+
+  assert.equal(restoredReply.changed, true)
+  assert.equal(restoredReply.item.replies.length, 1)
+  assert.deepEqual(restoredReply.item.hiddenReplies, [])
+  assert.equal(restoredReply.item.hiddenReplyCount, 0)
+
+  const restoredReplyAgain = await fetch(
+    `${baseUrl}/api/pocket/items/${source.id}/replies/same-reply`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ hidden: false }),
+    },
+  ).then(checkJson)
+
+  assert.equal(restoredReplyAgain.changed, false)
+  assert.equal(restoredReplyAgain.item.replies.length, 1)
+  assert.equal(
+    restoredReplyAgain.item.activity.length,
+    activityCountBeforeReplyHide,
+  )
+
 
   const staged = await client.callTool({
     name: 'pocket_review',

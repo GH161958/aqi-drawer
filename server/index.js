@@ -1,5 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import os from 'node:os'
+import { unlink } from 'node:fs/promises'
 import express from 'express'
 import multer from 'multer'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
@@ -17,10 +19,19 @@ import { extractXhsNoteId, XhsAdapter } from './adapters/xhs.js'
 const SERVICE_VERSION = '2.5.0'
 const DRAWER_SESSION_COOKIE = 'aqi_drawer_session'
 const DRAWER_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+const MAX_UPLOAD_FILES = 5
+const UPLOAD_FIELDS = [
+  { name: 'files', maxCount: MAX_UPLOAD_FILES },
+  ...Array.from(
+    { length: MAX_UPLOAD_FILES },
+    (_, index) => ({ name: `file${index + 1}`, maxCount: 1 }),
+  ),
+]
 
 export async function createBridgeApp(config = {}) {
   const root = path.dirname(fileURLToPath(import.meta.url))
   const drawerRoot = path.join(root, '..', 'public')
+  const reactDrawerRoot = path.join(root, '..', 'react-dist')
   const settings = {
     dataDir: config.dataDir ?? process.env.C_POCKET_DATA_DIR ?? path.join(root, '..', 'data'),
     bridgeToken: config.bridgeToken ?? cleanEnvironmentValue(process.env.C_POCKET_BRIDGE_TOKEN),
@@ -60,15 +71,82 @@ export async function createBridgeApp(config = {}) {
       destination: store.mediaDir,
       filename: (_req, _file, callback) => callback(null, randomUUID()),
     }),
-    limits: { files: 5, fileSize: 25 * 1024 * 1024 },
+    limits: { files: MAX_UPLOAD_FILES, fileSize: 25 * 1024 * 1024 },
   })
-  const app = createMcpExpressApp({ host: settings.temporaryPublicMcp ? '0.0.0.0' : settings.serverHost })
+  const receiveUpload = upload.fields(UPLOAD_FIELDS)
+  const acceptUpload = (req, res, next) => {
+    receiveUpload(req, res, async (error) => {
+      if (!error) return next()
+      await removeUploadedFiles(normalizeMultipartFiles(req.files))
+      next(error)
+    })
+  }
+  const mcpHost =
+    settings.temporaryPublicMcp
+      ? '0.0.0.0'
+      : settings.serverHost
+
+  const mcpAppOptions = {
+    host: mcpHost,
+    ...(isLoopbackHost(mcpHost)
+      ? {
+          allowedHosts:
+            localDevelopmentHosts(),
+        }
+      : {}),
+  }
+
+  const app =
+    createMcpExpressApp(
+      mcpAppOptions,
+    )
   const transports = new Map()
 
   app.disable('x-powered-by')
   app.use(express.json({ limit: '2mb' }))
   app.use(express.urlencoded({ extended: false, limit: '2mb' }))
   app.use(express.text({ type: ['text/plain', 'text/*'], limit: '2mb' }))
+  /*
+    React production candidate.
+
+    /drawer remains the currently deployed legacy frontend.
+    /drawer-next serves the React QA build against the same
+    backend and the same persistent PocketStore.
+
+    No data migration occurs here.
+  */
+  app.get(
+    '/drawer-next',
+    (_req, res) =>
+      res.sendFile(
+        path.join(
+          reactDrawerRoot,
+          'index.html',
+        ),
+      ),
+  )
+
+  app.get(
+    '/drawer-next/',
+    (_req, res) =>
+      res.sendFile(
+        path.join(
+          reactDrawerRoot,
+          'index.html',
+        ),
+      ),
+  )
+
+  app.use(
+    '/drawer-next',
+    express.static(
+      reactDrawerRoot,
+      {
+        index: false,
+      },
+    ),
+  )
+
   app.get('/drawer', (_req, res) => res.sendFile(path.join(drawerRoot, 'index.html')))
   app.use('/drawer', express.static(drawerRoot, { index: false }))
   app.use(
@@ -372,35 +450,64 @@ export async function createBridgeApp(config = {}) {
   })
 
   const handleUpload = ({ defaultText = false } = {}) => async (req, res, next) => {
+    const files = normalizeMultipartFiles(req.files)
+    let uploadedAttachments
+    let storedItem = null
+
     try {
       let payload = parseRequestPayload(req.body)
-      if (typeof req.body?.payload === 'string' && req.body.payload.trim()) payload = JSON.parse(req.body.payload)
+      if (typeof req.body?.payload === 'string' && req.body.payload.trim()) {
+        payload = {
+          ...payload,
+          ...parseRequestPayload(JSON.parse(req.body.payload)),
+        }
+      }
       delete payload.payload
+
+      const expectedFileCount = parseExpectedFileCount(payload)
+      delete payload.expectedFileCount
+
+      if (
+        expectedFileCount !== null
+        && files.length !== expectedFileCount
+      ) {
+        const error = httpError(
+          422,
+          `Expected ${expectedFileCount} uploaded file(s), but received ${files.length}.`,
+        )
+        error.code = 'EXPECTED_FILE_COUNT_MISMATCH'
+        error.expectedFileCount = expectedFileCount
+        error.receivedFileCount = files.length
+        throw error
+      }
+
       payload = normalizeIncomingShare(payload)
       if (isSelfServiceShare(payload.sourceUrl, req, settings)) {
         throw httpError(400, '这看起来是口袋自己的服务地址，没有作为收藏保存。请从原 App 的分享菜单运行快捷指令。')
       }
-      const files = Array.isArray(req.files) ? req.files : []
-      const attachments = files.map((file) => ({
-        id: randomUUID(),
-        name: file.originalname,
-        mimeType: file.mimetype,
-        size: file.size,
-        storageName: file.filename,
+      uploadedAttachments = files.map((file) => ({
+        file,
+        attachment: {
+          id: randomUUID(),
+          name: normalizeUploadedFilename(file.originalname),
+          mimeType: file.mimetype,
+          size: file.size,
+          storageName: file.filename,
+        },
       }))
+      const attachments = uploadedAttachments.map((entry) => entry.attachment)
       const allAttachments = [...(payload.attachments ?? []), ...attachments]
       const xhsInput = [payload.sourceUrl, payload.text].filter(Boolean).join('\n')
-      let item
       if (xhsAdapter.canHandle(xhsInput)) {
         try {
           const xhs = await xhsAdapter.parse(xhsInput)
-          item = await store.upsertXhs({ ...payload, attachments: allAttachments, sharedText: payload.text, xhs }, {
+          storedItem = await store.upsertXhs({ ...payload, attachments: allAttachments, sharedText: payload.text, xhs }, {
             loadImage: (url) => xhsAdapter.loadImage(url),
           })
         } catch (error) {
           const resolvedUrl = cleanWebUrl(error?.finalUrl) || payload.sourceUrl
           const noteId = extractXhsNoteId(resolvedUrl)
-          item = await store.upsert({
+          storedItem = await store.upsert({
             ...payload,
             attachments: allAttachments,
             sourceUrl: resolvedUrl,
@@ -418,19 +525,41 @@ export async function createBridgeApp(config = {}) {
           console.warn(`XHS adapter fell back to a link item: ${String(error?.message || 'unknown error').slice(0, 160)}`)
         }
       } else {
-        item = await store.upsert({ ...payload, attachments: allAttachments })
+        storedItem = await store.upsert({ ...payload, attachments: allAttachments })
       }
-      const receipt = createDropReceipt(item)
+
+      const retainedAttachmentIds = new Set(
+        storedItem.attachments.map((attachment) => attachment.id),
+      )
+      await removeUploadedFiles(
+        uploadedAttachments
+          .filter(({ attachment }) => !retainedAttachmentIds.has(attachment.id))
+          .map(({ file }) => file),
+      )
+
+      const receipt = createDropReceipt(storedItem)
       const responseMode = String(req.query.response ?? '').toLowerCase()
       if (responseMode === 'text' || (defaultText && responseMode !== 'json')) {
         return res.status(200).type('text/plain; charset=utf-8').send(receipt.message)
       }
-      res.status(200).json({ ok: true, message: receipt.message, receipt, item })
-    } catch (error) { next(error) }
+      res.status(200).json({ ok: true, message: receipt.message, receipt, item: storedItem })
+    } catch (error) {
+      const retainedAttachmentIds = new Set(
+        storedItem?.attachments.map((attachment) => attachment.id) ?? [],
+      )
+      await removeUploadedFiles(
+        uploadedAttachments
+          ? uploadedAttachments
+              .filter(({ attachment }) => !retainedAttachmentIds.has(attachment.id))
+              .map(({ file }) => file)
+          : files,
+      )
+      next(error)
+    }
   }
 
-  app.post('/api/pocket/items/upload', upload.array('files', 5), handleUpload())
-  app.post(`/drop/${settings.dropSecret}`, upload.array('files', 5), handleUpload({ defaultText: true }))
+  app.post('/api/pocket/items/upload', acceptUpload, handleUpload())
+  app.post(`/drop/${settings.dropSecret}`, acceptUpload, handleUpload({ defaultText: true }))
 
   app.get('/api/pocket/media/:attachmentId', async (req, res, next) => {
     try {
@@ -450,8 +579,16 @@ export async function createBridgeApp(config = {}) {
 
   app.patch('/api/pocket/items/:id/replies/:replyId', async (req, res, next) => {
     try {
-      if (req.body?.hidden !== true) return res.status(400).json({ error: 'Reply hidden must be true.' })
-      res.json(await store.hideReply(req.params.id, req.params.replyId))
+      if (typeof req.body?.hidden !== 'boolean') {
+        return res.status(400).json({ error: 'Reply hidden must be boolean.' })
+      }
+      res.json(
+        await store.setReplyHidden(
+          req.params.id,
+          req.params.replyId,
+          req.body.hidden,
+        ),
+      )
     } catch (error) { next(error) }
   })
 
@@ -504,7 +641,13 @@ export async function createBridgeApp(config = {}) {
 
   app.use((error, _req, res, _next) => {
     void _next
-    res.status(Number(error?.status) || 500).json({ error: error?.message || 'Internal server error.' })
+    res.status(Number(error?.status) || 500).json({
+      error: error?.message || 'Internal server error.',
+      ...(error?.code ? { code: error.code } : {}),
+      ...(typeof error?.field === 'string' && error.field ? { field: error.field } : {}),
+      ...(Number.isInteger(error?.expectedFileCount) ? { expectedFileCount: error.expectedFileCount } : {}),
+      ...(Number.isInteger(error?.receivedFileCount) ? { receivedFileCount: error.receivedFileCount } : {}),
+    })
   })
 
   return {
@@ -607,6 +750,74 @@ function safeSecretEqual(value, expected) {
   return left.length === right.length && timingSafeEqual(left, right)
 }
 
+function isLoopbackHost(value) {
+  return [
+    '127.0.0.1',
+    'localhost',
+    '::1',
+  ].includes(
+    cleanEnvironmentValue(value),
+  )
+}
+
+function localDevelopmentHosts() {
+  const hosts =
+    new Set([
+      '127.0.0.1',
+      'localhost',
+      '[::1]',
+    ])
+
+  const hostname =
+    cleanEnvironmentValue(
+      os.hostname(),
+    )
+
+  if (hostname) {
+    const lowerHostname =
+      hostname.toLowerCase()
+
+    hosts.add(hostname)
+    hosts.add(lowerHostname)
+
+    if (
+      !lowerHostname
+        .endsWith('.local')
+    ) {
+      hosts.add(
+        `${hostname}.local`,
+      )
+      hosts.add(
+        `${lowerHostname}.local`,
+      )
+    }
+  }
+
+  for (
+    const addresses
+    of Object.values(
+      os.networkInterfaces(),
+    )
+  ) {
+    for (
+      const address
+      of addresses || []
+    ) {
+      if (
+        address
+        && !address.internal
+        && address.family === 'IPv4'
+      ) {
+        hosts.add(
+          address.address,
+        )
+      }
+    }
+  }
+
+  return [...hosts]
+}
+
 function isSameOriginRequest(req) {
   const origin = cleanEnvironmentValue(req.get('origin'))
   if (!origin) return false
@@ -671,6 +882,68 @@ function parseRequestPayload(body) {
   }
   if (Array.isArray(body)) return { share: body }
   return body && typeof body === 'object' ? { ...body } : {}
+}
+
+function parseExpectedFileCount(payload) {
+  if (!Object.hasOwn(payload, 'expectedFileCount')) return null
+
+  const raw = payload.expectedFileCount
+  const value = typeof raw === 'string' && raw.trim() !== ''
+    ? Number(raw)
+    : raw
+
+  if (
+    !Number.isInteger(value)
+    || value < 0
+    || value > MAX_UPLOAD_FILES
+  ) {
+    const error = httpError(
+      422,
+      `expectedFileCount must be an integer from 0 through ${MAX_UPLOAD_FILES}.`,
+    )
+    error.code = 'INVALID_EXPECTED_FILE_COUNT'
+    throw error
+  }
+
+  return value
+}
+
+function normalizeUploadedFilename(value) {
+  const original = String(value ?? '')
+  const containsNonLatin1 = [...original]
+    .some((character) => character.codePointAt(0) > 0xFF)
+
+  if (containsNonLatin1) return original.normalize('NFC')
+
+  const candidate = Buffer.from(original, 'latin1').toString('utf8')
+  return (candidate.includes('\uFFFD') ? original : candidate).normalize('NFC')
+}
+
+function normalizeMultipartFiles(value) {
+  if (Array.isArray(value)) return value
+  if (!value || typeof value !== 'object') return []
+
+  return [
+    ...(Array.isArray(value.files) ? value.files : []),
+    ...Array.from(
+      { length: MAX_UPLOAD_FILES },
+      (_, index) => value[`file${index + 1}`]?.[0],
+    ).filter(Boolean),
+  ]
+}
+
+async function removeUploadedFiles(files) {
+  await Promise.all(
+    files.map(async (file) => {
+      try {
+        await unlink(file.path)
+      } catch (error) {
+        if (error?.code !== 'ENOENT') {
+          console.error(`Failed to remove uploaded file ${file.filename}: ${error?.message || 'unknown error'}`)
+        }
+      }
+    }),
+  )
 }
 
 function createDropReceipt(item) {

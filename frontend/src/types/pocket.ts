@@ -24,10 +24,78 @@ export interface PocketAttachmentSummary {
   url?: string
 }
 
+export interface PocketIntakeReceipt {
+  status: 'saved' | 'merged'
+  itemId: string
+  title: string
+  sourceApp: string
+  receivedCount: number
+  message: string
+}
+
+export interface PocketIntakeResult {
+  item: PocketItemSummary
+  receipt: PocketIntakeReceipt
+  message: string
+}
+
 export interface PocketReplySummary {
   id?: string
+
+  author?:
+    | 'EE'
+    | 'Aqi'
+
   text?: string
   content?: string
+
+  createdAt?: string
+  source?: string
+}
+
+export interface PocketContentImage {
+  url: string
+  alt?: string
+}
+
+export interface PocketContentSnapshot {
+  siteName?: string
+  title?: string
+  author?: string
+  publishedAt?: string
+  description?: string
+  text?: string
+
+  detail?: 'compact' | 'full'
+
+  textTruncated?: boolean
+
+  finalUrl?: string
+  canonicalUrl?: string
+
+  images: PocketContentImage[]
+
+  browserCapturePlan?: {
+    needed?: boolean
+  }
+
+  video?: {
+    detected?: boolean
+    durationSeconds?: number
+  }
+
+  frameExtraction?: {
+    requested?: number
+    extracted?: number
+  }
+}
+
+export interface PocketContentReadResult {
+  snapshot: PocketContentSnapshot
+
+  cache: {
+    hit?: boolean
+  }
 }
 
 export interface PocketActivityEntry {
@@ -59,6 +127,12 @@ export interface PocketItemSummary {
 
   replies:
     PocketReplySummary[]
+
+  hiddenReplies:
+    PocketReplySummary[]
+
+  hiddenReplyCount: number
+
 
   collection: string | null
 

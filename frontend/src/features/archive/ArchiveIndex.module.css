@@ -1,0 +1,292 @@
+/*
+  Archive index keeps React management behavior,
+  but visually returns to the legacy filing strip.
+*/
+
+.index {
+  position: relative;
+  z-index: 5;
+
+  display: grid;
+
+  gap: 0;
+
+  width:
+    calc(100% - 28px);
+
+  margin:
+    18px 14px 0;
+
+  padding: 0;
+
+  border: 0;
+
+  font-family:
+    var(--drawer-font-meta);
+}
+
+.topRow {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 9px;
+
+  min-width: 0;
+}
+
+.topRow > .line {
+  flex: 1;
+}
+
+.line {
+  display: flex;
+
+  flex-wrap: nowrap;
+
+  align-items: center;
+
+  gap: 15px;
+
+  min-width: 0;
+  min-height: 32px;
+
+  padding:
+    5px 0;
+
+  overflow-x: auto;
+
+  border-top:
+    1px solid
+    rgba(116, 93, 71, .10);
+
+  scrollbar-width: none;
+}
+
+.line::-webkit-scrollbar {
+  display: none;
+}
+
+.index > .line:last-of-type {
+  opacity: .72;
+}
+
+.entry,
+.manageButton,
+.removeButton,
+.confirmActions button {
+  appearance: none;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  font-family:
+    var(--drawer-font-meta);
+
+  cursor: pointer;
+}
+
+.entry {
+  flex: 0 0 auto;
+
+  min-height: 32px;
+
+  padding:
+    5px 0;
+
+  border-bottom:
+    1px solid transparent;
+
+  color:
+    rgba(86, 80, 70, .62);
+
+  font-size:
+    .61rem;
+
+  line-height: 1.25;
+
+  letter-spacing:
+    .055em;
+
+  white-space: nowrap;
+}
+
+.entry[data-current='true'] {
+  border-bottom-color:
+    rgba(83, 96, 78, .50);
+
+  color:
+    var(--drawer-sage);
+}
+
+.managedEntry {
+  display: inline-flex;
+
+  flex: 0 0 auto;
+
+  align-items: center;
+
+  gap: 2px;
+}
+
+.manageButton {
+  flex: 0 0 auto;
+
+  min-height: 32px;
+
+  padding:
+    5px 0;
+
+  color:
+    rgba(83, 96, 78, .62);
+
+  font-size:
+    .56rem;
+
+  letter-spacing:
+    .055em;
+}
+
+.removeButton {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 20px;
+  height: 24px;
+
+  margin-left:
+    -4px;
+
+  padding: 0;
+
+  color:
+    rgba(123, 75, 65, .58);
+
+  font-size:
+    .70rem;
+}
+
+.confirmSlip {
+  display: flex;
+
+  align-items: center;
+  justify-content:
+    space-between;
+
+  gap: 12px;
+
+  margin:
+    5px 0 4px;
+
+  padding:
+    8px 0 8px 9px;
+
+  border-left:
+    1px solid
+    rgba(121, 78, 66, .26);
+
+  background:
+    rgba(238, 228, 211, .38);
+}
+
+.confirmSlip p {
+  flex: 1;
+
+  margin: 0;
+
+  color:
+    rgba(74, 61, 53, .70);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .54rem;
+
+  line-height: 1.5;
+}
+
+.confirmActions {
+  display: flex;
+
+  flex: 0 0 auto;
+
+  gap: 9px;
+}
+
+.confirmActions button {
+  padding:
+    2px 0;
+
+  color:
+    rgba(72, 82, 68, .72);
+
+  font-size:
+    .50rem;
+
+  white-space: nowrap;
+}
+
+.confirmActions button:first-child {
+  color:
+    rgba(121, 67, 58, .80);
+}
+
+.confirmActions button:disabled {
+  cursor: default;
+
+  opacity: .45;
+}
+
+.error {
+  margin:
+    4px 0 0;
+
+  color:
+    rgba(118, 64, 56, .80);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .50rem;
+}
+
+.entry:focus-visible,
+.manageButton:focus-visible,
+.removeButton:focus-visible,
+.confirmActions button:focus-visible {
+  outline:
+    1px solid
+    rgba(93, 76, 57, .35);
+
+  outline-offset: 2px;
+}
+
+@media (max-width: 430px) {
+  .index {
+    width:
+      calc(100% - 22px);
+
+    margin-inline:
+      11px;
+  }
+
+  .line {
+    gap: 13px;
+  }
+
+  .confirmSlip {
+    align-items:
+      flex-start;
+
+    flex-direction:
+      column;
+
+    gap: 5px;
+  }
+}

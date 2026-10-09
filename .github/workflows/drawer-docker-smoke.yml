@@ -1,0 +1,96 @@
+name: Drawer Docker smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build production image
+        run: docker build --tag aqi-drawer:ci .
+
+      - name: Start isolated production container
+        run: |
+          docker volume create aqi-drawer-ci-data
+
+          bridge_token="$(openssl rand -hex 32)"
+          drawer_secret="$(openssl rand -hex 32)"
+          drop_secret="$(openssl rand -hex 32)"
+          mcp_suffix="$(openssl rand -hex 32)"
+
+          docker run --detach \
+            --name aqi-drawer-ci \
+            --publish 127.0.0.1:8787:8787 \
+            --mount type=volume,source=aqi-drawer-ci-data,target=/app/data \
+            --env "C_POCKET_BRIDGE_TOKEN=${bridge_token}" \
+            --env "C_POCKET_DRAWER_SECRET=${drawer_secret}" \
+            --env "C_POCKET_DROP_SECRET=${drop_secret}" \
+            --env "C_POCKET_MCP_PATH=/mcp/${mcp_suffix}" \
+            aqi-drawer:ci
+
+      - name: Wait for Docker health check
+        run: |
+          for attempt in $(seq 1 45); do
+            running="$(docker inspect --format '{{.State.Running}}' aqi-drawer-ci)"
+            health="$(docker inspect --format '{{.State.Health.Status}}' aqi-drawer-ci)"
+            printf 'attempt=%s running=%s health=%s\n' "$attempt" "$running" "$health"
+
+            if [ "$running" != "true" ]; then
+              docker logs aqi-drawer-ci
+              exit 1
+            fi
+
+            if [ "$health" = "healthy" ]; then
+              exit 0
+            fi
+
+            if [ "$health" = "unhealthy" ]; then
+              docker logs aqi-drawer-ci
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker logs aqi-drawer-ci
+          echo 'Container did not become healthy before the timeout.' >&2
+          exit 1
+
+      - name: Verify production routes
+        run: |
+          check_route() {
+            label="$1"
+            path="$2"
+            status="$(curl --silent --show-error --output /tmp/aqi-drawer-response --write-out '%{http_code}' "http://127.0.0.1:8787${path}")"
+            printf '%s %s -> HTTP %s\n' "$label" "$path" "$status"
+
+            if [ "$status" != "200" ]; then
+              cat /tmp/aqi-drawer-response
+              exit 1
+            fi
+          }
+
+          check_route health /health
+          check_route legacy-drawer /drawer
+          check_route react-drawer /drawer-next
+
+          test "$(docker inspect --format '{{.State.Running}}' aqi-drawer-ci)" = "true"
+          test "$(docker inspect --format '{{.State.Health.Status}}' aqi-drawer-ci)" = "healthy"
+          echo 'Container remains running and healthy after route smoke tests.'
+
+      - name: Clean up isolated container and data
+        if: always()
+        run: |
+          docker rm --force aqi-drawer-ci 2>/dev/null || true
+          docker volume rm aqi-drawer-ci-data 2>/dev/null || true

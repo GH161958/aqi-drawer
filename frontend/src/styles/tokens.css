@@ -1,3 +1,13 @@
+@font-face {
+  font-family: "Aqi Brand Gloock";
+  src:
+    url("../assets/fonts/gloock/Gloock-Regular-latin.woff2")
+    format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   --drawer-paper: #f3eddf;
   --drawer-paper-soft: #e8decd;
@@ -20,19 +30,120 @@
   --drawer-page-inline:
     clamp(20px, 6vw, 48px);
 
-  --drawer-font-display:
-    Georgia,
-    "Times New Roman",
-    serif;
+  --font-ui:
+    -apple-system,
+    BlinkMacSystemFont,
+    "PingFang SC",
+    "PingFang TC",
+    system-ui,
+    sans-serif;
 
-  --drawer-font-body:
-    Georgia,
-    "Noto Serif SC",
-    serif;
+  --font-reading:
+    var(--font-ui);
 
-  --drawer-font-meta:
+  --font-display:
+    var(--font-ui);
+
+  --font-meta:
     ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
+
+  --font-brand:
+    "Aqi Brand Gloock",
+    Georgia,
+    "Times New Roman",
+    serif;
+
+  --drawer-font-display:
+    var(--font-display);
+
+  --drawer-font-body:
+    var(--font-reading);
+
+  --drawer-font-meta:
+    var(--font-meta);
+
+  --paper-type-eyebrow-size: .50rem;
+  --paper-type-eyebrow-line-height: normal;
+  --paper-type-eyebrow-weight: 400;
+  --paper-type-eyebrow-spacing: .10em;
+
+  --paper-type-title-size: .76rem;
+  --paper-type-title-line-height: normal;
+  --paper-type-title-weight: 400;
+  --paper-type-title-spacing: .065em;
+
+  --paper-type-label-size: .54rem;
+  --paper-type-label-line-height: normal;
+  --paper-type-label-weight: 400;
+  --paper-type-label-spacing: .10em;
+
+  --paper-type-body-size: .69rem;
+  --paper-type-body-line-height: 1.55;
+  --paper-type-body-weight: 400;
+  --paper-type-body-spacing: 0;
+
+  --paper-type-action-family:
+    var(--drawer-font-meta);
+  --paper-type-action-size: .64rem;
+  --paper-type-action-line-height: normal;
+  --paper-type-action-weight: 400;
+  --paper-type-action-spacing: 0;
+  --paper-type-action-color:
+    var(--drawer-sage);
+  --paper-type-action-underline:
+    rgba(83, 96, 78, .24);
+
+  --paper-type-meta-size: .49rem;
+  --paper-type-meta-line-height: 1.45;
+  --paper-type-meta-weight: 400;
+  --paper-type-meta-spacing: .03em;
+
+  --paper-type-input-size: 16px;
+
+  --paper-attached-tab-ee-background: #efeade;
+  --paper-attached-tab-ee-border:
+    rgba(103, 118, 96, .26);
+  --paper-attached-tab-ee-text:
+    rgba(88, 102, 83, .82);
+
+  --paper-attached-tab-aqi-background: #eee6d8;
+  --paper-attached-tab-aqi-border:
+    rgba(151, 124, 79, .26);
+  --paper-attached-tab-aqi-text:
+    rgba(118, 94, 58, .82);
+
+  --paper-attached-tab-font:
+    var(--drawer-font-meta);
+  --paper-attached-tab-font-size: .44rem;
+  --paper-attached-tab-font-weight: 400;
+  --paper-attached-tab-line-height: 1;
+  --paper-attached-tab-letter-spacing: .02em;
+
+  --paper-attached-tab-width: 63px;
+  --paper-attached-tab-height: 17px;
+  --paper-attached-tab-buried: 43px;
+  --paper-attached-tab-gap: 5px;
+}
+
+@media (min-width: 431px) {
+  :root {
+    --paper-attached-tab-width: 64px;
+    --paper-attached-tab-height: 18px;
+    --paper-attached-tab-buried: 44px;
+    --paper-attached-tab-gap: 6px;
+    --paper-attached-tab-font-size: .46rem;
+  }
+}
+
+@media (max-width: 370px) {
+  :root {
+    --paper-attached-tab-width: 60px;
+    --paper-attached-tab-height: 17px;
+    --paper-attached-tab-buried: 41px;
+    --paper-attached-tab-gap: 5px;
+    --paper-attached-tab-font-size: .44rem;
+  }
 }

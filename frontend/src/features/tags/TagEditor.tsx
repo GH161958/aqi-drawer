@@ -147,9 +147,34 @@ export function TagEditor({
   }
 
   return (
-    <div className={styles.field}>
-      <div className={styles.label}>
-        TAGS
+    <div
+      className={styles.field}
+      data-busy={
+        busy
+          ? 'true'
+          : undefined
+      }
+    >
+      <div className={styles.fieldHead}>
+        <div className={styles.label}>
+          INDEX TERMS
+        </div>
+
+        <button
+          type="button"
+          className={styles.editToggle}
+          aria-expanded={editing}
+          onClick={() =>
+            setEditing(
+              (value) =>
+                !value,
+            )
+          }
+        >
+          {editing
+            ? '完成'
+            : '整理'}
+        </button>
       </div>
 
       <div className={styles.content}>
@@ -200,25 +225,6 @@ export function TagEditor({
               )}
           </div>
 
-          <button
-            type="button"
-            className={
-              styles.editToggle
-            }
-            aria-expanded={
-              editing
-            }
-            onClick={() =>
-              setEditing(
-                (value) =>
-                  !value,
-              )
-            }
-          >
-            {editing
-              ? '完成'
-              : '整理'}
-          </button>
         </div>
 
         {editing && (
@@ -311,34 +317,40 @@ export function TagEditor({
                   styles.newRow
                 }
               >
-                <input
-                  id={
-                    `new-tag-${item.id}`
-                  }
+                <div
                   className={
-                    styles.newInput
+                    styles.inputViewport
                   }
-                  value={newTag}
-                  disabled={busy}
-                  placeholder="新的标签"
-                  onChange={
-                    (event) =>
-                      setNewTag(
-                        event.target.value,
-                      )
-                  }
-                  onKeyDown={
-                    (event) => {
-                      if (
-                        event.key
-                        === 'Enter'
-                      ) {
-                        event.preventDefault()
-                        attach(newTag)
+                >
+                  <input
+                    id={
+                      `new-tag-${item.id}`
+                    }
+                    className={
+                      styles.newInput
+                    }
+                    value={newTag}
+                    disabled={busy}
+                    placeholder="新的标签"
+                    onChange={
+                      (event) =>
+                        setNewTag(
+                          event.target.value,
+                        )
+                    }
+                    onKeyDown={
+                      (event) => {
+                        if (
+                          event.key
+                          === 'Enter'
+                        ) {
+                          event.preventDefault()
+                          attach(newTag)
+                        }
                       }
                     }
-                  }
-                />
+                  />
+                </div>
 
                 <button
                   type="button"
@@ -415,49 +427,22 @@ export function TagEditor({
                 </section>
               )}
 
-            {update.isPending && (
-              <p
-                className={
-                  styles.feedback
-                }
-              >
-                正在记下标签……
-              </p>
-            )}
-
-            {removeEverywhere.isPending && (
-              <p
-                className={
-                  styles.feedback
-                }
-              >
-                正在从整个 Drawer
-                移除标签……
-              </p>
-            )}
-
-            {update.isError && (
-              <p
-                className={
-                  styles.feedback
-                }
-              >
-                {update.error.message}
-              </p>
-            )}
-
-            {removeEverywhere.isError && (
-              <p
-                className={
-                  styles.feedback
-                }
-              >
-                {
-                  removeEverywhere
-                    .error.message
-                }
-              </p>
-            )}
+            <p
+              className={
+                styles.feedback
+              }
+              aria-live="polite"
+            >
+              {update.isPending
+                ? '正在记下标签……'
+                : removeEverywhere.isPending
+                  ? '正在从整个 Drawer 移除标签……'
+                  : update.isError
+                    ? update.error.message
+                    : removeEverywhere.isError
+                      ? removeEverywhere.error.message
+                      : '\u00A0'}
+            </p>
           </div>
         )}
 

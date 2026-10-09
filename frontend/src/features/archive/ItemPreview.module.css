@@ -6,10 +6,15 @@
 
 .paper {
   position: relative;
+  z-index: 2;
+
+  isolation: isolate;
 
   display: block;
 
   width: 100%;
+
+  overflow: visible;
 
   padding:
     clamp(20px, 5vw, 30px);
@@ -35,6 +40,27 @@
     rgba(52, 39, 30, .07);
 
   cursor: pointer;
+}
+
+.previewPaperBundle {
+  position: relative;
+
+  isolation: isolate;
+
+  overflow: visible;
+}
+
+.previewBundleCover {
+  position: absolute;
+  z-index: -1;
+
+  inset: 0;
+
+  border-radius: inherit;
+
+  background: inherit;
+
+  pointer-events: none;
 }
 
 .meta {
@@ -77,6 +103,9 @@
 
   color:
     rgba(52, 46, 39, .78);
+
+  font-family:
+    var(--font-reading);
 
   font-size: .9rem;
 
@@ -121,65 +150,4716 @@
 }
 
 .edgeTabs {
-  position: absolute;
+  --preview-edge-tab-width:
+    var(--paper-attached-tab-width);
+  --preview-edge-tab-exposure: 14px;
+  --preview-edge-tab-height: 12px;
+  --preview-edge-tab-top: 72px;
 
-  right: -24px;
-  bottom: 17px;
+  position: absolute;
+  z-index: -2;
+
+  /*
+    Attached tabs now position against
+    the actual presentation object.
+  */
+  top:
+    var(--preview-edge-tab-top);
+
+  right:
+    calc(
+      -1
+      * var(--preview-edge-tab-exposure)
+    );
+  bottom: auto;
 
   display: grid;
+  grid-template-columns:
+    var(--preview-edge-tab-exposure);
+  gap:
+    var(--paper-attached-tab-gap);
 
-  gap: 6px;
+  width:
+    var(--preview-edge-tab-exposure);
+  min-width:
+    var(--preview-edge-tab-exposure);
+  max-width:
+    var(--preview-edge-tab-exposure);
+
+  overflow: hidden;
+
+  margin: 0;
+  padding: 0;
 
   pointer-events: none;
 }
 
+
 .edgeTabs span {
-  min-width: 44px;
+  position: relative;
+
+  box-sizing: border-box;
+
+  width:
+    var(--preview-edge-tab-width);
+  min-width:
+    var(--preview-edge-tab-width);
+  max-width:
+    var(--preview-edge-tab-width);
+
+  justify-self: end;
+
+  height:
+    var(--preview-edge-tab-height);
+  min-height:
+    var(--preview-edge-tab-height);
+  max-height:
+    var(--preview-edge-tab-height);
+
+  margin: 0;
 
   padding:
-    6px 8px 6px 14px;
+    0 7px 0 0;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: flex-end;
+
+  border-radius: 0;
+
+  white-space: nowrap;
 
   font-family:
-    var(--drawer-font-meta);
+    var(--paper-attached-tab-font);
 
-  font-size: .58rem;
+  font-size:
+    var(--paper-attached-tab-font-size);
+
+  font-weight:
+    var(--paper-attached-tab-font-weight);
+
+  line-height:
+    var(--paper-attached-tab-line-height);
+
+  letter-spacing:
+    var(--paper-attached-tab-letter-spacing);
+
+  text-align: right;
 
   box-shadow:
-    1px 2px 4px
-    rgba(49, 37, 29, .06);
+    1px 2px 3px
+    rgba(55, 39, 29, .03);
+
+  transform: none;
 }
 
 .eeTab {
   border:
     1px solid
-    rgba(126, 138, 119, .30);
-
-  background:
-    #dfe8d9;
+    var(--paper-attached-tab-ee-border);
 
   color:
-    var(--drawer-sage);
+    var(--paper-attached-tab-ee-text);
+
+  background:
+    var(--paper-attached-tab-ee-background);
 }
 
 .aqiTab {
   border:
     1px solid
-    rgba(166, 144, 110, .30);
-
-  background:
-    #eadfc8;
+    var(--paper-attached-tab-aqi-border);
 
   color:
-    #74604c;
+    var(--paper-attached-tab-aqi-text);
+
+  background:
+    var(--paper-attached-tab-aqi-background);
 }
 
 @media (max-width: 520px) {
   .edgeTabs {
-    right: -14px;
+    --preview-edge-tab-top: 64px;
+
   }
+
 
   .paper {
     padding:
       20px 18px;
+  }
+}
+
+/* ==========================================
+   DOCUMENT SPECIMEN V9
+
+   Ear returns.
+   Date stays put.
+
+   FILES belongs to the folder tab.
+   Date belongs to the folder body.
+
+   They are intentionally NOT one flex row.
+
+   Storage = stack.
+   Reading = spread.
+========================================== */
+
+.documentCarrier {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.documentFolder {
+  position: relative;
+
+  width: calc(100% - 38px);
+  max-width: 382px;
+  height: 212px;
+
+  margin:
+    26px 9px 15px auto;
+
+  text-align: left;
+
+  transform:
+    rotate(-.035deg);
+}
+
+/*
+  Integrated shallow folder ear.
+  No borders = no seam lines.
+*/
+
+.documentBack {
+  position: absolute;
+  z-index: 0;
+
+  top: -10px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  border: 0;
+
+  background:
+    #dacbad;
+
+  clip-path:
+    polygon(
+      0 10px,
+      7% 10px,
+      7% 0,
+      46% 0,
+      49% 10px,
+      100% 10px,
+      100% 100%,
+      0 100%
+    );
+
+  box-shadow:
+    1px 4px 8px
+    rgba(55, 39, 29, .038);
+}
+
+/*
+  Metadata wrapper is merely a positioning layer.
+
+  FILES lives on the raised ear.
+  Date lives on the flat folder shoulder.
+
+  No flex alignment.
+  No translateY.
+  No date wandering.
+*/
+
+.documentTab {
+  position: absolute;
+  z-index: 4;
+
+  top: -5px;
+  right: 0;
+  left: 0;
+
+  display: block;
+
+  width: auto;
+  height: 30px;
+
+  margin: 0;
+  padding: 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  box-shadow: none;
+
+  font-family:
+    var(--drawer-font-meta);
+
+  pointer-events: none;
+}
+
+.documentTab::after {
+  display: none;
+}
+
+.documentTab > span {
+  position: absolute;
+
+  top: 0;
+  left: 10%;
+
+  display: block;
+
+  margin: 0;
+  padding: 0;
+
+  color:
+    rgba(72, 62, 51, .45);
+
+  font-size: .625rem;
+  line-height: 1;
+
+  letter-spacing:
+    .15em;
+
+  transform: none;
+}
+
+.documentTab > time {
+  position: absolute;
+
+  top: 16px;
+  right: 17px;
+
+  display: block;
+
+  margin: 0;
+  padding: 0;
+
+  color:
+    rgba(72, 62, 51, .28);
+
+  font-size: .60rem;
+  line-height: 1;
+
+  letter-spacing:
+    .02em;
+
+  font-variant-numeric:
+    tabular-nums;
+
+  white-space: nowrap;
+
+  transform: none;
+}
+
+/*
+  Keep V8's quiet dossier page.
+*/
+
+.documentInnerSheet {
+  position: absolute;
+  z-index: 2;
+
+  top: 35px;
+  right: 18px;
+  left: 20px;
+
+  min-height: 137px;
+
+  padding:
+    15px 17px 39px 24px;
+
+  border: 0;
+
+  background:
+    #fbf6ea;
+
+  box-shadow:
+    1px 3px 6px
+    rgba(60, 43, 32, .030);
+
+  transform:
+    translateX(1px)
+    rotate(-.08deg);
+}
+
+.documentInnerSheet::after {
+  display: none;
+}
+
+.documentType {
+  margin:
+    0 0 16px;
+
+  color:
+    rgba(111, 91, 61, .48);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .625rem;
+
+  line-height: 1;
+
+  letter-spacing:
+    .18em;
+}
+
+.documentTitle {
+  max-width: 96%;
+
+  margin:
+    0 0 11px;
+
+  color:
+    #40382f;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .92rem;
+
+  font-weight: 500;
+
+  line-height: 1.4;
+
+  letter-spacing:
+    -.006em;
+}
+
+.documentPreview {
+  display: -webkit-box;
+
+  width: 100%;
+  max-width: none;
+
+  margin: 0;
+
+  overflow: hidden;
+
+  color:
+    rgba(64, 56, 47, .59);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .73rem;
+
+  line-height: 1.66;
+
+  letter-spacing:
+    -.006em;
+
+  overflow-wrap: normal;
+  word-break: normal;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp: 2;
+}
+
+/*
+  Keep the quiet front flap.
+*/
+
+.documentFront {
+  position: absolute;
+  z-index: 3;
+
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto;
+
+  align-items: end;
+
+  gap: 16px;
+
+  min-height: 45px;
+
+  padding:
+    13px 15px 10px;
+
+  border: 0;
+
+  background:
+    #d7c7a8;
+
+  box-shadow:
+    0 -2px 5px
+    rgba(73, 52, 36, .010);
+
+  color:
+    rgba(73, 63, 52, .41);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .625rem;
+
+  line-height: 1.3;
+
+  letter-spacing:
+    .025em;
+}
+
+.documentFront::before {
+  display: none;
+}
+
+.documentFilename {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+.documentSource {
+  color:
+    rgba(73, 63, 52, .26);
+
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .documentFolder {
+    width:
+      calc(100% - 26px);
+
+    height: 204px;
+
+    margin:
+      25px 6px 14px auto;
+  }
+
+  .documentBack {
+    top: -9px;
+
+    clip-path:
+      polygon(
+        0 9px,
+        7% 9px,
+        7% 0,
+        46% 0,
+        49% 9px,
+        100% 9px,
+        100% 100%,
+        0 100%
+      );
+  }
+
+  .documentTab {
+    top: -4px;
+
+    height: 28px;
+  }
+
+  .documentTab > span {
+    top: 0;
+    left: 10%;
+  }
+
+  .documentTab > time {
+    top: 14px;
+    right: 14px;
+  }
+
+  .documentInnerSheet {
+    top: 33px;
+    right: 15px;
+    left: 17px;
+
+    min-height: 132px;
+
+    padding:
+      14px 14px 37px 21px;
+  }
+
+  .documentType {
+    margin-bottom: 14px;
+  }
+
+  .documentTitle {
+    max-width: 100%;
+
+    font-size: .89rem;
+  }
+
+  .documentPreview {
+    font-size: .71rem;
+
+    line-height: 1.65;
+  }
+
+  .documentFront {
+    min-height: 43px;
+
+    padding:
+      12px 13px 9px;
+
+    gap: 14px;
+  }
+}
+
+/* ==========================================
+   ARTICLE / LINK CLIPPING SPECIMEN V6
+
+   Physical accent pass.
+
+   One real fastening gesture:
+   a quiet brass paperclip binding
+   clipping + backing sheet.
+
+   No tape.
+   No fake stamps.
+   No scrapbook costume.
+
+   Real content is the decoration.
+========================================== */
+
+.articleCarrier {
+  padding: 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  box-shadow: none;
+}
+
+.articleObject {
+  position: relative;
+
+  width:
+    calc(100% - 72px);
+
+  max-width: 328px;
+
+  margin:
+    22px auto 23px 24px;
+
+  padding:
+    0 0 14px 14px;
+
+  text-align: left;
+
+  transform:
+    rotate(.12deg);
+}
+
+/*
+  Backing sheet is clearly independent
+  from the clipping, but remains quiet.
+*/
+
+
+/*
+  Archival keeper strip.
+
+  Inspired by the folded bond-paper strip used
+  beneath archival fasteners.
+
+  It gives the paperclip a physical reason
+  to exist while introducing only a whisper
+  of the Drawer sage accent.
+*/
+
+
+
+.articleMount {
+  position: absolute;
+  z-index: 0;
+
+  top: 13px;
+  right: -7px;
+  bottom: 2px;
+  left: 9px;
+
+  background:
+    #dfd4bd;
+
+  clip-path:
+    polygon(
+      .4% .6%,
+      99.4% 0,
+      100% 99.1%,
+      .7% 100%
+    );
+
+  box-shadow:
+    1px 4px 8px
+    rgba(57, 40, 30, .032);
+
+  transform:
+    rotate(-.38deg);
+
+  pointer-events: none;
+}
+
+/*
+  One actual fastening object.
+
+  Warm muted brass rather than shiny metal.
+  It physically crosses the top edge,
+  so it reads as a clip, not an icon.
+*/
+
+.articleTape {
+  position: absolute;
+  z-index: 5;
+
+  /*
+    One quiet collage gesture.
+
+    Slightly off mathematical center,
+    so it feels placed by hand rather
+    than auto-aligned by UI.
+  */
+
+  top: -7px;
+  left: 48%;
+
+  width: 54px;
+  height: 17px;
+
+  background:
+    rgba(190, 196, 171, .52);
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, .18);
+
+  border-bottom:
+    1px solid
+    rgba(99, 103, 83, .055);
+
+  box-shadow:
+    0 1px 2px
+    rgba(64, 54, 40, .025);
+
+  transform:
+    translateX(-50%)
+    rotate(-1deg);
+
+  pointer-events: none;
+}
+
+
+
+/*
+  The clipping remains the main object.
+*/
+
+.articleClipping {
+  position: relative;
+  z-index: 2;
+
+  min-height: 214px;
+
+  padding:
+    18px 20px 20px;
+
+  border: 0;
+
+  background:
+    #faf4e7;
+
+  color:
+    #40382f;
+
+  clip-path:
+    polygon(
+      .35% 0,
+      99.75% .35%,
+      100% 99.1%,
+      .20% 100%
+    );
+
+  box-shadow:
+    2px 5px 11px
+    rgba(57, 40, 30, .052);
+
+  transform:
+    translateX(2px)
+    rotate(-.18deg);
+}
+
+.articleClipping::before {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  bottom: 0;
+  left: 0;
+
+  width: 3px;
+
+  background:
+    linear-gradient(
+      to right,
+      rgba(117, 97, 68, .065),
+      rgba(117, 97, 68, 0)
+    );
+
+  pointer-events: none;
+}
+
+/*
+  Masthead is printed matter,
+  not application chrome.
+*/
+
+.articleMasthead {
+  position: relative;
+
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 18px;
+
+  margin:
+    0 0 23px;
+
+  padding:
+    0 0 10px;
+
+  border: 0;
+
+  font-family:
+    var(--drawer-font-meta);
+}
+
+.articleMasthead::after {
+  display: none;
+}
+
+.articleSource {
+  min-width: 0;
+
+  overflow: hidden;
+
+  color:
+    rgba(73, 86, 68, .70);
+
+  font-size: .66rem;
+
+  line-height: 1;
+
+  letter-spacing:
+    .14em;
+
+  text-overflow:
+    ellipsis;
+
+  white-space:
+    nowrap;
+}
+
+.articleDate {
+  flex: 0 0 auto;
+
+  color:
+    rgba(78, 68, 57, .30);
+
+  font-size: .60rem;
+
+  line-height: 1;
+
+  letter-spacing:
+    .015em;
+
+  font-variant-numeric:
+    tabular-nums;
+
+  white-space:
+    nowrap;
+}
+
+.articleTitle {
+  max-width: 93%;
+
+  margin:
+    0 0 18px;
+
+  color:
+    #3d352e;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    1.10rem;
+
+  font-weight: 500;
+
+  line-height: 1.38;
+
+  letter-spacing:
+    -.012em;
+
+  text-wrap:
+    balance;
+}
+
+.articleExcerpt {
+  display: -webkit-box;
+
+  max-width: 91%;
+
+  margin: 0;
+
+  overflow: hidden;
+
+  color:
+    rgba(61, 54, 47, .65);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size: .72rem;
+
+  line-height: 1.82;
+
+  letter-spacing:
+    -.004em;
+
+  text-wrap:
+    pretty;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp: 5;
+}
+
+.articleExcerpt::first-letter {
+  color:
+    rgba(55, 48, 41, .82);
+
+  font-size:
+    1.38em;
+
+  line-height:
+    .9;
+}
+
+.articleFooter {
+  display: flex;
+
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  margin-top: 22px;
+
+  padding: 0;
+
+  border: 0;
+
+  color:
+    rgba(81, 72, 62, .30);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size: .60rem;
+
+  line-height: 1.2;
+
+  letter-spacing:
+    .025em;
+}
+
+.articleFooter span {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow:
+    ellipsis;
+
+  white-space:
+    nowrap;
+}
+
+.articleFooter span:first-child {
+  max-width: 72%;
+}
+
+.articleFooter span:last-child {
+  color:
+    rgba(73, 86, 68, .34);
+}
+
+/*
+  Tiny paper-edge echo only.
+*/
+
+.articleObject::after {
+  display: none;
+}
+
+@media (max-width: 520px) {
+  .articleObject {
+    width:
+      calc(100% - 54px);
+
+    margin:
+      20px auto 21px 17px;
+
+    padding:
+      0 0 12px 12px;
+  }
+
+  .articleTape {
+    top: -6px;
+    left: 48%;
+
+    width: 49px;
+    height: 16px;
+  }
+
+  .articleMount {
+    top: 10px;
+    right: -8px;
+  }
+
+  .articleClipping {
+    min-height: 204px;
+
+    padding:
+      17px 18px 19px;
+
+    transform:
+      translateX(2px)
+      rotate(-.16deg);
+  }
+
+  .articleMasthead {
+    margin-bottom: 21px;
+
+    padding-bottom: 9px;
+  }
+
+  .articleMasthead::after {
+    width: 35%;
+  }
+
+  .articleTitle {
+    max-width: 96%;
+
+    margin-bottom: 16px;
+
+    font-size:
+      1.05rem;
+
+    line-height:
+      1.40;
+  }
+
+  .articleExcerpt {
+    max-width: 94%;
+
+    font-size: .71rem;
+
+    line-height: 1.78;
+
+    -webkit-line-clamp: 5;
+  }
+
+  .articleFooter {
+    margin-top: 20px;
+  }
+}
+
+/* ==========================================
+   PHOTO PREVIEW SPECIMEN V7
+
+   Source split restored.
+
+   XHS:
+   → legacy stacked-photo social packet
+   → caption slip overlaps photo stack
+
+   Generic single photo:
+   → one print in translucent sleeve
+
+   Generic photo set:
+   → stacked prints inside translucent sleeve
+   → NOT a contact sheet
+
+   Shared photo body,
+   different source accent.
+========================================== */
+
+
+/* ------------------------------------------
+   XHS · restore legacy storage object
+------------------------------------------ */
+
+.xhsCarrier {
+  padding: 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  box-shadow: none;
+}
+
+.xhsStorageObject {
+  position: relative;
+
+  width:
+    calc(100% - 18px);
+
+  max-width:
+    340px;
+
+  margin:
+    17px auto 25px;
+
+  padding:
+    3px 2px 8px;
+
+  text-align:
+    left;
+}
+
+.xhsPhotoStack {
+  position: relative;
+
+  width:
+    min(88%, 250px);
+
+  aspect-ratio:
+    4 / 5;
+
+  margin:
+    0 auto;
+}
+
+.xhsPhotoStack img {
+  position: absolute;
+
+  width:
+    calc(100% - 13px);
+
+  height:
+    calc(100% - 12px);
+
+  border:
+    5px solid
+    #f7f1e6;
+
+  background:
+    var(--drawer-paper-soft);
+
+  object-fit:
+    cover;
+
+  object-position:
+    center 18%;
+
+  box-shadow:
+    1px 5px 9px
+    rgba(50, 35, 27, .12);
+}
+
+.xhsPhotoStack img:nth-child(1) {
+  z-index: 3;
+
+  top: 0;
+  left: 0;
+
+  transform:
+    rotate(-.42deg);
+}
+
+.xhsPhotoStack img:nth-child(2) {
+  z-index: 2;
+
+  top: 5px;
+  left: 6px;
+
+  transform:
+    rotate(0deg);
+}
+
+.xhsPhotoStack img:nth-child(3) {
+  z-index: 1;
+
+  top: 10px;
+  left: 12px;
+
+  transform:
+    rotate(.42deg);
+}
+
+.xhsPhotoStack[
+  data-photo-count="1"
+] img {
+  width: 100%;
+  height: 100%;
+
+  top: 0;
+  left: 0;
+
+  transform:
+    rotate(-.22deg);
+}
+
+.xhsCaptionSlip {
+  position: relative;
+  z-index: 6;
+
+  width:
+    min(84%, 245px);
+
+  margin:
+    -31px 1px 0 auto;
+
+  padding:
+    14px 15px 12px;
+
+  border:
+    1px solid
+    rgba(116, 93, 71, .08);
+
+  background:
+    var(--drawer-paper, #f7f1e6);
+
+  box-shadow:
+    1px 3px 6px
+    rgba(66, 44, 29, .07);
+
+  transform:
+    rotate(.22deg);
+}
+
+.xhsCaptionTitle {
+  display: -webkit-box;
+
+  margin:
+    0 0 8px;
+
+  overflow:
+    hidden;
+
+  color:
+    #40382f;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    1rem;
+
+  font-weight:
+    500;
+
+  line-height:
+    1.32;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+.xhsPreviewRecord {
+  display: flex;
+
+  flex-wrap:
+    wrap;
+
+  align-items:
+    baseline;
+
+  gap:
+    5px 8px;
+
+  margin: 0;
+
+  padding-top:
+    8px;
+
+  border-top:
+    1px solid
+    rgba(116, 93, 71, .10);
+
+  color:
+    rgba(83, 76, 67, .45);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  line-height:
+    1.35;
+}
+
+.xhsPreviewRecord time {
+  margin-left:
+    auto;
+
+  color:
+    rgba(83, 76, 67, .29);
+
+  font-variant-numeric:
+    tabular-nums;
+}
+
+
+/* ------------------------------------------
+   Generic Photo
+------------------------------------------ */
+
+.photoCarrier {
+  padding: 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  box-shadow: none;
+}
+
+.photoArchiveObject {
+  position: relative;
+
+  width:
+    calc(100% - 48px);
+
+  max-width:
+    352px;
+
+  margin:
+    19px auto 24px;
+
+  padding-bottom:
+    34px;
+
+  text-align:
+    left;
+}
+
+
+/*
+  Generic Photo paperclip.
+
+  V6:
+  replace the hand-drawn border clip with a cleaner
+  inline SVG brass clip so the silhouette reads more
+  like a real stationery paperclip.
+*/
+
+
+
+
+
+
+/* Single */
+
+.photoSleeve {
+  position: relative;
+
+  width:
+    min(84%, 286px);
+
+  margin:
+    0 auto;
+
+  padding:
+    13px 13px 31px;
+
+  background:
+    rgba(223, 226, 211, .50);
+
+  border:
+    1px solid
+    rgba(104, 105, 87, .075);
+
+  box-shadow:
+    1px 4px 8px
+    rgba(55, 39, 29, .035);
+
+  transform:
+    rotate(-.18deg);
+}
+
+.photoSleeve::after,
+.photoSetSleeve::after {
+  content: "";
+
+  position: absolute;
+
+  z-index: 4;
+
+  inset:
+    4px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, .19);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, .07),
+      rgba(255, 255, 255, 0) 42%
+    );
+
+  pointer-events:
+    none;
+}
+
+.photoSinglePrint {
+  position: relative;
+
+  z-index: 1;
+
+  aspect-ratio:
+    4 / 5;
+
+  padding:
+    5px;
+
+  background:
+    #f8f1e4;
+
+  box-shadow:
+    1px 4px 8px
+    rgba(50, 35, 27, .10);
+
+  transform:
+    translateY(2px)
+    rotate(.10deg);
+}
+
+.photoSinglePrint img {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit:
+    cover;
+
+  background:
+    var(--drawer-paper-soft);
+}
+
+.photoSleeveRecord {
+  position: absolute;
+
+  z-index: 5;
+
+  right: 12px;
+  bottom: 10px;
+  left: 12px;
+
+  display: flex;
+
+  justify-content:
+    space-between;
+
+  align-items:
+    baseline;
+
+  gap: 12px;
+
+  color:
+    rgba(76, 78, 65, .44);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .10em;
+}
+
+.photoSleeveRecord time {
+  color:
+    rgba(76, 78, 65, .29);
+
+  letter-spacing:
+    .015em;
+
+  font-variant-numeric:
+    tabular-nums;
+}
+
+
+/* Generic multi-photo:
+   stacked prints INSIDE one sleeve.
+*/
+
+.photoSetSleeve {
+  position: relative;
+
+  width:
+    min(88%, 300px);
+
+  margin:
+    0 auto;
+
+  padding:
+    13px 13px 34px;
+
+  background:
+    rgba(223, 226, 211, .46);
+
+  border:
+    1px solid
+    rgba(104, 105, 87, .07);
+
+  box-shadow:
+    1px 4px 8px
+    rgba(55, 39, 29, .032);
+
+  transform:
+    rotate(.12deg);
+}
+
+.photoSetStack {
+  position: relative;
+
+  z-index: 1;
+
+  width:
+    min(88%, 250px);
+
+  aspect-ratio:
+    4 / 5;
+
+  margin:
+    0 auto 7px;
+
+  overflow:
+    visible;
+}
+
+.photoSetStack img {
+  position: absolute;
+
+  width:
+    calc(100% - 18px);
+
+  height:
+    calc(100% - 18px);
+
+  border:
+    5px solid
+    #f7f1e6;
+
+  background:
+    var(--drawer-paper-soft);
+
+  object-fit:
+    cover;
+
+  box-shadow:
+    1px 4px 8px
+    rgba(50, 35, 27, .10);
+}
+
+.photoSetStack img:nth-child(1) {
+  z-index: 3;
+
+  top: 0;
+  left: 0;
+
+  transform:
+    rotate(-.42deg);
+}
+
+.photoSetStack img:nth-child(2) {
+  z-index: 2;
+
+  top: 7px;
+  left: 8px;
+
+  transform:
+    rotate(.08deg);
+}
+
+.photoSetStack img:nth-child(3) {
+  z-index: 1;
+
+  top: 14px;
+  left: 16px;
+
+  transform:
+    rotate(.48deg);
+}
+
+.photoSetRecord {
+  position: absolute;
+
+  z-index: 5;
+
+  right: 12px;
+  bottom: 10px;
+  left: 12px;
+
+  display: flex;
+
+  justify-content:
+    space-between;
+
+  gap: 12px;
+
+  color:
+    rgba(76, 78, 65, .43);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .10em;
+}
+
+
+/* Generic filing label */
+
+.photoArchiveLabel {
+  position: relative;
+
+  z-index: 6;
+
+  width:
+    72%;
+
+  margin:
+    -13px 4px 0 auto;
+
+  padding:
+    10px 12px 9px;
+
+  background:
+    #f2ebdd;
+
+  box-shadow:
+    1px 2px 4px
+    rgba(66, 44, 29, .045);
+
+  transform:
+    rotate(.10deg);
+}
+
+.photoArchiveLabel h2 {
+  display: -webkit-box;
+
+  margin:
+    0 0 8px;
+
+  overflow:
+    hidden;
+
+  color:
+    #423a31;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .84rem;
+
+  font-weight:
+    500;
+
+  line-height:
+    1.38;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+.photoArchiveLabel > div {
+  display: flex;
+
+  align-items:
+    baseline;
+
+  gap:
+    8px;
+
+  padding-top:
+    6px;
+
+  border-top:
+    1px solid
+    rgba(116, 93, 71, .075);
+
+  color:
+    rgba(82, 75, 65, .40);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  line-height:
+    1.25;
+}
+
+
+/* ------------------------------------------
+   Mobile
+------------------------------------------ */
+
+@media (max-width: 520px) {
+  .xhsStorageObject {
+    width:
+      calc(100% - 10px);
+
+    margin:
+      15px auto 22px;
+  }
+
+  .xhsPhotoStack {
+    width:
+      min(86%, 236px);
+  }
+
+  .xhsPhotoStack img {
+    border-width:
+      4px;
+  }
+
+  .xhsCaptionSlip {
+    width:
+      min(82%, 228px);
+
+    margin-top:
+      -27px;
+
+    padding:
+      12px 13px 11px;
+  }
+
+  .xhsCaptionTitle {
+    font-size:
+      .92rem;
+  }
+
+  .xhsPreviewRecord {
+    font-size:
+      .60rem;
+  }
+
+  .photoArchiveObject {
+    width:
+      calc(100% - 32px);
+
+    margin:
+      17px auto 22px;
+
+    padding-bottom:
+      31px;
+  }
+
+  .photoSleeve {
+    width:
+      min(85%, 260px);
+
+    padding:
+      11px 11px 29px;
+  }
+
+  .photoSinglePrint {
+    padding:
+      4px;
+  }
+
+
+
+  .photoSetSleeve {
+    width:
+      min(88%, 274px);
+
+    padding:
+      11px 11px 31px;
+  }
+
+  .photoSetStack {
+    width:
+      min(87%, 232px);
+  }
+
+  .photoSetStack img {
+    border-width:
+      4px;
+  }
+
+  .photoSetStack img:nth-child(2) {
+    top: 6px;
+    left: 7px;
+  }
+
+  .photoSetStack img:nth-child(3) {
+    top: 12px;
+    left: 14px;
+  }
+
+  .photoArchiveLabel {
+    width:
+      74%;
+
+    padding:
+      9px 11px 8px;
+  }
+
+  .photoArchiveLabel h2 {
+    font-size:
+      .81rem;
+  }
+
+  .photoArchiveLabel > div {
+    font-size:
+      .60rem;
+  }
+}
+
+/* AQI PAPERCLIP PHOTO V2 BEGIN */
+/*
+  Bring back a quiet paperclip feeling for generic photos only.
+  Do NOT affect Xiaohongshu cards.
+  Override previous top hardware / corner experiments.
+*/
+.paper[data-presentation-kind='photo'][data-source-flavor='generic'],
+.paper[data-presentation-kind='photo-set'][data-source-flavor='generic'] {
+  position: relative;
+  overflow: visible;
+}
+
+/* disable previous extra hardware / corners */
+.paper[data-presentation-kind='photo'][data-source-flavor='generic']::after,
+.paper[data-presentation-kind='photo-set'][data-source-flavor='generic']::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  clip-path: none !important;
+}
+
+/* refined light paperclip */
+.paper[data-presentation-kind='photo'][data-source-flavor='generic']::before,
+.paper[data-presentation-kind='photo-set'][data-source-flavor='generic']::before {
+  content: '';
+  position: absolute;
+  left: 73px;
+  top: 8px;
+  width: 22px;
+  height: 46px;
+  z-index: 8;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 48'%3E%3Cg fill='none' stroke='%23b89b6d' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke-width='1.9' d='M15.8 5.5c3.2 0 5.2 2.7 4.8 6l-2.4 21.7c-.4 4.3-3.5 7.1-7.2 7.1-3.9 0-6.9-3.1-6.4-7.6L7.1 11c.4-3.5 2.8-5.7 5.6-5.7 2.9 0 4.9 2.2 4.6 5.3l-2.3 20c-.2 2-1.5 3.2-3 3.2-1.7 0-2.8-1.3-2.6-3.2l2-18'/%3E%3C/g%3E%3C/svg%3E");
+  filter: drop-shadow(0 1px 1px rgba(116, 90, 54, .16));
+  transform: rotate(-11deg);
+  transform-origin: center;
+  opacity: .95;
+}
+/* AQI PAPERCLIP PHOTO V2 END */
+
+/* ==========================================
+   XHS SINGLE COVER SOCIAL SHEET · V5
+
+   Archive preview = cover.
+
+   One hero image only.
+   Remaining images are implied by the
+   source record ("3 张"), not shown here.
+
+   Inspect later becomes the spread.
+
+   Generic Photo remains:
+   sleeve + loose prints + brass paperclip.
+
+   XHS becomes:
+   one quiet editorial social sheet.
+
+   Storage = cover.
+   Reading = spread.
+========================================== */
+
+
+/* ------------------------------------------
+   One complete editorial sheet
+------------------------------------------ */
+
+.xhsStorageObject {
+  position: relative;
+
+  width:
+    calc(100% - 58px);
+
+  max-width:
+    282px;
+
+  margin:
+    22px auto 30px;
+
+  padding:
+    10px 10px 13px;
+
+  border:
+    1px solid
+    rgba(117, 101, 80, .06);
+
+  background:
+    #f3ecdf;
+
+  box-shadow:
+    1px 5px 10px
+    rgba(55, 39, 29, .07);
+
+  text-align:
+    left;
+
+  transform:
+    rotate(-.08deg);
+}
+
+
+/* ------------------------------------------
+   ONE cover image.
+
+   The DOM may still contain multiple images,
+   but Archive intentionally shows only #1.
+------------------------------------------ */
+
+.xhsPhotoStack {
+  position: relative;
+
+  display: block;
+
+  width: 100%;
+
+  aspect-ratio:
+    4 / 5;
+
+  margin: 0;
+
+  overflow: hidden;
+
+  background:
+    #ddd5c5;
+}
+
+.xhsPhotoStack img {
+  display: none;
+
+  position: static;
+
+  width: 100%;
+  height: 100%;
+
+  border: 0;
+
+  background:
+    var(--drawer-paper-soft);
+
+  object-fit:
+    cover;
+
+  object-position:
+    center 18%;
+
+  box-shadow: none;
+
+  transform: none;
+}
+
+.xhsPhotoStack img:first-child {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit:
+    cover;
+
+  object-position:
+    center 18%;
+}
+
+
+/* ------------------------------------------
+   Integrated social record.
+
+   Not a separate card.
+   Typography is printed into the same sheet.
+------------------------------------------ */
+
+.xhsSocialBand {
+  position: relative;
+
+  width: auto;
+
+  margin: 0;
+
+  padding:
+    10px 3px 0;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  box-shadow: none;
+
+  transform: none;
+}
+
+
+/*
+  No tape.
+  The sheet itself is already one object.
+*/
+
+.xhsBandTape {
+  display: none;
+}
+
+
+/* source + image count */
+
+.xhsBandMeta {
+  display: flex;
+
+  align-items:
+    baseline;
+
+  justify-content:
+    space-between;
+
+  gap:
+    12px;
+
+  margin:
+    0 0 7px;
+
+  color:
+    rgba(82, 75, 65, .33);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .055em;
+}
+
+
+/*
+  Tiny sage rule = source accent.
+  No red app chrome.
+*/
+
+.xhsBandMeta span:first-child {
+  padding-left:
+    6px;
+
+  border-left:
+    2px solid
+    rgba(111, 126, 103, .42);
+
+  color:
+    rgba(76, 91, 72, .65);
+
+  letter-spacing:
+    .10em;
+}
+
+.xhsBandMeta span:last-child {
+  white-space:
+    nowrap;
+}
+
+
+/* title */
+
+.xhsBandTitle {
+  display: -webkit-box;
+
+  margin: 0;
+
+  overflow:
+    hidden;
+
+  color:
+    #40382f;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .79rem;
+
+  font-weight:
+    500;
+
+  line-height:
+    1.35;
+
+  letter-spacing:
+    -.004em;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+
+/* date */
+
+.xhsBandFooter {
+  display: flex;
+
+  justify-content:
+    flex-end;
+
+  margin:
+    8px 0 0;
+
+  padding-top:
+    6px;
+
+  border-top:
+    1px solid
+    rgba(116, 93, 71, .055);
+
+  color:
+    rgba(83, 76, 67, .23);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .60rem;
+
+  line-height:
+    1;
+}
+
+.xhsBandFooter time {
+  font-variant-numeric:
+    tabular-nums;
+
+  white-space:
+    nowrap;
+}
+
+
+/* ------------------------------------------
+   Mobile
+------------------------------------------ */
+
+@media (max-width: 520px) {
+  .xhsStorageObject {
+    width:
+      calc(100% - 46px);
+
+    max-width:
+      270px;
+
+    margin:
+      20px auto 27px;
+
+    padding:
+      9px 9px 12px;
+  }
+
+  .xhsPhotoStack {
+    aspect-ratio:
+      4 / 5;
+  }
+
+  .xhsSocialBand {
+    padding:
+      9px 2px 0;
+  }
+
+  .xhsBandMeta {
+    margin-bottom:
+      6px;
+
+    font-size:
+      .60rem;
+  }
+
+  .xhsBandTitle {
+    font-size:
+      .75rem;
+  }
+
+  .xhsBandFooter {
+    margin-top:
+      7px;
+
+    padding-top:
+      5px;
+
+    font-size:
+      .60rem;
+  }
+}
+
+/* ==========================================
+   TEXT LOOSE PAPER · V2
+
+   Text remains simply paper.
+
+   The second sheet is represented by
+   a crisp offset shadow-layer rather than
+   a pseudo-element.
+
+   This guarantees:
+   right / bottom exposure only.
+
+   No tape.
+   No clip.
+   No tab.
+   No typography redesign.
+========================================== */
+
+.paper[data-presentation-kind='text'] {
+  width:
+    calc(100% - 10px);
+
+  margin:
+    0 10px 8px 0;
+
+  overflow:
+    visible;
+
+  transform:
+    rotate(-.12deg);
+
+  /*
+    Layer 1:
+    an opaque quiet backing sheet,
+    shifted only right + down.
+
+    Layer 2:
+    the original soft paper shadow.
+  */
+
+  box-shadow:
+    6px 4px 0
+    #eee4d4,
+
+    2px 7px 18px
+    rgba(52, 39, 30, .07);
+}
+
+
+/*
+  V1 pseudo sheet deliberately removed.
+*/
+
+.paper[data-presentation-kind='text']::before {
+  content:
+    none;
+
+  display:
+    none;
+}
+
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='text'] {
+    width:
+      calc(100% - 8px);
+
+    margin:
+      0 8px 6px 0;
+
+    transform:
+      rotate(-.09deg);
+
+    box-shadow:
+      4px 3px 0
+      #eee4d4,
+
+      2px 7px 18px
+      rgba(52, 39, 30, .07);
+  }
+}
+
+
+/* ==========================================
+   VIDEO SCREENING SLIP · V1 SAFE
+
+   Archive has not watched the video.
+
+   Therefore:
+   no fake still,
+   no fake poster,
+   no play button,
+   no platform UI.
+
+   Existing generic DOM becomes:
+
+   title -> screening matte
+   meta  -> archival screening record
+
+   Real poster / keyframes belong to
+   future Inspect / Source Reading.
+
+   Storage = screening record.
+   Reading = moving-image evidence.
+========================================== */
+
+.paper[data-presentation-kind='video'] {
+  display:
+    grid;
+
+  width:
+    calc(100% - 24px);
+
+  max-width:
+    408px;
+
+  margin:
+    12px auto 18px;
+
+  padding:
+    9px;
+
+  border:
+    1px solid
+    rgba(116, 93, 71, .065);
+
+  background:
+    #f3ecdf;
+
+  box-shadow:
+    2px 6px 13px
+    rgba(50, 35, 27, .07);
+
+  transform:
+    rotate(-.08deg);
+
+  overflow:
+    visible;
+}
+
+
+/* ------------------------------------------
+   Film title-card / screening matte
+
+   This is NOT an image.
+   The saved title itself is the content.
+------------------------------------------ */
+
+.paper[data-presentation-kind='video']
+.title {
+  order:
+    1;
+
+  display:
+    grid;
+
+  width:
+    100%;
+
+  min-height:
+    164px;
+
+  aspect-ratio:
+    16 / 8.8;
+
+  margin:
+    0;
+
+  padding:
+    26px 30px;
+
+  overflow:
+    hidden;
+
+  background:
+    #777866;
+
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(242, 235, 222, .075);
+
+  color:
+    #f3ecdf;
+
+  font-family:
+    var(--drawer-font-display);
+
+  font-size:
+    clamp(
+      1.06rem,
+      4vw,
+      1.42rem
+    );
+
+  font-weight:
+    400;
+
+  line-height:
+    1.30;
+
+  letter-spacing:
+    -.012em;
+
+  text-align:
+    center;
+
+  place-items:
+    center;
+}
+
+
+/*
+  Keep long titles under control.
+*/
+
+.paper[data-presentation-kind='video']
+.title {
+  display:
+    -webkit-box;
+
+  align-content:
+    center;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+
+/* ------------------------------------------
+   Existing source/kind meta becomes
+   the screening record printed below.
+------------------------------------------ */
+
+.paper[data-presentation-kind='video']
+.meta {
+  order:
+    2;
+
+  display:
+    flex;
+
+  align-items:
+    baseline;
+
+  justify-content:
+    space-between;
+
+  gap:
+    16px;
+
+  margin:
+    0;
+
+  padding:
+    10px 4px 3px;
+
+  border:
+    0;
+
+  color:
+    rgba(75, 68, 59, .36);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .075em;
+}
+
+
+.paper[data-presentation-kind='video']
+.meta span:first-child {
+  color:
+    rgba(76, 91, 72, .66);
+
+  letter-spacing:
+    .09em;
+}
+
+
+.paper[data-presentation-kind='video']
+.meta span:last-child {
+  color:
+    rgba(75, 68, 59, .28);
+
+  letter-spacing:
+    .06em;
+
+  text-transform:
+    uppercase;
+}
+
+
+/* ------------------------------------------
+   Archive does not pretend to have
+   read/watched the moving content.
+
+   Full text remains available elsewhere.
+------------------------------------------ */
+
+.paper[data-presentation-kind='video']
+.preview {
+  display:
+    none;
+}
+
+
+/*
+  If a collection label exists,
+  keep it quiet underneath the record.
+*/
+
+.paper[data-presentation-kind='video']
+.collection {
+  order:
+    3;
+
+  margin:
+    5px 4px 0;
+
+  color:
+    rgba(75, 68, 59, .26);
+
+  font-size:
+    .60rem;
+}
+
+
+/* ------------------------------------------
+   Mobile
+------------------------------------------ */
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='video'] {
+    width:
+      calc(100% - 14px);
+
+    margin:
+      10px auto 16px;
+
+    padding:
+      8px;
+
+    transform:
+      rotate(-.06deg);
+  }
+
+  .paper[data-presentation-kind='video']
+  .title {
+    min-height:
+      142px;
+
+    aspect-ratio:
+      16 / 9;
+
+    padding:
+      23px 22px;
+
+    font-size:
+      1.02rem;
+  }
+
+  .paper[data-presentation-kind='video']
+  .meta {
+    gap:
+      12px;
+
+    padding:
+      9px 3px 2px;
+
+    font-size:
+      .60rem;
+  }
+}
+
+
+/* ==========================================
+   VIDEO SCREENING DATE · V1.1
+
+   Left  = screening source
+   Right = real saved date
+
+   No new decoration.
+========================================== */
+
+.paper[data-presentation-kind='video']
+.meta span:first-child {
+  color:
+    rgba(76, 91, 72, .66);
+
+  letter-spacing:
+    .095em;
+
+  white-space:
+    nowrap;
+}
+
+.paper[data-presentation-kind='video']
+.meta span:last-child {
+  color:
+    rgba(75, 68, 59, .28);
+
+  font-variant-numeric:
+    tabular-nums;
+
+  letter-spacing:
+    .015em;
+
+  text-transform:
+    none;
+
+  white-space:
+    nowrap;
+}
+
+/* ==========================================
+   AUDIO · SAVED ALBUM SHARE CARD · V3
+
+   New body:
+
+   saved listening / album share card
+
+   The track TITLE itself becomes
+   the square album-jacket field.
+
+   No vinyl.
+   No player controls.
+   No progress bar.
+   No fake album artwork.
+   No platform UI clone.
+
+   Source = quiet attribution.
+   Content = the body.
+
+   Archive = saved listening card.
+========================================== */
+
+
+/* ------------------------------------------
+   One coherent music-share sheet
+------------------------------------------ */
+
+.paper[data-presentation-kind='audio'] {
+  position:
+    relative;
+
+  isolation:
+    isolate;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  width:
+    min(
+      calc(100% - 58px),
+      286px
+    );
+
+  margin:
+    25px auto 34px;
+
+  padding:
+    10px 10px 13px;
+
+  overflow:
+    visible;
+
+  border:
+    1px solid
+    rgba(113, 95, 72, .065);
+
+  background:
+    #f4ecdf;
+
+  box-shadow:
+    2px 6px 12px
+    rgba(53, 40, 30, .055);
+
+  transform:
+    rotate(-.05deg);
+}
+
+
+/*
+  Kill ALL old vinyl hardware.
+*/
+
+.paper[data-presentation-kind='audio']::before,
+.paper[data-presentation-kind='audio']::after {
+  content:
+    none;
+
+  display:
+    none;
+}
+
+
+/*
+  We do not pretend an arbitrary attachment
+  is stable album artwork.
+
+  Real artwork can replace this cover field
+  later when its contract exists.
+*/
+
+.paper[data-presentation-kind='audio']
+.imageFrame {
+  display:
+    none;
+}
+
+
+/* ------------------------------------------
+   Album-jacket field
+
+   The REAL SAVED TITLE becomes the cover.
+
+   This gives us an album-cover silhouette
+   without inventing an image.
+------------------------------------------ */
+
+.paper[data-presentation-kind='audio']
+.title {
+  order:
+    1;
+
+  position:
+    relative;
+
+  display:
+    grid;
+
+  align-content:
+    end;
+
+  width:
+    100%;
+
+  aspect-ratio:
+    1 / 1;
+
+  margin:
+    0;
+
+  padding:
+    26px 24px 24px;
+
+  overflow:
+    hidden;
+
+  border:
+    1px solid
+    rgba(247, 241, 230, .20);
+
+  background:
+    linear-gradient(
+      145deg,
+      #a6ad98 0%,
+      #98a08a 54%,
+      #8a917d 100%
+    );
+
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(59, 63, 52, .035);
+
+  color:
+    #f8f1e6;
+
+  font-family:
+    var(--drawer-font-display);
+
+  font-size:
+    clamp(
+      1.20rem,
+      4.8vw,
+      1.58rem
+    );
+
+  font-weight:
+    400;
+
+  line-height:
+    1.30;
+
+  letter-spacing:
+    -.014em;
+
+  text-align:
+    left;
+}
+
+
+/*
+  Tiny cover inscription.
+
+  Presentation grammar only;
+  not fake music metadata.
+*/
+
+.paper[data-presentation-kind='audio']
+.title::before {
+  content:
+    "LISTENING";
+
+  position:
+    absolute;
+
+  top:
+    15px;
+
+  left:
+    16px;
+
+  color:
+    rgba(247, 241, 231, .58);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  font-weight:
+    400;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .16em;
+}
+
+
+/*
+  Tiny quiet mark in opposite corner
+  gives the square the rhythm of
+  a printed album jacket.
+
+  No logo.
+*/
+
+.paper[data-presentation-kind='audio']
+.title::after {
+  content:
+    "AUDIO";
+
+  position:
+    absolute;
+
+  top:
+    15px;
+
+  right:
+    16px;
+
+  color:
+    rgba(247, 241, 231, .42);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .60rem;
+
+  font-weight:
+    400;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .12em;
+}
+
+
+/* ------------------------------------------
+   Saved note / subtitle
+
+   This sits BELOW the square cover,
+   like a music-share metadata area.
+------------------------------------------ */
+
+.paper[data-presentation-kind='audio']
+.preview {
+  order:
+    2;
+
+  display:
+    -webkit-box;
+
+  max-width:
+    94%;
+
+  margin:
+    12px 5px 0;
+
+  overflow:
+    hidden;
+
+  color:
+    rgba(86, 77, 67, .60);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .68rem;
+
+  line-height:
+    1.48;
+
+  letter-spacing:
+    -.002em;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+
+/* ------------------------------------------
+   Spotify / source footer
+
+   Existing real source data stays intact.
+------------------------------------------ */
+
+.paper[data-presentation-kind='audio']
+.meta {
+  order:
+    3;
+
+  display:
+    flex;
+
+  align-items:
+    baseline;
+
+  justify-content:
+    space-between;
+
+  gap:
+    14px;
+
+  width:
+    auto;
+
+  margin:
+    11px 5px 0;
+
+  padding:
+    9px 0 1px;
+
+  border-top:
+    1px solid
+    rgba(113, 95, 72, .075);
+
+  color:
+    rgba(91, 82, 71, .30);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .085em;
+
+  text-transform:
+    uppercase;
+}
+
+
+.paper[data-presentation-kind='audio']
+.meta span:first-child {
+  color:
+    rgba(85, 100, 79, .70);
+
+  white-space:
+    nowrap;
+}
+
+
+.paper[data-presentation-kind='audio']
+.meta span:last-child {
+  color:
+    rgba(91, 82, 71, .26);
+
+  white-space:
+    nowrap;
+}
+
+
+/* ------------------------------------------
+   Collection remains almost invisible
+------------------------------------------ */
+
+.paper[data-presentation-kind='audio']
+.collection {
+  order:
+    4;
+
+  margin:
+    6px 5px 0;
+
+  color:
+    rgba(75, 68, 58, .18);
+
+  font-size:
+    .60rem;
+
+  letter-spacing:
+    .05em;
+}
+
+
+/* ------------------------------------------
+   Mobile
+------------------------------------------ */
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='audio'] {
+    width:
+      min(
+        calc(100% - 44px),
+        270px
+      );
+
+    margin:
+      22px auto 31px;
+
+    padding:
+      9px 9px 12px;
+
+    transform:
+      rotate(-.04deg);
+  }
+
+  .paper[data-presentation-kind='audio']
+  .title {
+    padding:
+      23px 21px 21px;
+
+    font-size:
+      1.18rem;
+  }
+
+  .paper[data-presentation-kind='audio']
+  .title::before {
+    top:
+      13px;
+
+    left:
+      14px;
+
+    font-size:
+      .60rem;
+  }
+
+  .paper[data-presentation-kind='audio']
+  .title::after {
+    top:
+      13px;
+
+    right:
+      14px;
+
+    font-size:
+      .60rem;
+  }
+
+  .paper[data-presentation-kind='audio']
+  .preview {
+    margin-top:
+      10px;
+
+    font-size:
+      .66rem;
+  }
+
+  .paper[data-presentation-kind='audio']
+  .meta {
+    margin-top:
+      10px;
+
+    padding-top:
+      8px;
+
+    font-size:
+      .60rem;
+  }
+}
+
+/* ==========================================
+   PRODUCT · TEXT CATALOG INDEX · V2
+
+   ONE ACTIVE PRODUCT CONTRACT.
+
+   STRUCTURAL SAFARI TEST:
+
+   .paper = BUTTON interaction carrier.
+   .productObject = physical layout object.
+
+   Complex Product layout no longer depends
+   on flex/grid behavior of <button> itself.
+
+   Archive:
+   - catalog identity
+   - source
+   - product title
+
+   Inspect later:
+   - product image
+   - price
+   - variants
+   - merchant detail
+
+   Storage = index.
+   Reading = product spread.
+========================================== */
+
+
+/* ------------------------------------------
+   Button = interaction carrier only
+------------------------------------------ */
+
+.paper[data-presentation-kind='product'] {
+  position:
+    relative;
+
+  display:
+    block;
+
+  width:
+    calc(100% - 22px);
+
+  max-width:
+    368px;
+
+  margin:
+    19px auto 26px;
+
+  padding:
+    0;
+
+  overflow:
+    visible;
+
+  appearance:
+    none;
+
+  -webkit-appearance:
+    none;
+
+  border:
+    1px solid
+    rgba(109, 92, 71, .060);
+
+  background:
+    transparent;
+
+  box-shadow:
+    2px 5px 11px
+    rgba(53, 40, 30, .042);
+
+  transform:
+    rotate(-.035deg);
+
+  text-align:
+    left;
+}
+
+
+/* ------------------------------------------
+   Actual physical object
+------------------------------------------ */
+
+.productObject {
+  position: relative;
+
+  display:
+    block;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  min-height:
+    178px;
+
+  box-sizing:
+    border-box;
+
+  margin:
+    0;
+
+  padding:
+    0;
+
+  background:
+    #f7f0e6;
+}
+
+
+/* ------------------------------------------
+   Catalogue band
+------------------------------------------ */
+
+.productMeta {
+  display:
+    grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto;
+
+  grid-template-rows:
+    auto
+    auto;
+
+  align-items:
+    baseline;
+
+  gap:
+    8px 18px;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  box-sizing:
+    border-box;
+
+  margin:
+    0;
+
+  padding:
+    13px 19px 12px;
+
+  border-bottom:
+    1px solid
+    rgba(109, 92, 71, .055);
+
+  background:
+    #eee7dc;
+
+  font-family:
+    var(--drawer-font-meta);
+
+  line-height:
+    1;
+
+  text-transform:
+    uppercase;
+}
+
+
+.productCatalog {
+  grid-column:
+    1 / -1;
+
+  grid-row:
+    1;
+
+  color:
+    rgba(103, 96, 81, .58);
+
+  font-size:
+    .60rem;
+
+  letter-spacing:
+    .15em;
+}
+
+
+.productSource {
+  grid-column:
+    1;
+
+  grid-row:
+    2;
+
+  min-width:
+    0;
+
+  color:
+    rgba(83, 88, 73, .66);
+
+  font-size:
+    .66rem;
+
+  letter-spacing:
+    .065em;
+
+  white-space:
+    normal;
+}
+
+
+.productKind {
+  grid-column:
+    2;
+
+  grid-row:
+    2;
+
+  color:
+    rgba(77, 69, 59, .28);
+
+  font-size:
+    .625rem;
+
+  letter-spacing:
+    .06em;
+
+  text-align:
+    right;
+
+  white-space:
+    nowrap;
+}
+
+
+/* ------------------------------------------
+   Product name
+------------------------------------------ */
+
+.productTitle {
+  display:
+    -webkit-box;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  box-sizing:
+    border-box;
+
+  margin:
+    0;
+
+  padding:
+    27px 26px 29px;
+
+  overflow:
+    hidden;
+
+  color:
+    #4b4439;
+
+  font-family:
+    var(--drawer-font-display);
+
+  font-size:
+    1.06rem;
+
+  font-weight:
+    400;
+
+  line-height:
+    1.43;
+
+  letter-spacing:
+    -.009em;
+
+  text-align:
+    left;
+
+  word-break:
+    normal;
+
+  overflow-wrap:
+    break-word;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    3;
+}
+
+
+/* ------------------------------------------
+   Generic Product nodes are not used
+------------------------------------------ */
+
+.paper[data-presentation-kind='product']
+.imageFrame,
+
+.paper[data-presentation-kind='product']
+.meta,
+
+.paper[data-presentation-kind='product']
+.title,
+
+.paper[data-presentation-kind='product']
+.preview,
+
+.paper[data-presentation-kind='product']
+.collection {
+  display:
+    none;
+}
+
+
+/* ------------------------------------------
+   No Product hardware
+------------------------------------------ */
+
+.paper[data-presentation-kind='product']::before,
+.paper[data-presentation-kind='product']::after {
+  content:
+    none;
+
+  display:
+    none;
+}
+
+
+/* ==========================================
+   MOBILE
+
+   Same physical DOM.
+   No alternate Product geometry.
+========================================== */
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='product'] {
+    display:
+      block;
+
+    width:
+      calc(100% - 18px);
+
+    max-width:
+      326px;
+
+    margin:
+      17px auto 24px;
+
+    padding:
+      0;
+
+    transform:
+      rotate(-.025deg);
+  }
+
+
+  .productObject {
+    width:
+      100%;
+
+    min-height:
+      0;
+  }
+
+
+  .productMeta {
+    width:
+      100%;
+
+    gap:
+      7px 15px;
+
+    padding:
+      12px 17px 11px;
+  }
+
+
+  .productCatalog {
+    font-size:
+      .60rem;
+  }
+
+
+  .productSource {
+    font-size:
+      .625rem;
+  }
+
+
+  .productKind {
+    font-size:
+      .60rem;
+  }
+
+
+  .productTitle {
+    width:
+      100%;
+
+    padding:
+      23px 21px 25px;
+
+    font-size:
+      1rem;
+
+    line-height:
+      1.44;
+
+    -webkit-line-clamp:
+      3;
+  }
+}
+
+/* ==========================================
+   REPOSITORY · SOFT TECH SHEET · V4.2
+
+   ONE ACTIVE REPOSITORY CONTRACT.
+
+   V4.2 removes the horizontal data strip
+   and shifts the card into a cooler,
+   quieter tech-leaning paper tone.
+
+   REAL DATA ONLY.
+   No fake code.
+   No fake stats.
+   No fake screenshot.
+========================================== */
+
+.paper[data-presentation-kind='repository'] {
+  position:
+    relative;
+
+  display:
+    block;
+
+  width:
+    calc(100% - 50px);
+
+  max-width:
+    350px;
+
+  margin:
+    26px auto 33px;
+
+  padding:
+    0;
+
+  overflow:
+    visible;
+
+  appearance:
+    none;
+
+  -webkit-appearance:
+    none;
+
+  border:
+    0;
+
+  background:
+    transparent;
+
+  box-shadow:
+    none;
+
+  transform:
+    rotate(-.016deg);
+
+  text-align:
+    left;
+}
+
+.repositoryObject {
+  position:
+    relative;
+
+  display:
+    block;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  box-sizing:
+    border-box;
+
+  padding:
+    0 6px 6px 0;
+}
+
+.repositoryBackCard {
+  position:
+    absolute;
+
+  z-index:
+    0;
+
+  left:
+    6px;
+
+  right:
+    0;
+
+  top:
+    6px;
+
+  bottom:
+    0;
+
+  box-sizing:
+    border-box;
+
+  border:
+    1px solid
+    rgba(82, 88, 84, .07);
+
+  background:
+    #dddcd3;
+
+  box-shadow:
+    1px 4px 8px
+    rgba(43, 48, 45, .025);
+
+  transform:
+    rotate(.10deg);
+
+  pointer-events:
+    none;
+}
+
+.repositoryCard {
+  position:
+    relative;
+
+  z-index:
+    1;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  min-height:
+    152px;
+
+  box-sizing:
+    border-box;
+
+  overflow:
+    hidden;
+
+  border:
+    1px solid
+    rgba(77, 83, 79, .09);
+
+  background:
+    #ecebe4;
+
+  box-shadow:
+    2px 6px 13px
+    rgba(43, 48, 45, .04);
+
+  clip-path:
+    polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - 9px),
+      calc(100% - 9px) 100%,
+      0 100%
+    );
+
+  color:
+    #474840;
+}
+
+.repositoryMain {
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  box-sizing:
+    border-box;
+
+  padding:
+    22px 22px 16px;
+}
+
+.repositorySource {
+  margin:
+    0 0 19px;
+
+  color:
+    rgba(83, 89, 85, .33);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .105em;
+
+  text-transform:
+    uppercase;
+}
+
+.repositoryIdentity {
+  display:
+    flex;
+
+  align-items:
+    baseline;
+
+  flex-wrap:
+    wrap;
+
+  gap:
+    4px;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  margin:
+    0;
+}
+
+.repositoryOwner {
+  display:
+    inline;
+
+  margin:
+    0;
+
+  color:
+    rgba(70, 75, 72, .48);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  line-height:
+    1.25;
+
+  letter-spacing:
+    .035em;
+
+  overflow-wrap:
+    anywhere;
+}
+
+.repositoryName {
+  display:
+    inline;
+
+  width:
+    auto;
+
+  min-width:
+    0;
+
+  margin:
+    0;
+
+  overflow:
+    visible;
+
+  color:
+    #464740;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .86rem;
+
+  font-weight:
+    600;
+
+  line-height:
+    1.22;
+
+  letter-spacing:
+    -.008em;
+
+  overflow-wrap:
+    anywhere;
+
+  -webkit-line-clamp:
+    unset;
+}
+
+.repositoryDescription {
+  display:
+    -webkit-box;
+
+  width:
+    auto;
+
+  max-width:
+    88%;
+
+  margin:
+    18px 0 0;
+
+  padding:
+    0;
+
+  overflow:
+    hidden;
+
+  border:
+    0;
+
+  color:
+    rgba(67, 70, 67, .56);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .70rem;
+
+  font-weight:
+    400;
+
+  line-height:
+    1.50;
+
+  letter-spacing:
+    .002em;
+
+  overflow-wrap:
+    break-word;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+.repositoryFooter {
+  display:
+    flex;
+
+  align-items:
+    baseline;
+
+  flex-wrap:
+    wrap;
+
+  gap:
+    4px 10px;
+
+  width:
+    auto;
+
+  min-width:
+    0;
+
+  margin:
+    auto 21px 13px;
+
+  padding:
+    0;
+
+  border:
+    0;
+
+  color:
+    rgba(77, 82, 79, .30);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .60rem;
+
+  line-height:
+    1.2;
+
+  letter-spacing:
+    .04em;
+
+  text-transform:
+    uppercase;
+}
+
+.repositoryFooter span,
+.repositoryFooter time {
+  white-space:
+    nowrap;
+}
+
+.repositoryFooter span + span::before,
+.repositoryFooter span + time::before {
+  content:
+    "·";
+
+  margin-right:
+    10px;
+
+  color:
+    rgba(77, 82, 79, .16);
+}
+
+.paper[data-presentation-kind='repository']::before,
+.paper[data-presentation-kind='repository']::after {
+  content:
+    none;
+
+  display:
+    none;
+}
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='repository'] {
+    display:
+      block;
+
+    width:
+      calc(100% - 40px);
+
+    max-width:
+      306px;
+
+    margin:
+      24px auto 31px;
+
+    padding:
+      0;
+
+    transform:
+      rotate(-.012deg);
+  }
+
+  .repositoryObject {
+    width:
+      100%;
+
+    padding:
+      0 5px 5px 0;
+  }
+
+  .repositoryBackCard {
+    left:
+      5px;
+
+    top:
+      5px;
+  }
+
+  .repositoryCard {
+    width:
+      100%;
+
+    min-height:
+      142px;
+  }
+
+  .repositoryMain {
+    padding:
+      19px 18px 14px;
+  }
+
+  .repositorySource {
+    margin-bottom:
+      16px;
+
+    font-size:
+      .60rem;
+  }
+
+  .repositoryOwner {
+    font-size:
+      .60rem;
+  }
+
+  .repositoryName {
+    font-size:
+      .80rem;
+  }
+
+  .repositoryDescription {
+    max-width:
+      92%;
+
+    margin-top:
+      15px;
+
+    font-size:
+      .68rem;
+
+    line-height:
+      1.48;
+  }
+
+  .repositoryFooter {
+    gap:
+      4px 8px;
+
+    margin:
+      auto 18px 11px;
+
+    font-size:
+      .60rem;
+  }
+
+  .repositoryFooter span + span::before,
+  .repositoryFooter span + time::before {
+    margin-right:
+      8px;
+  }
+}
+
+/* ==========================================
+   MIXED · QUIET INTAKE POCKET · V1.3
+
+   SAME PHYSICAL SPECIES.
+
+   V1.3 readability pass:
+   - filing marks raised to readable scale
+   - filing contrast raised
+   - title/body/layout/palette unchanged
+
+   Storage = stack.
+   Reading = spread.
+
+   Interactive carrier != layout object.
+========================================== */
+
+.paper[data-presentation-kind='mixed'] {
+  position:
+    relative;
+
+  display:
+    block;
+
+  width:
+    calc(100% - 34px);
+
+  max-width:
+    356px;
+
+  margin:
+    24px auto 33px;
+
+  padding:
+    0;
+
+  overflow:
+    visible;
+
+  appearance:
+    none;
+
+  -webkit-appearance:
+    none;
+
+  border:
+    0;
+
+  background:
+    transparent;
+
+  box-shadow:
+    none;
+
+  transform:
+    rotate(.01deg);
+
+  text-align:
+    left;
+}
+
+.mixedObject {
+  --mixed-pocket-offset: 79px;
+
+  position:
+    relative;
+
+  display:
+    block;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  box-sizing:
+    border-box;
+
+  padding-top:
+    var(--mixed-pocket-offset);
+}
+
+.mixedObject > .edgeTabs {
+  --preview-edge-tab-top:
+    calc(
+      var(--mixed-pocket-offset)
+      + 18px
+    );
+}
+
+.mixedInsertStack {
+  position:
+    absolute;
+
+  left:
+    0;
+
+  right:
+    0;
+
+  top:
+    0;
+
+  height:
+    121px;
+
+  pointer-events:
+    none;
+}
+
+.mixedPhotoInsert {
+  position:
+    absolute;
+
+  z-index:
+    1;
+
+  left:
+    18px;
+
+  top:
+    3px;
+
+  width:
+    47%;
+
+  height:
+    108px;
+
+  box-sizing:
+    border-box;
+
+  margin:
+    0;
+
+  padding:
+    5px 5px 15px;
+
+  overflow:
+    hidden;
+
+  border:
+    1px solid
+    rgba(92, 84, 70, .085);
+
+  background:
+    #f3eee4;
+
+  box-shadow:
+    2px 5px 10px
+      rgba(55, 46, 36, .042);
+
+  transform:
+    rotate(-.82deg);
+
+  transform-origin:
+    bottom center;
+}
+
+.mixedPhotoInsert img {
+  display:
+    block;
+
+  width:
+    100%;
+
+  height:
+    100%;
+
+  object-fit:
+    cover;
+}
+
+.mixedDocumentInsert {
+  position:
+    absolute;
+
+  z-index:
+    2;
+
+  right:
+    21px;
+
+  top:
+    8px;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  justify-content:
+    space-between;
+
+  width:
+    43%;
+
+  height:
+    101px;
+
+  min-width:
+    0;
+
+  box-sizing:
+    border-box;
+
+  padding:
+    13px 12px 12px;
+
+  overflow:
+    hidden;
+
+  border:
+    1px solid
+    rgba(82, 84, 75, .075);
+
+  background:
+    #eeece5;
+
+  box-shadow:
+    2px 4px 9px
+      rgba(50, 46, 38, .036);
+
+  transform:
+    rotate(.55deg);
+
+  transform-origin:
+    bottom center;
+}
+
+.mixedDocumentType {
+  color:
+    rgba(77, 79, 71, .56);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .60rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .09em;
+
+  text-transform:
+    uppercase;
+}
+
+.mixedDocumentName {
+  display:
+    -webkit-box;
+
+  min-width:
+    0;
+
+  overflow:
+    hidden;
+
+  color:
+    rgba(67, 67, 60, .57);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .625rem;
+
+  font-weight:
+    500;
+
+  line-height:
+    1.34;
+
+  overflow-wrap:
+    anywhere;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+.mixedPocket {
+  position:
+    relative;
+
+  z-index:
+    3;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  min-height:
+    132px;
+
+  box-sizing:
+    border-box;
+
+  padding:
+    17px 20px 13px;
+
+  overflow:
+    hidden;
+
+  border:
+    1px solid
+    rgba(85, 82, 69, .08);
+
+  border-top-color:
+    rgba(82, 82, 70, .11);
+
+  background:
+    #e9e5da;
+
+  box-shadow:
+    2px 6px 13px
+      rgba(52, 46, 36, .038);
+
+  color:
+    #48473f;
+}
+
+.mixedPocketMeta {
+  display:
+    flex;
+
+  align-items:
+    baseline;
+
+  justify-content:
+    space-between;
+
+  gap:
+    12px;
+
+  width:
+    100%;
+
+  color:
+    rgba(78, 80, 69, .56);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .625rem;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    .055em;
+
+  text-transform:
+    uppercase;
+}
+
+.mixedPocketMeta span:last-child {
+  color:
+    rgba(78, 80, 69, .48);
+}
+
+.mixedTitle {
+  display:
+    -webkit-box;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  margin:
+    15px 0 0;
+
+  overflow:
+    hidden;
+
+  color:
+    #47463e;
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .83rem;
+
+  font-weight:
+    590;
+
+  line-height:
+    1.30;
+
+  letter-spacing:
+    -.004em;
+
+  overflow-wrap:
+    break-word;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+.mixedDescription {
+  display:
+    -webkit-box;
+
+  width:
+    auto;
+
+  max-width:
+    90%;
+
+  margin:
+    10px 0 0;
+
+  padding:
+    0;
+
+  overflow:
+    hidden;
+
+  border:
+    0;
+
+  color:
+    rgba(68, 68, 60, .47);
+
+  font-family:
+    var(--drawer-font-body);
+
+  font-size:
+    .68rem;
+
+  font-weight:
+    400;
+
+  line-height:
+    1.48;
+
+  overflow-wrap:
+    break-word;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+.mixedFooter {
+  display:
+    flex;
+
+  align-items:
+    baseline;
+
+  justify-content:
+    space-between;
+
+  gap:
+    12px;
+
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  margin:
+    18px 0 0;
+
+  padding:
+    0;
+
+  color:
+    rgba(75, 76, 66, .52);
+
+  font-family:
+    var(--drawer-font-meta);
+
+  font-size:
+    .60rem;
+
+  line-height:
+    1.2;
+
+  letter-spacing:
+    .025em;
+
+  text-transform:
+    uppercase;
+}
+
+.paper[data-presentation-kind='mixed']::before,
+.paper[data-presentation-kind='mixed']::after {
+  content:
+    none;
+
+  display:
+    none;
+}
+
+@media (max-width: 520px) {
+  .paper[data-presentation-kind='mixed'] {
+    display:
+      block;
+
+    width:
+      calc(100% - 26px);
+
+    max-width:
+      310px;
+
+    margin:
+      22px auto 31px;
+
+    padding:
+      0;
+
+    transform:
+      rotate(.006deg);
+  }
+
+  .mixedObject {
+    --mixed-pocket-offset: 70px;
+
+    width:
+      100%;
+
+    padding-top:
+      var(--mixed-pocket-offset);
+  }
+
+  .mixedInsertStack {
+    height:
+      107px;
+  }
+
+  .mixedPhotoInsert {
+    left:
+      14px;
+
+    top:
+      3px;
+
+    width:
+      48%;
+
+    height:
+      95px;
+
+    padding:
+      4px 4px 13px;
+
+    transform:
+      rotate(-.70deg);
+  }
+
+  .mixedDocumentInsert {
+    right:
+      17px;
+
+    top:
+      7px;
+
+    width:
+      43%;
+
+    height:
+      89px;
+
+    padding:
+      11px 10px 10px;
+
+    transform:
+      rotate(.44deg);
+  }
+
+  .mixedDocumentType {
+    font-size:
+      .60rem;
+  }
+
+  .mixedDocumentName {
+    font-size:
+      .60rem;
+  }
+
+  .mixedPocket {
+    min-height:
+      124px;
+
+    padding:
+      15px 17px 12px;
+  }
+
+  .mixedPocketMeta {
+    font-size:
+      .60rem;
+  }
+
+  .mixedTitle {
+    margin-top:
+      13px;
+
+    font-size:
+      .77rem;
+
+    line-height:
+      1.30;
+  }
+
+  .mixedDescription {
+    max-width:
+      94%;
+
+    margin-top:
+      9px;
+
+    font-size:
+      .66rem;
+
+    line-height:
+      1.46;
+  }
+
+  .mixedFooter {
+    margin-top:
+      16px;
+
+    font-size:
+      .60rem;
   }
 }
