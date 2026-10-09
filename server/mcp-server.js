@@ -1,9 +1,10 @@
 import * as z from 'zod/v4'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { VAULT_ALLOWED_PATHS } from './vault-client.js'
 
 const statuses = ['inbox', 'tonight', 'discussed', 'deferred', 'memory_candidate', 'archived']
 
-export function createPocketMcpServer({ store, cmemory, contentReader }) {
+export function createPocketMcpServer({ store, cmemory, contentReader, vault }) {
   const server = new McpServer({
     name: 'aqi-drawer',
     version: '2.5.0',
@@ -21,6 +22,9 @@ export function createPocketMcpServer({ store, cmemory, contentReader }) {
       'Before a personal-memory reply call memory_turn_pre and mention only surfaceableMemories.',
       'After the final reply call memory_turn_post exactly once.',
       'pocket_review with memory_candidate only stages pending candidates; it never activates a durable memory.',
+      'Canonical Vault tools are separate from ordinary Drawer items. They operate only on a small allowlist of canonical Seed, Voice, Home, and Work documents.',
+      'Before vault_update, always call vault_read on that exact path and pass back its fresh SHA. Never overwrite from stale context.',
+      'Use vault_update only after EE explicitly approves a canonical document change in the current conversation. Never use it as an automatic transcript logger or to write generated Memory, Mailbox, secrets, or arbitrary files.',
     ].join(' '),
   })
 
@@ -276,6 +280,79 @@ export function createPocketMcpServer({ store, cmemory, contentReader }) {
   }, async (payload) => {
     try { return result(await cmemory.turnPost({ ...payload, remember: false }), 'Turn closed without promoting a durable memory.') }
     catch (error) { return errorResult(error.message) }
+  })
+
+
+  server.registerTool('vault_list', {
+    title: 'List Aqi canonical Vault documents',
+    description: 'List the small fixed allowlist of canonical documents available through Aqi Vault. This does not expose arbitrary repository or filesystem paths.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
+  }, async () => {
+    try {
+      if (!vault?.describe) throw new Error('Aqi Canonical Vault is unavailable.')
+      const info = vault.describe()
+      return result(info, `${info.paths.length} canonical Vault document(s) are allowlisted.`)
+    } catch (error) {
+      return errorResult(error.message)
+    }
+  })
+
+  server.registerTool('vault_read', {
+    title: 'Read one Aqi canonical document',
+    description: 'Read one allowlisted canonical document and return its current content and SHA. Always use this immediately before proposing or performing a canonical update.',
+    inputSchema: {
+      path: z.enum([...VAULT_ALLOWED_PATHS]),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
+  }, async ({ path }) => {
+    try {
+      if (!vault?.read) throw new Error('Aqi Canonical Vault is unavailable.')
+      const file = await vault.read(path)
+      return result(file, `Read canonical Vault document ${path} at SHA ${file.sha}.`)
+    } catch (error) {
+      return errorResult(error.message)
+    }
+  })
+
+  server.registerTool('vault_update', {
+    title: 'Update one approved Aqi canonical document',
+    description: 'Update one allowlisted canonical document only after EE explicitly approved the change. Requires the fresh SHA returned by vault_read; stale writes are rejected. Seed, Voice, and Work Handoff receive a History snapshot before replacement.',
+    inputSchema: {
+      path: z.enum([...VAULT_ALLOWED_PATHS]),
+      content: z.string().min(1),
+      expectedSha: z.string().min(7),
+      commitMessage: z.string().max(120).optional(),
+      approved: z.literal(true).describe('Set true only when EE explicitly approved this canonical change in the current conversation.'),
+    },
+    annotations: {
+      readOnlyHint: false,
+      openWorldHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+    },
+  }, async ({ path, content, expectedSha, commitMessage, approved }) => {
+    try {
+      if (approved !== true) throw new Error('Canonical update requires explicit EE approval.')
+      if (!vault?.update) throw new Error('Aqi Canonical Vault is unavailable.')
+
+      const saved = await vault.update({
+        path,
+        content,
+        expectedSha,
+        commitMessage,
+        snapshotHistory: true,
+      })
+
+      return result(
+        saved,
+        saved.historyPath
+          ? `Updated ${path}; previous revision was preserved in ${saved.historyPath}.`
+          : `Updated ${path}.`,
+      )
+    } catch (error) {
+      return errorResult(error.message)
+    }
   })
 
   return server

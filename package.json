@@ -17,7 +17,7 @@
     "start": "node --env-file-if-exists=.env server/index.js",
     "dev": "node --env-file-if-exists=.env server/index.js --temporary-public-mcp",
     "lint": "eslint server",
-    "test": "node server/smoke-test.js && node server/xhs-test.js",
+    "test": "node server/smoke-test.js && node server/xhs-test.js && node server/vault-test.js",
     "check": "npm run lint && npm test",
     "production:check": "node --env-file-if-exists=deploy/.env.production server/production-config-check.js",
     "frontend:dev": "npm run dev --workspace=frontend",
