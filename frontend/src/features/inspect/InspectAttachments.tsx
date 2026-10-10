@@ -207,7 +207,7 @@ export function InspectAttachments({
             htmlFor={`attachment-input-${item.id}`}
             aria-disabled={append.isPending}
           >
-            选择附件
+            ＋ 选择附件
           </label>
 
           {selectedFiles.length > 0 && (
@@ -248,30 +248,30 @@ export function InspectAttachments({
             </div>
           )}
 
-          <button
-            type="button"
-            className={styles.uploadAction}
-            disabled={append.isPending || selectedFiles.length === 0}
-            onClick={() => {
-              append.mutate(
-                { files: selectedFiles, requestId },
-                {
-                  onSuccess: () => {
-                    setSelectedFiles([])
-                    setUploadNotice('附件已补充。')
-                    setAdding(false)
-                    if (fileInputRef.current) fileInputRef.current.value = ''
+          {selectedFiles.length > 0 && (
+            <button
+              type="button"
+              className={styles.uploadAction}
+              disabled={append.isPending}
+              onClick={() => {
+                append.mutate(
+                  { files: selectedFiles, requestId },
+                  {
+                    onSuccess: () => {
+                      setSelectedFiles([])
+                      setUploadNotice('附件已补充。')
+                      setAdding(false)
+                      if (fileInputRef.current) fileInputRef.current.value = ''
+                    },
                   },
-                },
-              )
-            }}
-          >
-            {append.isPending
-              ? '正在补充…'
-              : selectedFiles.length > 0
-                ? `添加 ${selectedFiles.length} 个附件`
-                : '添加附件'}
-          </button>
+                )
+              }}
+            >
+              {append.isPending
+                ? '正在补充…'
+                : `确认添加 · ${selectedFiles.length}`}
+            </button>
+          )}
         </div>
       )}
 

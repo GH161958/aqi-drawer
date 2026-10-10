@@ -316,16 +316,7 @@
 .viewerTopControls {
   display: flex;
 
-  gap: 0;
-
-  border:
-    1px solid
-    rgba(255, 255, 255, .12);
-
-  border-radius: 2px;
-
-  background:
-    rgba(22, 20, 18, .42);
+  gap: 6px;
 }
 
 .viewerMenuSlot {
@@ -338,9 +329,15 @@
 }
 
 .viewerClose {
-  background: rgba(255, 255, 255, .07);
   color: rgba(255, 250, 242, .96);
   font-size: 20px;
+}
+
+@media (hover: hover) {
+  .viewerMenuButton:hover,
+  .viewerClose:hover {
+    background: rgba(255, 255, 255, .07);
+  }
 }
 
 .viewerControls button {

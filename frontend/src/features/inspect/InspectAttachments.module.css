@@ -186,10 +186,7 @@
 }
 
 .filePicker {
-  min-width: 112px;
-  padding: 0 14px;
-  border: 1px solid var(--drawer-rule);
-  background: rgba(243, 237, 223, .38);
+  padding: 0 4px;
 }
 
 .fileInput:focus-visible + .filePicker {
@@ -258,9 +255,7 @@
 }
 
 .uploadAction {
-  width: 100%;
-  padding: 0 12px;
-  background: rgba(98, 115, 88, .08);
+  padding: 0 4px;
 }
 
 .addToggle:focus-visible,
