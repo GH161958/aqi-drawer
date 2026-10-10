@@ -175,6 +175,34 @@
   letter-spacing: .06em;
 }
 
+.titleViewport,
+.textViewport {
+  display: block;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.titleViewport {
+  height: 44px;
+}
+
+.textViewport {
+  height: 104px;
+}
+
+.titleLabel:focus-within .fieldLabel,
+.textLabel:focus-within .fieldLabel {
+  color: var(--drawer-sage);
+}
+
+.titleViewport:focus-within,
+.textViewport:focus-within {
+  box-shadow:
+    inset 0 -1px
+    rgba(83, 96, 78, .48);
+}
+
 .titleLabel input,
 .textLabel textarea {
   display: block;
@@ -189,6 +217,7 @@
 }
 
 .titleLabel input {
+  height: 100%;
   min-height: 44px;
   font-family: var(--drawer-font-display);
   font-weight: var(--paper-type-title-weight);
@@ -196,16 +225,11 @@
 }
 
 .textLabel textarea {
-  min-height: 104px;
+  height: 100%;
+  min-height: 0;
   resize: vertical;
   font-family: var(--drawer-font-body);
   line-height: 1.65;
-}
-
-.titleLabel input:focus,
-.textLabel textarea:focus {
-  outline: 1px solid rgba(83, 96, 78, .44);
-  outline-offset: 3px;
 }
 
 .titleLabel input::placeholder,
@@ -376,7 +400,11 @@
   }
 
   .textLabel textarea {
-    min-height: 116px;
+    min-height: 0;
+  }
+
+  .textViewport {
+    height: 116px;
   }
 
   .attachmentRow {
@@ -389,6 +417,45 @@
 
   .dropHint {
     display: none;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .titleViewport,
+  .textViewport {
+    --capture-editor-visual-scale: .69;
+    --capture-editor-size-compensation:
+      1.4492753623;
+  }
+
+  .titleLabel input,
+  .textLabel textarea {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width:
+      calc(
+        100%
+        * var(--capture-editor-size-compensation)
+      );
+    height:
+      calc(
+        100%
+        * var(--capture-editor-size-compensation)
+      );
+    min-height: 0;
+    padding:
+      calc(
+        6px
+        * var(--capture-editor-size-compensation)
+      )
+      0;
+    font-size: var(--paper-type-input-size);
+    transform:
+      scale(
+        var(--capture-editor-visual-scale)
+      );
+    transform-origin: top left;
   }
 }
 

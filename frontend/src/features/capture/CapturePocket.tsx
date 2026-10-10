@@ -336,36 +336,40 @@ export function CapturePocket() {
                 <span className={styles.fieldLabel}>
                   标题 · 选填
                 </span>
-                <input
-                  ref={titleRef}
-                  type="text"
-                  value={title}
-                  disabled={draftFrozen}
-                  placeholder="给这张纸起个名字……"
-                  onChange={(event) => {
-                    setTitle(event.currentTarget.value)
-                    setReceipt(null)
-                    intake.reset()
-                  }}
-                />
+                <span className={styles.titleViewport}>
+                  <input
+                    ref={titleRef}
+                    type="text"
+                    value={title}
+                    disabled={draftFrozen}
+                    placeholder="给这张纸起个名字……"
+                    onChange={(event) => {
+                      setTitle(event.currentTarget.value)
+                      setReceipt(null)
+                      intake.reset()
+                    }}
+                  />
+                </span>
               </label>
 
               <label className={styles.textLabel}>
                 <span className={styles.fieldLabel}>
                   正文／链接
                 </span>
-                <textarea
-                  ref={textareaRef}
-                  value={text}
-                  rows={3}
-                  disabled={draftFrozen}
-                  placeholder="粘贴一个链接，或留下一段文字……"
-                  onChange={(event) => {
-                    setText(event.currentTarget.value)
-                    setReceipt(null)
-                    intake.reset()
-                  }}
-                />
+                <span className={styles.textViewport}>
+                  <textarea
+                    ref={textareaRef}
+                    value={text}
+                    rows={3}
+                    disabled={draftFrozen}
+                    placeholder="粘贴一个链接，或留下一段文字……"
+                    onChange={(event) => {
+                      setText(event.currentTarget.value)
+                      setReceipt(null)
+                      intake.reset()
+                    }}
+                  />
+                </span>
               </label>
             </div>
 
