@@ -156,12 +156,19 @@
 
 .folio form {
   display: grid;
-  gap: 13px;
+  gap: 12px;
+}
+
+.editorFields {
+  display: grid;
+  gap: 15px;
+  padding: 5px 2px 11px;
+  border-bottom: 1px solid rgba(126, 104, 81, .24);
 }
 
 .fieldLabel {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   color: var(--drawer-quiet-ink);
   font-family: var(--drawer-font-meta);
   font-size: .56rem;
@@ -172,30 +179,33 @@
 .textLabel textarea {
   display: block;
   width: 100%;
-  padding: 8px 2px 10px;
+  padding: 6px 0;
   border: 0;
-  border-bottom: 1px solid rgba(126, 104, 81, .24);
   border-radius: 0;
   outline: 0;
   color: var(--drawer-ink);
   background: transparent;
-  font-family: var(--drawer-font-body);
   font-size: 16px;
-  line-height: 1.6;
 }
 
 .titleLabel input {
   min-height: 44px;
+  font-family: var(--drawer-font-display);
+  font-weight: var(--paper-type-title-weight);
+  line-height: 1.45;
 }
 
 .textLabel textarea {
-  min-height: 102px;
+  min-height: 104px;
   resize: vertical;
+  font-family: var(--drawer-font-body);
+  line-height: 1.65;
 }
 
 .titleLabel input:focus,
 .textLabel textarea:focus {
-  border-bottom-color: rgba(83, 96, 78, .66);
+  outline: 1px solid rgba(83, 96, 78, .44);
+  outline-offset: 3px;
 }
 
 .titleLabel input::placeholder,
@@ -366,7 +376,7 @@
   }
 
   .textLabel textarea {
-    min-height: 112px;
+    min-height: 116px;
   }
 
   .attachmentRow {
