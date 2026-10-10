@@ -746,26 +746,27 @@ export function InspectMedia({
               onKeyDown={handleViewerKeyDown}
             >
               <div className={styles.viewerToolbar}>
-                <div className={styles.viewerMenuSlot}>
-                  <button
-                    type="button"
-                    className={styles.viewerMenuButton}
-                    aria-label="照片操作"
-                    aria-expanded={viewerMenuOpen}
-                    onClick={() => {
-                      setConfirmingRemoval(false)
-                      setCleanupWarning(false)
-                      remove.reset()
-                      setViewerMenuOpen(
-                        (current) => !current,
-                      )
-                    }}
-                  >
-                    ···
-                  </button>
+                <div className={styles.viewerTopControls}>
+                  <div className={styles.viewerMenuSlot}>
+                    <button
+                      type="button"
+                      className={styles.viewerMenuButton}
+                      aria-label="照片操作"
+                      aria-expanded={viewerMenuOpen}
+                      onClick={() => {
+                        setConfirmingRemoval(false)
+                        setCleanupWarning(false)
+                        remove.reset()
+                        setViewerMenuOpen(
+                          (current) => !current,
+                        )
+                      }}
+                    >
+                      ···
+                    </button>
 
-                  {viewerMenuOpen && (
-                    <div className={styles.viewerMenu}>
+                    {viewerMenuOpen && (
+                      <div className={styles.viewerMenu}>
                       <a
                         href={
                           activeImage.url?.startsWith(
@@ -837,19 +838,20 @@ export function InspectMedia({
                           照片已移除，但原文件清理没有完成。系统已留下排查记录。
                         </p>
                       )}
-                    </div>
-                  )}
-                </div>
+                      </div>
+                    )}
+                  </div>
 
-                <button
-                  ref={viewerCloseRef}
-                  type="button"
-                  className={styles.viewerClose}
-                  aria-label="关闭完整照片"
-                  onClick={closeViewer}
-                >
-                  ×
-                </button>
+                  <button
+                    ref={viewerCloseRef}
+                    type="button"
+                    className={styles.viewerClose}
+                    aria-label="关闭完整照片"
+                    onClick={closeViewer}
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
 
               <div

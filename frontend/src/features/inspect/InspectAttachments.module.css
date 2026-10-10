@@ -7,13 +7,21 @@
 }
 
 .attachments h2 {
-  margin: 0 0 10px;
+  margin: 0;
   color: var(--drawer-quiet-ink);
   font-family: var(--font-meta);
   font-size: 10px;
   font-weight: 400;
   line-height: 1.4;
   letter-spacing: .055em;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
 }
 
 .attachments ul {
@@ -142,7 +150,11 @@
 
 .addToggle,
 .uploadAction,
+.filePicker,
 .selectedFiles button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 44px;
   border: 0;
   background: transparent;
@@ -154,28 +166,59 @@
 }
 
 .addToggle {
-  margin: -8px 0 4px;
   padding: 0;
 }
 
 .uploader {
-  margin: 0 0 10px;
-  padding: 10px 0;
+  margin: 2px 0 10px;
+  padding: 12px 0;
   border-block: 1px solid rgba(126, 104, 81, .14);
 }
 
-.uploader input {
-  display: block;
-  width: 100%;
-  min-height: 44px;
-  font-family: var(--font-ui);
-  font-size: 16px;
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.filePicker {
+  min-width: 112px;
+  padding: 0 14px;
+  border: 1px solid var(--drawer-rule);
+  background: rgba(243, 237, 223, .38);
+}
+
+.fileInput:focus-visible + .filePicker {
+  outline: 1px solid var(--drawer-sage);
+  outline-offset: 2px;
+}
+
+.filePicker[aria-disabled='true'] {
+  cursor: wait;
+  opacity: .55;
+}
+
+.selection {
+  margin-top: 8px;
+}
+
+.selectionCount {
+  margin: 0;
+  color: var(--drawer-quiet-ink);
+  font-family: var(--font-meta);
+  font-size: 9px;
+  line-height: 1.4;
+  letter-spacing: .025em;
 }
 
 .selectedFiles {
   display: grid;
   gap: 2px;
-  margin: 6px 0;
+  margin: 4px 0 8px;
   padding: 0;
   list-style: none;
 }
@@ -186,22 +229,43 @@
   align-items: center;
   gap: 8px;
   min-height: 44px;
+  border-bottom: 1px solid rgba(126, 104, 81, .1);
   font-size: 11px;
 }
 
-.selectedFiles span {
+.selectedIdentity {
+  min-width: 0;
+}
+
+.selectedName,
+.selectedMeta {
+  display: block;
+}
+
+.selectedName {
   overflow: hidden;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.selectedMeta {
+  margin-top: 1px;
+  color: var(--drawer-quiet-ink);
+  font-family: var(--font-meta);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
 .uploadAction {
+  width: 100%;
   padding: 0 12px;
   background: rgba(98, 115, 88, .08);
 }
 
 .addToggle:focus-visible,
 .uploadAction:focus-visible,
+.filePicker:focus-visible,
 .selectedFiles button:focus-visible {
   outline: 1px solid currentColor;
   outline-offset: 2px;

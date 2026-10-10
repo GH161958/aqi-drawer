@@ -67,6 +67,17 @@ function formatSize(
   return `${(size / (1024 * 1024)).toFixed(1)} MiB`
 }
 
+function selectedFileMeta(file: File): string {
+  const type = file.type
+    ? file.type.split('/').at(-1)?.toUpperCase()
+    : file.name.split('.').pop()?.toUpperCase()
+  const size = formatSize(file.size)
+
+  return [type || '文件', size]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 export function InspectAttachments({
   item,
 }: InspectAttachmentsProps) {
@@ -136,30 +147,43 @@ export function InspectAttachments({
   return (
     <section
       className={styles.attachments}
-      aria-labelledby={`attachment-title-${item.id}`}
+      {...(
+        attachments.length > 0
+          ? {
+              'aria-labelledby':
+                `attachment-title-${item.id}`,
+            }
+          : { 'aria-label': '附件' }
+      )}
     >
-      <h2 id={`attachment-title-${item.id}`}>
-        其他附件 · {attachments.length}
-      </h2>
+      <div className={styles.sectionHead}>
+        {attachments.length > 0 && (
+          <h2 id={`attachment-title-${item.id}`}>
+            其他附件 · {attachments.length}
+          </h2>
+        )}
 
-      <button
-        type="button"
-        className={styles.addToggle}
-        aria-expanded={adding}
-        disabled={append.isPending}
-        onClick={() => {
-          append.reset()
-          setUploadNotice('')
-          setAdding((current) => !current)
-        }}
-      >
-        补充附件
-      </button>
+        <button
+          type="button"
+          className={styles.addToggle}
+          aria-expanded={adding}
+          disabled={append.isPending}
+          onClick={() => {
+            append.reset()
+            setUploadNotice('')
+            setAdding((current) => !current)
+          }}
+        >
+          补充附件
+        </button>
+      </div>
 
       {adding && (
         <div className={styles.uploader}>
           <input
             ref={fileInputRef}
+            id={`attachment-input-${item.id}`}
+            className={styles.fileInput}
             type="file"
             multiple
             aria-label="选择要补充的附件"
@@ -178,26 +202,50 @@ export function InspectAttachments({
             }}
           />
 
+          <label
+            className={styles.filePicker}
+            htmlFor={`attachment-input-${item.id}`}
+            aria-disabled={append.isPending}
+          >
+            选择附件
+          </label>
+
           {selectedFiles.length > 0 && (
-            <ul className={styles.selectedFiles}>
-              {selectedFiles.map((file, index) => (
-                <li key={`${file.name}-${file.size}-${file.lastModified}-${index}`}>
-                  <span>{file.name}</span>
-                  <button
-                    type="button"
-                    disabled={append.isPending}
-                    onClick={() => {
-                      setSelectedFiles((current) =>
-                        current.filter((_, fileIndex) => fileIndex !== index),
-                      )
-                      setRequestId(createAttachmentRequestId())
-                    }}
-                  >
-                    移除
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className={styles.selection}>
+              <p className={styles.selectionCount}>
+                已选择 {selectedFiles.length} 个附件
+              </p>
+
+              <ul className={styles.selectedFiles}>
+                {selectedFiles.map((file, index) => (
+                  <li key={`${file.name}-${file.size}-${file.lastModified}-${index}`}>
+                    <span className={styles.selectedIdentity}>
+                      <span className={styles.selectedName}>
+                        {file.name}
+                      </span>
+                      <span className={styles.selectedMeta}>
+                        {selectedFileMeta(file)}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      disabled={append.isPending}
+                      onClick={() => {
+                        setSelectedFiles((current) =>
+                          current.filter((_, fileIndex) => fileIndex !== index),
+                        )
+                        setRequestId(createAttachmentRequestId())
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = ''
+                        }
+                      }}
+                    >
+                      移除
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           <button
@@ -218,7 +266,11 @@ export function InspectAttachments({
               )
             }}
           >
-            {append.isPending ? '正在补充…' : '添加所选附件'}
+            {append.isPending
+              ? '正在补充…'
+              : selectedFiles.length > 0
+                ? `添加 ${selectedFiles.length} 个附件`
+                : '添加附件'}
           </button>
         </div>
       )}
