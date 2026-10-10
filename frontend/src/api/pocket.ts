@@ -1,5 +1,9 @@
 import { drawerFetch } from './http'
 
+import {
+  capturePocketPayload,
+} from './capturePayload'
+
 import type {
   PocketItemsResponse,
 } from './contracts'
@@ -2003,17 +2007,22 @@ function parseIntakeReceipt(
 }
 
 export async function capturePocketItem({
+  title,
   text,
   files,
 }: {
+  title: string
   text: string
   files: File[]
 }): Promise<PocketIntakeResult> {
+  const cleanTitle = title.trim()
   const cleanText = text.trim()
 
   if (!cleanText && files.length === 0) {
     throw new DrawerIntakeError(
-      '先放进一段文字、一个链接，或至少一个文件。',
+      cleanTitle
+        ? '标题不能单独收进抽屉；请再填写正文／链接，或添加至少一个文件。'
+        : '先放进一段文字、一个链接，或至少一个文件。',
       {
         status: 400,
         code: 'EMPTY_CAPTURE_DRAFT',
@@ -2027,13 +2036,11 @@ export async function capturePocketItem({
           const body = new FormData()
           body.set(
             'payload',
-            JSON.stringify({
-              ...(cleanText
-                ? { share: cleanText }
-                : {}),
-              expectedFileCount:
-                files.length,
-            }),
+            JSON.stringify(capturePocketPayload({
+              title,
+              text,
+              expectedFileCount: files.length,
+            })),
           )
           for (const file of files) {
             body.append('files', file)
@@ -2046,10 +2053,11 @@ export async function capturePocketItem({
             'content-type':
               'application/json',
           },
-          body: JSON.stringify({
-            share: cleanText,
+          body: JSON.stringify(capturePocketPayload({
+            title,
+            text,
             expectedFileCount: 0,
-          }),
+          })),
         }
 
   const response =

@@ -21,6 +21,10 @@ import {
   safeAttachmentUrl,
 } from '../src/api/attachmentUrls.ts'
 
+import {
+  capturePocketPayload,
+} from '../src/api/capturePayload.ts'
+
 function attachment(
   name: string,
   mimeType: string,
@@ -60,6 +64,33 @@ function item(
     lastReceivedAt: '2026-01-01T00:00:00.000Z',
   }
 }
+
+test('Capture payload includes only a non-empty manual title', () => {
+  assert.deepEqual(
+    capturePocketPayload({
+      title: '  手动标题  ',
+      text: '  正文  ',
+      expectedFileCount: 2,
+    }),
+    {
+      title: '手动标题',
+      titleOrigin: 'capture',
+      share: '正文',
+      expectedFileCount: 2,
+    },
+  )
+  assert.deepEqual(
+    capturePocketPayload({
+      title: '   ',
+      text: 'https://example.com',
+      expectedFileCount: 0,
+    }),
+    {
+      share: 'https://example.com',
+      expectedFileCount: 0,
+    },
+  )
+})
 
 test('recognizes only the known Clipboard text filename shape', () => {
   assert.equal(

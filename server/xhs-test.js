@@ -148,6 +148,34 @@ try {
     'XHS refresh must preserve manually appended attachments',
   )
 
+  const manualTitleXhs = {
+    ...parsed,
+    noteId: 'manual-title-note-id',
+    externalId: 'manual-title-note-id',
+  }
+  const manuallyTitled = await store.upsertXhs({
+    title: '手动标题',
+    titleOrigin: 'capture',
+    text: `手动标题测试 ${FINAL_URL}`,
+    sourceUrl: FINAL_URL,
+    xhs: manualTitleXhs,
+  }, { loadImage })
+  assert.equal(manuallyTitled.title, '手动标题')
+  assert.equal(manuallyTitled.sourceData.titleOrigin, 'capture')
+  const refreshedManualTitle = await store.upsertXhs({
+    text: `再次分享 ${FINAL_URL}`,
+    sourceUrl: FINAL_URL,
+    xhs: {
+      ...manualTitleXhs,
+      title: '刷新后的 XHS 标题',
+    },
+  }, { loadImage })
+  assert.equal(
+    refreshedManualTitle.title,
+    '手动标题',
+    'Capture manual titles must survive later XHS refreshes',
+  )
+
   let failSecondImage = true
   let partialDownloads = 0
   const partialXhs = { ...parsed, noteId: 'partial-note-id', externalId: 'partial-note-id' }

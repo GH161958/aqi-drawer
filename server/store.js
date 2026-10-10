@@ -742,8 +742,16 @@ export class PocketStore {
           ]
         : [...nonXhsAttachments, ...imageAttachments]
       const failedImages = imageRecords.filter((image) => image.status === 'failed').length
+      const captureTitle = clean(input.titleOrigin) === 'capture'
+        ? clean(input.title)
+        : ''
+      const manualTitle = captureTitle
+        || (clean(existing?.sourceData?.titleOrigin) === 'capture'
+          ? clean(existing?.title)
+          : '')
       const sourceData = normalizeSourceData({
         ...xhs,
+        ...(manualTitle ? { titleOrigin: 'capture' } : {}),
         parseStatus: failedImages ? 'partial' : xhs.parseStatus === 'failed' ? 'failed' : 'complete',
         images: imageRecords,
         imageCount: remoteImages.length,
@@ -755,7 +763,7 @@ export class PocketStore {
       })
       const normalized = normalizeItem({
         ...input,
-        title: clean(xhs.title) || input.title,
+        title: manualTitle || clean(xhs.title) || input.title,
         text: clean(xhs.desc) || input.text,
         sourceUrl: clean(xhs.canonicalUrl) || input.sourceUrl,
         sourceApp: '小红书',

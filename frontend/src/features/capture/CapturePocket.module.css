@@ -159,27 +159,46 @@
   gap: 13px;
 }
 
+.fieldLabel {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--drawer-quiet-ink);
+  font-family: var(--drawer-font-meta);
+  font-size: .56rem;
+  letter-spacing: .06em;
+}
+
+.titleLabel input,
 .textLabel textarea {
   display: block;
   width: 100%;
-  min-height: 116px;
-  resize: vertical;
-  padding: 21px 2px 15px;
+  padding: 8px 2px 10px;
   border: 0;
   border-bottom: 1px solid rgba(126, 104, 81, .24);
   border-radius: 0;
   outline: 0;
   color: var(--drawer-ink);
   background: transparent;
-  font: inherit;
+  font-family: var(--drawer-font-body);
   font-size: 16px;
-  line-height: 1.7;
+  line-height: 1.6;
 }
 
+.titleLabel input {
+  min-height: 44px;
+}
+
+.textLabel textarea {
+  min-height: 102px;
+  resize: vertical;
+}
+
+.titleLabel input:focus,
 .textLabel textarea:focus {
   border-bottom-color: rgba(83, 96, 78, .66);
 }
 
+.titleLabel input::placeholder,
 .textLabel textarea::placeholder {
   color: rgba(52, 46, 39, .42);
 }
@@ -347,7 +366,7 @@
   }
 
   .textLabel textarea {
-    min-height: 126px;
+    min-height: 112px;
   }
 
   .attachmentRow {
