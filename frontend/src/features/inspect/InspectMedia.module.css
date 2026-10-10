@@ -438,11 +438,6 @@
   line-height: 1.45;
 }
 
-.viewerMenu .viewerSaveHint {
-  margin: 0 12px 7px;
-  color: rgba(255, 250, 242, .58);
-}
-
 .viewerConfirmation {
   border-top: 1px solid rgba(255, 255, 255, .12);
 }

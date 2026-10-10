@@ -326,7 +326,7 @@ export function CapturePocket() {
               aria-label="放回收件夹"
               onClick={closeCapture}
             >
-              放回
+              <span>放回</span>
             </button>
           </header>
 
@@ -501,11 +501,13 @@ export function CapturePocket() {
                 || !hasDraft
               }
             >
-              {intake.isPending
-                ? '正在收进去……'
-                : intake.isError
-                  ? '再试一次 →'
-                  : '收好 →'}
+              <span>
+                {intake.isPending
+                  ? '正在收进去……'
+                  : intake.isError
+                    ? '再试一次 →'
+                    : '收好 →'}
+              </span>
             </button>
           </form>
         </article>

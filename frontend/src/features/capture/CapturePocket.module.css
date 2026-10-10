@@ -147,11 +147,18 @@
 }
 
 .closeAction {
-  min-height: 30px;
-  padding: 3px 0;
-  border-bottom: 1px solid rgba(83, 96, 78, .26);
-  color: var(--drawer-sage);
-  font-size: .62rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  color: var(--paper-type-action-color);
+  font-family: var(--paper-type-action-family);
+  font-size: var(--paper-type-action-size);
+  font-weight: var(--paper-type-action-weight);
+  line-height: var(--paper-type-action-line-height);
+  letter-spacing: var(--paper-type-action-spacing);
 }
 
 .folio form {
@@ -362,13 +369,29 @@
 }
 
 .submitAction {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   justify-self: end;
-  min-height: 38px;
-  padding: 7px 0 4px 12px;
-  border-bottom: 1px solid rgba(83, 96, 78, .34);
-  color: var(--drawer-sage);
-  font-size: .7rem;
-  letter-spacing: .05em;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0 0 12px;
+  color: var(--paper-type-action-color);
+  font-family: var(--paper-type-action-family);
+  font-size: var(--paper-type-action-size);
+  font-weight: var(--paper-type-action-weight);
+  line-height: var(--paper-type-action-line-height);
+  letter-spacing: var(--paper-type-action-spacing);
+}
+
+.closeAction > span,
+.submitAction > span {
+  display: inline-block;
+  padding-bottom: 2px;
+  border-bottom:
+    1px solid
+    var(--paper-type-action-underline);
+  white-space: nowrap;
 }
 
 .closeAction:disabled,

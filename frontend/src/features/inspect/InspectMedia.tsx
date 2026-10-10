@@ -792,10 +792,6 @@ export function InspectMedia({
                         保存原图
                       </a>
 
-                      <p className={styles.viewerSaveHint}>
-                        存入照片：长按图片选择『储存到照片』
-                      </p>
-
                       {!confirmingRemoval ? (
                         <button
                           type="button"
