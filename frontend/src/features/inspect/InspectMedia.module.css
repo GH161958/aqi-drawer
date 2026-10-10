@@ -315,6 +315,12 @@
   gap: 6px;
 }
 
+.viewerToolbar,
+.viewerControls {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .viewerMenuSlot {
   position: relative;
 }
@@ -329,20 +335,21 @@
   font-size: 20px;
 }
 
+.viewerClose,
+.viewerMenuButton,
+.viewerControls button,
+.viewerMenu > a,
+.viewerMenu > button,
+.viewerConfirmation button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 @media (hover: hover) {
   .viewerMenuButton:hover,
   .viewerClose:hover {
     background: rgba(255, 255, 255, .07);
   }
-}
-
-.viewerControls button {
-  border:
-    1px solid
-    rgba(255, 255, 255, .22);
-
-  background:
-    rgba(22, 20, 18, .56);
 }
 
 .viewerClose:focus-visible,
@@ -431,6 +438,11 @@
   line-height: 1.45;
 }
 
+.viewerMenu .viewerSaveHint {
+  margin: 0 12px 7px;
+  color: rgba(255, 250, 242, .58);
+}
+
 .viewerConfirmation {
   border-top: 1px solid rgba(255, 255, 255, .12);
 }
@@ -457,9 +469,6 @@
 
   color:
     rgba(255, 250, 242, .28);
-
-  border-color:
-    rgba(255, 255, 255, .10);
 }
 
 .viewerImageFrame {
