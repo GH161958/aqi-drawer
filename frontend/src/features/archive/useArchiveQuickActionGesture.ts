@@ -102,6 +102,10 @@ export function useArchiveQuickActionGesture({
       return
     }
 
+    if (event.button !== 2) {
+      suppressClickRef.current = true
+    }
+
     onOpen(event.currentTarget)
   }
 

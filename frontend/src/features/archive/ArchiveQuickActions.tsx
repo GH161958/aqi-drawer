@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react'
@@ -36,6 +37,16 @@ interface ArchiveQuickActionsProps {
   onClose: () => void
   onComplete:
     (result: ArchiveQuickActionResult) => void
+}
+
+function isTouchAppleWebKit() {
+  return (
+    navigator.maxTouchPoints > 0
+    && /AppleWebKit/u.test(navigator.userAgent)
+    && /(iPad|iPhone|iPod|Macintosh)/u.test(
+      navigator.userAgent,
+    )
+  )
 }
 
 export function ArchiveQuickActions({
@@ -159,6 +170,64 @@ export function ArchiveQuickActions({
     setConfirmMemory(false)
     setView('main')
   }
+
+  useLayoutEffect(() => {
+    const scrollY = window.scrollY
+
+    if (isTouchAppleWebKit()) {
+      function guardBackgroundTouch(
+        event: TouchEvent,
+      ) {
+        const target = event.target
+
+        if (
+          target instanceof Node
+          && panelRef.current?.contains(target)
+        ) {
+          return
+        }
+
+        event.preventDefault()
+      }
+
+      document.addEventListener(
+        'touchmove',
+        guardBackgroundTouch,
+        { passive: false },
+      )
+
+      return () => {
+        document.removeEventListener(
+          'touchmove',
+          guardBackgroundTouch,
+        )
+
+        if (window.scrollY !== scrollY) {
+          window.scrollTo(0, scrollY)
+        }
+      }
+    }
+
+    const previous = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow,
+    }
+
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.width = '100%'
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.position = previous.position
+      document.body.style.top = previous.top
+      document.body.style.width = previous.width
+      document.body.style.overflow = previous.overflow
+      window.scrollTo(0, scrollY)
+    }
+  }, [])
 
   useEffect(() => {
     const focusKey = `${view}:${confirmMemory ? 'confirm' : 'base'}`
@@ -287,7 +356,11 @@ export function ArchiveQuickActions({
             <button type="button" onClick={() => setView('collection')}>
               放进 Collection <span aria-hidden="true">→</span>
             </button>
-            <button type="button" onClick={() => setView('trash')}>
+            <button
+              type="button"
+              className={styles.trashAction}
+              onClick={() => setView('trash')}
+            >
               放进废纸槽 <span aria-hidden="true">→</span>
             </button>
           </div>
@@ -335,6 +408,7 @@ export function ArchiveQuickActions({
                 </p>
                 <button
                   type="button"
+                  className={styles.trashAction}
                   disabled={pending}
                   onClick={confirmTrash}
                 >

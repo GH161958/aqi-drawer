@@ -23,6 +23,11 @@
   line-height: 1;
   cursor: pointer;
   opacity: .54;
+
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: pan-y;
 }
 
 .quickAction:hover,
@@ -40,6 +45,9 @@
   z-index: 2;
 
   -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: pan-y;
 
   isolation: isolate;
 
@@ -73,6 +81,12 @@
     rgba(52, 39, 30, .07);
 
   cursor: pointer;
+}
+
+.paper * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .previewPaperBundle {

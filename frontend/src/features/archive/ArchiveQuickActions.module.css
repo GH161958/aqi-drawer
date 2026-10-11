@@ -9,6 +9,10 @@
   overscroll-behavior: contain;
   padding: 24px max(16px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   background: rgba(54, 43, 35, .28);
+
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .slip {
@@ -16,6 +20,9 @@
   width: min(100%, 340px);
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   padding: 22px 22px 18px;
   border: 1px solid rgba(92, 75, 61, .24);
   border-radius: 1px;
@@ -23,6 +30,13 @@
   color: var(--drawer-ink);
   box-shadow: 2px 9px 24px rgba(48, 36, 29, .16);
   font-family: var(--font-ui);
+}
+
+.slip,
+.slip * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .header { padding-right: 48px; }
@@ -53,6 +67,8 @@
 
 .choices button { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 8px 2px; border-bottom: 1px solid var(--drawer-rule); text-align: left; }
 .choices button:disabled { color: var(--drawer-quiet-ink); cursor: default; }
+.choices .trashAction { color: rgba(117, 67, 58, .76); }
+.choices .trashAction:disabled { color: rgba(117, 67, 58, .48); }
 .choices button:focus-visible,
 .close:focus-visible { outline: 1px solid var(--drawer-sage); outline-offset: 2px; }
 .back { margin-top: 5px; }
