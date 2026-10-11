@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  canQuickActionPanelScroll,
   isQuickActionKey,
   movedBeyondLongPressThreshold,
   resolveQuickActionDismissal,
@@ -87,4 +88,44 @@ test('a non-pending backdrop dismissal closes from every layer', () => {
     view: 'collection',
     confirmMemory: false,
   }), 'close')
+})
+
+test('a short quick-action slip never chains touch scrolling', () => {
+  assert.equal(canQuickActionPanelScroll({
+    scrollTop: 0,
+    scrollHeight: 420,
+    clientHeight: 420,
+    touchDeltaY: -12,
+  }), false)
+})
+
+test('a long quick-action slip scrolls only away from its boundaries', () => {
+  const dimensions = {
+    scrollHeight: 900,
+    clientHeight: 400,
+  }
+
+  assert.equal(canQuickActionPanelScroll({
+    ...dimensions,
+    scrollTop: 0,
+    touchDeltaY: 12,
+  }), false)
+
+  assert.equal(canQuickActionPanelScroll({
+    ...dimensions,
+    scrollTop: 0,
+    touchDeltaY: -12,
+  }), true)
+
+  assert.equal(canQuickActionPanelScroll({
+    ...dimensions,
+    scrollTop: 500,
+    touchDeltaY: -12,
+  }), false)
+
+  assert.equal(canQuickActionPanelScroll({
+    ...dimensions,
+    scrollTop: 500,
+    touchDeltaY: 12,
+  }), true)
 })

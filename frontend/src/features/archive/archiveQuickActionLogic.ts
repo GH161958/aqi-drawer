@@ -110,3 +110,31 @@ export function movedBeyondLongPressThreshold(
     currentY - originY,
   ) > threshold
 }
+
+interface ScrollContinuationOptions {
+  scrollTop: number
+  scrollHeight: number
+  clientHeight: number
+  touchDeltaY: number
+}
+
+export function canQuickActionPanelScroll({
+  scrollTop,
+  scrollHeight,
+  clientHeight,
+  touchDeltaY,
+}: ScrollContinuationOptions): boolean {
+  const maxScrollTop =
+    scrollHeight - clientHeight
+
+  if (
+    maxScrollTop <= 1
+    || touchDeltaY === 0
+  ) {
+    return false
+  }
+
+  return touchDeltaY > 0
+    ? scrollTop > 0
+    : scrollTop < maxScrollTop
+}

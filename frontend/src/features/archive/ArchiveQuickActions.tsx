@@ -27,6 +27,7 @@ import type {
 } from './archiveQuickActionLogic'
 
 import {
+  canQuickActionPanelScroll,
   resolveQuickActionDismissal,
 } from './archiveQuickActionLogic'
 
@@ -173,40 +174,9 @@ export function ArchiveQuickActions({
 
   useLayoutEffect(() => {
     const scrollY = window.scrollY
-
-    if (isTouchAppleWebKit()) {
-      function guardBackgroundTouch(
-        event: TouchEvent,
-      ) {
-        const target = event.target
-
-        if (
-          target instanceof Node
-          && panelRef.current?.contains(target)
-        ) {
-          return
-        }
-
-        event.preventDefault()
-      }
-
-      document.addEventListener(
-        'touchmove',
-        guardBackgroundTouch,
-        { passive: false },
-      )
-
-      return () => {
-        document.removeEventListener(
-          'touchmove',
-          guardBackgroundTouch,
-        )
-
-        if (window.scrollY !== scrollY) {
-          window.scrollTo(0, scrollY)
-        }
-      }
-    }
+    const touchAppleWebKit =
+      isTouchAppleWebKit()
+    let lastTouchY: number | null = null
 
     const previous = {
       position: document.body.style.position,
@@ -219,6 +189,102 @@ export function ArchiveQuickActions({
     document.body.style.top = `-${scrollY}px`
     document.body.style.width = '100%'
     document.body.style.overflow = 'hidden'
+
+    if (touchAppleWebKit) {
+      function rememberTouch(
+        event: TouchEvent,
+      ) {
+        lastTouchY =
+          event.touches.length === 1
+            ? event.touches[0].clientY
+            : null
+      }
+
+      function guardBackgroundTouch(
+        event: TouchEvent,
+      ) {
+        const target = event.target
+        const panel = panelRef.current
+        const currentTouch =
+          event.touches.length === 1
+            ? event.touches[0]
+            : null
+
+        if (!currentTouch) {
+          lastTouchY = null
+          return
+        }
+
+        const touchDeltaY =
+          lastTouchY === null
+            ? 0
+            : currentTouch.clientY
+              - lastTouchY
+
+        lastTouchY = currentTouch.clientY
+
+        if (
+          target instanceof Node
+          && panel?.contains(target)
+          && canQuickActionPanelScroll({
+            scrollTop: panel.scrollTop,
+            scrollHeight: panel.scrollHeight,
+            clientHeight: panel.clientHeight,
+            touchDeltaY,
+          })
+        ) {
+          return
+        }
+
+        event.preventDefault()
+      }
+
+      document.addEventListener(
+        'touchstart',
+        rememberTouch,
+        { passive: true },
+      )
+      document.addEventListener(
+        'touchmove',
+        guardBackgroundTouch,
+        { passive: false },
+      )
+      document.addEventListener(
+        'touchend',
+        rememberTouch,
+        { passive: true },
+      )
+      document.addEventListener(
+        'touchcancel',
+        rememberTouch,
+        { passive: true },
+      )
+
+      return () => {
+        document.removeEventListener(
+          'touchstart',
+          rememberTouch,
+        )
+        document.removeEventListener(
+          'touchmove',
+          guardBackgroundTouch,
+        )
+        document.removeEventListener(
+          'touchend',
+          rememberTouch,
+        )
+        document.removeEventListener(
+          'touchcancel',
+          rememberTouch,
+        )
+
+        document.body.style.position = previous.position
+        document.body.style.top = previous.top
+        document.body.style.width = previous.width
+        document.body.style.overflow = previous.overflow
+        window.scrollTo(0, scrollY)
+      }
+    }
 
     return () => {
       document.body.style.position = previous.position
