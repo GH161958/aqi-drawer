@@ -1,4 +1,9 @@
 import {
+  useRef,
+  useState,
+} from 'react'
+
+import {
   useMutation,
   useQuery,
   useQueryClient,
@@ -36,6 +41,10 @@ import {
 import {
   ItemPreview,
 } from './ItemPreview'
+
+import {
+  ArchiveQuickActions,
+} from './ArchiveQuickActions'
 
 import {
   ArchiveIndex,
@@ -84,6 +93,12 @@ export function ArchiveDrawer({
   onBack,
   onInspect,
 }: ArchiveDrawerProps) {
+  const [quickActionItemId, setQuickActionItemId] =
+    useState<string | null>(null)
+
+  const quickActionTriggerRef =
+    useRef<HTMLButtonElement | null>(null)
+
   const queryClient =
     useQueryClient()
 
@@ -249,6 +264,41 @@ export function ArchiveDrawer({
     onInspect(item.id, trigger)
   }
 
+  function openQuickActions(
+    item: PocketItemSummary,
+    trigger: HTMLButtonElement,
+  ) {
+    quickActionTriggerRef.current = trigger
+    setQuickActionItemId(item.id)
+  }
+
+  function closeQuickActions() {
+    setQuickActionItemId(null)
+
+    window.requestAnimationFrame(() => {
+      const trigger = quickActionTriggerRef.current
+      const fallback =
+        document.querySelector<HTMLElement>(
+          '[data-archive-focus-fallback]',
+        )
+
+      if (trigger?.isConnected) {
+        trigger.focus({ preventScroll: true })
+      } else {
+        fallback?.focus({ preventScroll: true })
+      }
+
+      quickActionTriggerRef.current = null
+    })
+  }
+
+  const quickActionItem =
+    quickActionItemId
+      ? drawerItems.find(
+          (item) => item.id === quickActionItemId,
+        ) ?? null
+      : null
+
   return (
     <section
       className={styles.view}
@@ -407,11 +457,22 @@ export function ArchiveDrawer({
                     onOpen={
                       openPreview
                     }
+                    onQuickActions={
+                      openQuickActions
+                    }
                   />
                 ),
               )}
             </ol>
           )}
+
+        {quickActionItem && (
+          <ArchiveQuickActions
+            item={quickActionItem}
+            collections={collectionsQuery.data ?? []}
+            onClose={closeQuickActions}
+          />
+        )}
       </section>
     </section>
   )

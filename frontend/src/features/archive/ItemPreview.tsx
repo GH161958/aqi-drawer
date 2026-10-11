@@ -9,9 +9,19 @@ import type {
 
 import styles from './ItemPreview.module.css'
 
+import {
+  useArchiveQuickActionGesture,
+} from './useArchiveQuickActionGesture'
+
 interface ItemPreviewProps {
   item: PocketItemSummary
   onOpen:
+    (
+      item: PocketItemSummary,
+      trigger: HTMLButtonElement,
+    ) => void
+
+  onQuickActions:
     (
       item: PocketItemSummary,
       trigger: HTMLButtonElement,
@@ -142,7 +152,14 @@ function documentType(
 export function ItemPreview({
   item,
   onOpen,
+  onQuickActions,
 }: ItemPreviewProps) {
+  const quickActions =
+    useArchiveQuickActionGesture({
+      onOpen: (trigger) =>
+        onQuickActions(item, trigger),
+    })
+
   const image =
     firstPreviewImage(item)
 
@@ -324,12 +341,22 @@ export function ItemPreview({
           presentation.sourceFlavor
         }
         type="button"
-        onClick={(event) =>
+        onPointerDown={quickActions.onPointerDown}
+        onPointerMove={quickActions.onPointerMove}
+        onPointerUp={quickActions.onPointerUp}
+        onPointerCancel={quickActions.onPointerCancel}
+        onContextMenu={quickActions.onContextMenu}
+        onKeyDown={quickActions.onKeyDown}
+        onClick={(event) => {
+          if (quickActions.consumeSuppressedClick()) {
+            return
+          }
+
           onOpen(
             item,
             event.currentTarget,
           )
-        }
+        }}
       >
         {!isDocument
           && !isArticle
@@ -1129,6 +1156,17 @@ export function ItemPreview({
             )}
           </>
         )}
+      </button>
+
+      <button
+        type="button"
+        className={styles.quickAction}
+        aria-label={`整理「${item.title || '没有标题的纸'}」`}
+        onClick={(event) =>
+          onQuickActions(item, event.currentTarget)
+        }
+      >
+        <span aria-hidden="true">···</span>
       </button>
 
     </li>
