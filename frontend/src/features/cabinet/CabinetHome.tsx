@@ -261,11 +261,6 @@ export function CabinetHome({
 
         <button
           className={styles.discardTray}
-          data-has-contents={
-            counts.trash > 0
-              ? 'true'
-              : undefined
-          }
           type="button"
           aria-pressed={
             activeSlot === 'trash'
@@ -274,13 +269,6 @@ export function CabinetHome({
             onOpen('trash')
           }
         >
-          <span
-            className={
-              styles.discardPapers
-            }
-            aria-hidden="true"
-          />
-
           <span>
             DISCARDED
           </span>
