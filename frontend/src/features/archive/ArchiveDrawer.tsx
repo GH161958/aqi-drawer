@@ -47,6 +47,14 @@ import {
 } from './ArchiveQuickActions'
 
 import {
+  shouldFocusArchiveFallback,
+} from './archiveQuickActionLogic'
+
+import type {
+  ArchiveQuickActionResult,
+} from './archiveQuickActionLogic'
+
+import {
   ArchiveIndex,
 } from './ArchiveIndex'
 
@@ -272,7 +280,9 @@ export function ArchiveDrawer({
     setQuickActionItemId(item.id)
   }
 
-  function closeQuickActions() {
+  function closeQuickActions(
+    preferFallback = false,
+  ) {
     setQuickActionItemId(null)
 
     window.requestAnimationFrame(() => {
@@ -282,7 +292,10 @@ export function ArchiveDrawer({
           '[data-archive-focus-fallback]',
         )
 
-      if (trigger?.isConnected) {
+      if (
+        !preferFallback
+        && trigger?.isConnected
+      ) {
         trigger.focus({ preventScroll: true })
       } else {
         fallback?.focus({ preventScroll: true })
@@ -290,6 +303,18 @@ export function ArchiveDrawer({
 
       quickActionTriggerRef.current = null
     })
+  }
+
+  function completeQuickAction(
+    result: ArchiveQuickActionResult,
+  ) {
+    closeQuickActions(
+      shouldFocusArchiveFallback({
+        result,
+        slot,
+        collectionFilter: effectiveCollection,
+      }),
+    )
   }
 
   const quickActionItem =
@@ -469,8 +494,8 @@ export function ArchiveDrawer({
         {quickActionItem && (
           <ArchiveQuickActions
             item={quickActionItem}
-            collections={collectionsQuery.data ?? []}
-            onClose={closeQuickActions}
+            onClose={() => closeQuickActions()}
+            onComplete={completeQuickAction}
           />
         )}
       </section>

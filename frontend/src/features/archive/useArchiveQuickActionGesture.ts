@@ -9,6 +9,11 @@ import type {
   PointerEvent,
 } from 'react'
 
+import {
+  isQuickActionKey,
+  movedBeyondLongPressThreshold,
+} from './archiveQuickActionLogic'
+
 const LONG_PRESS_DELAY = 500
 const MOVE_THRESHOLD = 10
 
@@ -67,12 +72,13 @@ export function useArchiveQuickActionGesture({
       return
     }
 
-    if (
-      Math.hypot(
-        event.clientX - originRef.current.x,
-        event.clientY - originRef.current.y,
-      ) > MOVE_THRESHOLD
-    ) {
+    if (movedBeyondLongPressThreshold(
+      originRef.current.x,
+      originRef.current.y,
+      event.clientX,
+      event.clientY,
+      MOVE_THRESHOLD,
+    )) {
       clearTimer()
     }
   }
@@ -91,17 +97,13 @@ export function useArchiveQuickActionGesture({
   ) {
     event.preventDefault()
     clearTimer()
-    suppressClickRef.current = true
     onOpen(event.currentTarget)
   }
 
   function onKeyDown(
     event: KeyboardEvent<HTMLButtonElement>,
   ) {
-    if (
-      event.key === 'ContextMenu'
-      || (event.shiftKey && event.key === 'F10')
-    ) {
+    if (isQuickActionKey(event.key, event.shiftKey)) {
       event.preventDefault()
       onOpen(event.currentTarget)
     }

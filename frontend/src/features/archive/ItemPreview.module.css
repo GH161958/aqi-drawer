@@ -22,6 +22,12 @@
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
+  opacity: .54;
+}
+
+.quickAction:hover,
+.quickAction:focus-visible {
+  opacity: 1;
 }
 
 .quickAction:focus-visible {

@@ -59,6 +59,42 @@
 .copy { margin: 16px 0 5px; color: var(--drawer-quiet-ink); font-family: var(--font-reading); font-size: .83rem; line-height: 1.65; }
 .close { position: absolute; top: 10px; right: 12px; min-width: 44px; padding: 0; }
 
+.confirmation {
+  margin-top: 14px;
+  padding: 14px 0 2px;
+  border-top: 1px solid var(--drawer-rule);
+}
+
+.confirmTitle {
+  margin: 0;
+  font-family: var(--font-reading);
+  font-size: .9rem;
+}
+
+.confirmActions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.confirmActions button {
+  min-height: 44px;
+  appearance: none;
+  border: 0;
+  color: var(--drawer-sage);
+  background: transparent;
+  font: inherit;
+}
+
+.feedback {
+  min-height: 1.4em;
+  margin: 10px 0 0;
+  color: #875449;
+  font-family: var(--font-meta);
+  font-size: .7rem;
+  line-height: 1.4;
+}
+
 @media (min-width: 700px) {
   .backdrop { align-items: center; }
 }
