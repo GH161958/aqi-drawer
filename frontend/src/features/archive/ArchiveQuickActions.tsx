@@ -21,15 +21,15 @@ import type {
 
 import type {
   ArchiveQuickActionResult,
+  QuickActionDismissal,
+  QuickActionView,
+} from './archiveQuickActionLogic'
+
+import {
+  resolveQuickActionDismissal,
 } from './archiveQuickActionLogic'
 
 import styles from './ArchiveQuickActions.module.css'
-
-type QuickActionView =
-  | 'main'
-  | 'status'
-  | 'collection'
-  | 'trash'
 
 interface ArchiveQuickActionsProps {
   item: PocketItemSummary
@@ -45,6 +45,13 @@ export function ArchiveQuickActions({
 }: ArchiveQuickActionsProps) {
   const titleId = useId()
   const panelRef = useRef<HTMLElement>(null)
+  const confirmationRef = useRef<HTMLDivElement>(null)
+  const focusedLayerRef = useRef('')
+  const closeRef = useRef(onClose)
+  const completionRef = useRef(false)
+  const pendingRef = useRef(false)
+  const viewRef = useRef<QuickActionView>('main')
+  const confirmMemoryRef = useRef(false)
   const [view, setView] = useState<QuickActionView>('main')
   const [confirmMemory, setConfirmMemory] = useState(false)
 
@@ -58,10 +65,26 @@ export function ArchiveQuickActions({
     || collectionMutation.isPending
     || trashMutation.isPending
 
+  closeRef.current = onClose
+  pendingRef.current = pending
+  viewRef.current = view
+  confirmMemoryRef.current = confirmMemory
+
   const error =
     statusMutation.error
     || collectionMutation.error
     || trashMutation.error
+
+  function completeOnce(
+    result: ArchiveQuickActionResult,
+  ) {
+    if (completionRef.current) {
+      return
+    }
+
+    completionRef.current = true
+    onComplete(result)
+  }
 
   function commitStatus(status: PocketStatus) {
     if (pending || status === item.status) {
@@ -71,7 +94,7 @@ export function ArchiveQuickActions({
     statusMutation.mutate(status, {
       onSuccess: () => {
         setConfirmMemory(false)
-        onComplete({ type: 'status', status })
+        completeOnce({ type: 'status', status })
       },
     })
   }
@@ -93,7 +116,7 @@ export function ArchiveQuickActions({
 
     collectionMutation.mutate(collection, {
       onSuccess: () =>
-        onComplete({ type: 'collection', collection }),
+        completeOnce({ type: 'collection', collection }),
     })
   }
 
@@ -103,21 +126,69 @@ export function ArchiveQuickActions({
     }
 
     trashMutation.mutate(undefined, {
-      onSuccess: () => onComplete({ type: 'trash' }),
+      onSuccess: () => completeOnce({ type: 'trash' }),
     })
   }
 
-  useEffect(() => {
-    const panel = panelRef.current
+  function applyDismissal(
+    dismissal: QuickActionDismissal,
+  ) {
+    if (dismissal === 'blocked') {
+      return
+    }
 
-    panel
+    if (dismissal === 'cancel-memory') {
+      setConfirmMemory(false)
+      return
+    }
+
+    if (dismissal === 'main') {
+      setConfirmMemory(false)
+      setView('main')
+      return
+    }
+
+    closeRef.current()
+  }
+
+  function returnToMain() {
+    if (pending) {
+      return
+    }
+
+    setConfirmMemory(false)
+    setView('main')
+  }
+
+  useEffect(() => {
+    const focusKey = `${view}:${confirmMemory ? 'confirm' : 'base'}`
+
+    if (focusedLayerRef.current === focusKey) {
+      return
+    }
+
+    focusedLayerRef.current = focusKey
+
+    const focusOwner = confirmMemory
+      ? confirmationRef.current
+      : panelRef.current
+
+    focusOwner
       ?.querySelector<HTMLElement>('button:not(:disabled)')
       ?.focus({ preventScroll: true })
+  }, [confirmMemory, view])
 
+  useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
+      const panel = panelRef.current
+
       if (event.key === 'Tab') {
+        const focusOwner = confirmMemoryRef.current
+          ? confirmationRef.current
+          : panel
+
         const focusable = Array.from(
-          panel?.querySelectorAll<HTMLElement>(
+          focusOwner?.querySelectorAll<HTMLElement>(
             'button:not(:disabled)',
           ) ?? [],
         )
@@ -152,16 +223,20 @@ export function ArchiveQuickActions({
       }
 
       event.preventDefault()
-      if (view === 'main') {
-        onClose()
-      } else {
-        setView('main')
-      }
+      applyDismissal(
+        resolveQuickActionDismissal({
+          pending: pendingRef.current,
+          source: 'escape',
+          view: viewRef.current,
+          confirmMemory:
+            confirmMemoryRef.current,
+        }),
+      )
     }
 
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose, view])
+  }, [])
 
   const heading =
     view === 'main'
@@ -178,7 +253,14 @@ export function ArchiveQuickActions({
       aria-busy={pending}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) {
-          onClose()
+          applyDismissal(
+            resolveQuickActionDismissal({
+              pending,
+              source: 'backdrop',
+              view,
+              confirmMemory,
+            }),
+          )
         }
       }}
     >
@@ -265,7 +347,7 @@ export function ArchiveQuickActions({
               type="button"
               className={styles.back}
               disabled={pending}
-              onClick={() => setView('main')}
+              onClick={returnToMain}
             >
               返回
             </button>
@@ -274,6 +356,7 @@ export function ArchiveQuickActions({
 
         {confirmMemory && (
           <div
+            ref={confirmationRef}
             className={styles.confirmation}
             role="alertdialog"
             aria-labelledby={`${titleId}-memory`}
@@ -311,7 +394,14 @@ export function ArchiveQuickActions({
               : ''}
         </p>
 
-        <button type="button" className={styles.close} disabled={pending} onClick={onClose}>
+        <button
+          type="button"
+          className={styles.close}
+          disabled={pending}
+          onClick={() =>
+            closeRef.current()
+          }
+        >
           收起
         </button>
       </section>

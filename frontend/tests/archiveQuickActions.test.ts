@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   isQuickActionKey,
   movedBeyondLongPressThreshold,
+  resolveQuickActionDismissal,
   shouldFocusArchiveFallback,
 } from '../src/features/archive/archiveQuickActionLogic.ts'
 
@@ -50,4 +51,40 @@ test('collection-filter and trash actions restore focus safely', () => {
     slot: 'all',
     collectionFilter: '',
   }), true)
+})
+
+test('pending quick actions cannot be dismissed by Escape or the backdrop', () => {
+  for (const source of ['escape', 'backdrop'] as const) {
+    assert.equal(resolveQuickActionDismissal({
+      pending: true,
+      source,
+      view: 'trash',
+      confirmMemory: false,
+    }), 'blocked')
+  }
+})
+
+test('Memory confirmation is cleared before Escape navigates or closes', () => {
+  assert.equal(resolveQuickActionDismissal({
+    pending: false,
+    source: 'escape',
+    view: 'status',
+    confirmMemory: true,
+  }), 'cancel-memory')
+
+  assert.equal(resolveQuickActionDismissal({
+    pending: false,
+    source: 'escape',
+    view: 'status',
+    confirmMemory: false,
+  }), 'main')
+})
+
+test('a non-pending backdrop dismissal closes from every layer', () => {
+  assert.equal(resolveQuickActionDismissal({
+    pending: false,
+    source: 'backdrop',
+    view: 'collection',
+    confirmMemory: false,
+  }), 'close')
 })

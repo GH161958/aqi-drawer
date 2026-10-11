@@ -97,6 +97,11 @@ export function useArchiveQuickActionGesture({
   ) {
     event.preventDefault()
     clearTimer()
+
+    if (suppressClickRef.current) {
+      return
+    }
+
     onOpen(event.currentTarget)
   }
 

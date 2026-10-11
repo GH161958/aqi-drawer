@@ -16,6 +16,48 @@ export type ArchiveQuickActionResult =
       type: 'trash'
     }
 
+export type QuickActionView =
+  | 'main'
+  | 'status'
+  | 'collection'
+  | 'trash'
+
+export type QuickActionDismissal =
+  | 'blocked'
+  | 'cancel-memory'
+  | 'main'
+  | 'close'
+
+interface DismissalOptions {
+  pending: boolean
+  source: 'backdrop' | 'escape'
+  view: QuickActionView
+  confirmMemory: boolean
+}
+
+export function resolveQuickActionDismissal({
+  pending,
+  source,
+  view,
+  confirmMemory,
+}: DismissalOptions): QuickActionDismissal {
+  if (pending) {
+    return 'blocked'
+  }
+
+  if (source === 'backdrop') {
+    return 'close'
+  }
+
+  if (confirmMemory) {
+    return 'cancel-memory'
+  }
+
+  return view === 'main'
+    ? 'close'
+    : 'main'
+}
+
 interface FocusFallbackOptions {
   result: ArchiveQuickActionResult
   slot: CabinetSlot

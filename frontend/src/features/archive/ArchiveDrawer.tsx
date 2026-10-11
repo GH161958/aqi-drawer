@@ -101,8 +101,8 @@ export function ArchiveDrawer({
   onBack,
   onInspect,
 }: ArchiveDrawerProps) {
-  const [quickActionItemId, setQuickActionItemId] =
-    useState<string | null>(null)
+  const [quickActionItem, setQuickActionItem] =
+    useState<PocketItemSummary | null>(null)
 
   const quickActionTriggerRef =
     useRef<HTMLButtonElement | null>(null)
@@ -277,13 +277,13 @@ export function ArchiveDrawer({
     trigger: HTMLButtonElement,
   ) {
     quickActionTriggerRef.current = trigger
-    setQuickActionItemId(item.id)
+    setQuickActionItem(item)
   }
 
   function closeQuickActions(
     preferFallback = false,
   ) {
-    setQuickActionItemId(null)
+    setQuickActionItem(null)
 
     window.requestAnimationFrame(() => {
       const trigger = quickActionTriggerRef.current
@@ -316,13 +316,6 @@ export function ArchiveDrawer({
       }),
     )
   }
-
-  const quickActionItem =
-    quickActionItemId
-      ? drawerItems.find(
-          (item) => item.id === quickActionItemId,
-        ) ?? null
-      : null
 
   return (
     <section
