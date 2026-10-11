@@ -1158,17 +1158,6 @@ export function ItemPreview({
         )}
       </button>
 
-      <button
-        type="button"
-        className={styles.quickAction}
-        aria-label={`整理「${item.title || '没有标题的纸'}」`}
-        onClick={(event) =>
-          onQuickActions(item, event.currentTarget)
-        }
-      >
-        <span aria-hidden="true">···</span>
-      </button>
-
     </li>
   )
 }
