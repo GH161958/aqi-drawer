@@ -203,11 +203,9 @@
   color: var(--drawer-sage);
 }
 
-.titleViewport:focus-within,
-.textViewport:focus-within {
-  box-shadow:
-    inset 0 -1px
-    rgba(83, 96, 78, .48);
+.titleLabel:has(input:focus-visible) .fieldLabel,
+.textLabel:has(textarea:focus-visible) .fieldLabel {
+  font-weight: 600;
 }
 
 .titleLabel input,
@@ -259,11 +257,18 @@
 }
 
 .chooseAction {
-  min-height: 34px;
-  padding: 6px 2px;
-  border-bottom: 1px solid rgba(137, 112, 73, .34);
-  color: var(--drawer-ink);
-  font-size: .68rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 2px;
+  color: var(--paper-type-action-color);
+  font-family: var(--paper-type-action-family);
+  font-size: var(--paper-type-action-size);
+  font-weight: var(--paper-type-action-weight);
+  line-height: var(--paper-type-action-line-height);
+  letter-spacing: var(--paper-type-action-spacing);
 }
 
 .dropHint {
@@ -385,6 +390,7 @@
 }
 
 .closeAction > span,
+.chooseAction > span,
 .submitAction > span {
   display: inline-block;
   padding-bottom: 2px;

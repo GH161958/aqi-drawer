@@ -423,7 +423,7 @@ export function CapturePocket() {
                   fileInput.current?.click()
                 }}
               >
-                夹入文件
+                <span>夹入文件</span>
               </button>
 
               <span className={styles.dropHint}>
