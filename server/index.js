@@ -551,6 +551,10 @@ export async function createBridgeApp(config = {}) {
         } catch (error) {
           const resolvedUrl = cleanWebUrl(error?.finalUrl) || payload.sourceUrl
           const noteId = extractXhsNoteId(resolvedUrl)
+          const hasCaptureTitle =
+            payload.titleOrigin === 'capture'
+            && typeof payload.title === 'string'
+            && Boolean(payload.title.trim())
           storedItem = await store.upsert({
             ...payload,
             attachments: allAttachments,
@@ -559,6 +563,9 @@ export async function createBridgeApp(config = {}) {
             sourceData: {
               provider: 'xiaohongshu',
               ...(noteId ? { noteId } : {}),
+              ...(hasCaptureTitle
+                ? { titleOrigin: 'capture' }
+                : {}),
               parseStatus: 'failed',
               originalUrl: payload.sourceUrl,
               canonicalUrl: resolvedUrl,

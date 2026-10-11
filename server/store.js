@@ -1520,6 +1520,15 @@ function mergeDuplicate(existing, incoming, now) {
       : entry.name === attachment.name && entry.size === attachment.size)
     if (!duplicate) attachments.push(attachment)
   }
+  const sourceData = incoming.sourceData
+    ? {
+        ...incoming.sourceData,
+        ...(clean(existing.sourceData?.titleOrigin) === 'capture'
+          && !clean(incoming.sourceData?.titleOrigin)
+          ? { titleOrigin: 'capture' }
+          : {}),
+      }
+    : existing.sourceData
   const merged = {
     ...existing,
     title: existing.title || incoming.title,
@@ -1532,7 +1541,7 @@ function mergeDuplicate(existing, incoming, now) {
     kind: attachments.length ? 'mixed' : existing.sourceUrl || incoming.sourceUrl ? 'link' : 'text',
     attachments,
     ...(incoming.sourceIdentity ? { sourceIdentity: incoming.sourceIdentity } : {}),
-    ...(incoming.sourceData ? { sourceData: incoming.sourceData } : {}),
+    ...(sourceData ? { sourceData } : {}),
     fingerprint: incoming.fingerprint,
     receivedCount: Math.max(1, Number(existing.receivedCount) || 1) + 1,
     lastReceivedAt: now,
