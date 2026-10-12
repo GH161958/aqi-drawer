@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
-import { unlink } from 'node:fs/promises'
+import { stat, unlink } from 'node:fs/promises'
 import express from 'express'
 import multer from 'multer'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
@@ -398,6 +398,50 @@ export async function createBridgeApp(config = {}) {
     } catch (error) { next(error) }
   })
 
+  app.delete(
+    '/api/pocket/items/:id/attachments/:attachmentId',
+    async (req, res, next) => {
+      try {
+        const result =
+          await store.removeAttachment(
+            req.params.id,
+            req.params.attachmentId,
+          )
+
+        if (result.mediaCleanupFailed.length) {
+          for (const failure of result.mediaCleanupFailed) {
+            console.error(
+              'Attachment media cleanup failed.',
+              {
+                itemId: req.params.id,
+                attachmentId:
+                  req.params.attachmentId,
+                storageName:
+                  failure.storageName,
+                error: failure.error,
+              },
+            )
+          }
+        }
+
+        res.json({
+          item: result.item,
+          attachment: result.attachment,
+          cleanup: {
+            status:
+              result.mediaCleanupFailed.length
+                ? 'failed'
+                : result.mediaMissing
+                  ? 'missing'
+                  : 'ok',
+          },
+        })
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
   app.patch('/api/pocket/items/:id/metadata', async (req, res, next) => {
     try {
       const metadata = {
@@ -507,6 +551,10 @@ export async function createBridgeApp(config = {}) {
         } catch (error) {
           const resolvedUrl = cleanWebUrl(error?.finalUrl) || payload.sourceUrl
           const noteId = extractXhsNoteId(resolvedUrl)
+          const hasCaptureTitle =
+            payload.titleOrigin === 'capture'
+            && typeof payload.title === 'string'
+            && Boolean(payload.title.trim())
           storedItem = await store.upsert({
             ...payload,
             attachments: allAttachments,
@@ -515,6 +563,9 @@ export async function createBridgeApp(config = {}) {
             sourceData: {
               provider: 'xiaohongshu',
               ...(noteId ? { noteId } : {}),
+              ...(hasCaptureTitle
+                ? { titleOrigin: 'capture' }
+                : {}),
               parseStatus: 'failed',
               originalUrl: payload.sourceUrl,
               canonicalUrl: resolvedUrl,
@@ -561,15 +612,167 @@ export async function createBridgeApp(config = {}) {
   app.post('/api/pocket/items/upload', acceptUpload, handleUpload())
   app.post(`/drop/${settings.dropSecret}`, acceptUpload, handleUpload({ defaultText: true }))
 
+  app.post(
+    '/api/pocket/items/:id/attachments',
+    acceptUpload,
+    async (req, res, next) => {
+      const files = normalizeMultipartFiles(req.files)
+      let result = null
+      let uploadedAttachments = []
+
+      try {
+        let payload = parseRequestPayload(req.body)
+        if (typeof req.body?.payload === 'string' && req.body.payload.trim()) {
+          payload = {
+            ...payload,
+            ...parseRequestPayload(JSON.parse(req.body.payload)),
+          }
+        }
+
+        const expectedFileCount = parseExpectedFileCount(payload)
+        const requestId = String(payload.requestId || '').trim()
+        if (!requestId || requestId.length > 160) {
+          throw httpError(422, 'requestId must be a non-empty string up to 160 characters.')
+        }
+        if (!files.length) {
+          throw httpError(400, 'At least one attachment is required.')
+        }
+        if (
+          expectedFileCount !== null
+          && files.length !== expectedFileCount
+        ) {
+          const error = httpError(
+            422,
+            `Expected ${expectedFileCount} uploaded file(s), but received ${files.length}.`,
+          )
+          error.code = 'EXPECTED_FILE_COUNT_MISMATCH'
+          error.expectedFileCount = expectedFileCount
+          error.receivedFileCount = files.length
+          throw error
+        }
+
+        await Promise.all(
+          files.map(async (file) => {
+            const stored = await stat(file.path)
+            if (!stored.isFile() || stored.size !== file.size) {
+              throw httpError(500, 'Uploaded attachment was not persisted completely.')
+            }
+          }),
+        )
+
+        uploadedAttachments = files.map((file) => ({
+          file,
+          attachment: {
+            id: randomUUID(),
+            name: normalizeUploadedFilename(file.originalname),
+            mimeType: file.mimetype,
+            size: file.size,
+            storageName: file.filename,
+          },
+        }))
+        const attachments = uploadedAttachments.map(
+          (entry) => entry.attachment,
+        )
+
+        result = await store.appendAttachments(
+          req.params.id,
+          attachments,
+          {
+            actor: 'EE',
+            requestId,
+          },
+        )
+
+        const retained = new Set(result.addedAttachmentIds)
+        await removeUploadedFiles(
+          uploadedAttachments
+            .filter(({ attachment }) => !retained.has(attachment.id))
+            .map(({ file }) => file),
+        )
+
+        res.status(result.duplicate ? 200 : 201).json({
+          item: result.item,
+          addedAttachmentIds: result.addedAttachmentIds,
+          duplicate: result.duplicate,
+        })
+      } catch (error) {
+        const retained = new Set(result?.addedAttachmentIds ?? [])
+        await removeUploadedFiles(
+          uploadedAttachments.length
+            ? uploadedAttachments
+                .filter(({ attachment }) => !retained.has(attachment.id))
+                .map(({ file }) => file)
+            : files,
+        )
+        next(error)
+      }
+    },
+  )
+
   app.get('/api/pocket/media/:attachmentId', async (req, res, next) => {
     try {
       const found = await store.readAttachment(req.params.attachmentId, 25 * 1024 * 1024)
       if (!found) return res.status(404).json({ error: 'Attachment not found.' })
-      res.type(found.attachment.mimeType)
-      res.setHeader('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(found.attachment.name)}`)
+      setAttachmentResponseHeaders(
+        res,
+        found.attachment,
+        { forceDownload: false },
+      )
       res.send(found.data)
     } catch (error) { next(error) }
   })
+
+  app.get(
+    '/api/pocket/items/:id/attachments/:attachmentId/preview',
+    async (req, res, next) => {
+      try {
+        const found =
+          await store.readItemAttachment(
+            req.params.id,
+            req.params.attachmentId,
+          )
+        if (!found) {
+          return res.status(404).json({
+            error: 'Attachment not found on this item.',
+          })
+        }
+        setAttachmentResponseHeaders(
+          res,
+          found.attachment,
+          { forceDownload: false },
+        )
+        res.send(found.data)
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
+
+  app.get(
+    '/api/pocket/items/:id/attachments/:attachmentId/download',
+    async (req, res, next) => {
+      try {
+        const found =
+          await store.readItemAttachment(
+            req.params.id,
+            req.params.attachmentId,
+          )
+        if (!found) {
+          return res.status(404).json({
+            error: 'Attachment not found on this item.',
+          })
+        }
+        setAttachmentResponseHeaders(
+          res,
+          found.attachment,
+          { forceDownload: true },
+        )
+        res.send(found.data)
+      } catch (error) {
+        next(error)
+      }
+    },
+  )
 
   app.post('/api/pocket/items/:id/replies', async (req, res, next) => {
     try {
@@ -917,6 +1120,86 @@ function normalizeUploadedFilename(value) {
 
   const candidate = Buffer.from(original, 'latin1').toString('utf8')
   return (candidate.includes('\uFFFD') ? original : candidate).normalize('NFC')
+}
+
+const SAFE_INLINE_ATTACHMENT_TYPES =
+  new Set([
+    'application/pdf',
+    'image/avif',
+    'image/gif',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'text/plain',
+  ])
+
+function attachmentDisposition(
+  name,
+  disposition,
+) {
+  const normalized =
+    String(name || 'attachment')
+      .replace(/[\r\n]/gu, '')
+      .normalize('NFC')
+  const encoded =
+    encodeURIComponent(normalized)
+      .replace(/['()*]/gu, (character) =>
+        `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+      )
+
+  return (
+    `${disposition}; filename="attachment"; `
+    + `filename*=UTF-8''${encoded}`
+  )
+}
+
+function setAttachmentResponseHeaders(
+  res,
+  attachment,
+  { forceDownload },
+) {
+  const mimeType =
+    String(
+      attachment.mimeType
+      || 'application/octet-stream',
+    )
+      .trim()
+      .toLowerCase()
+
+  const inline =
+    !forceDownload
+    && SAFE_INLINE_ATTACHMENT_TYPES.has(
+      mimeType,
+    )
+
+  res.type(mimeType)
+  res.setHeader(
+    'content-disposition',
+    attachmentDisposition(
+      attachment.name,
+      inline ? 'inline' : 'attachment',
+    ),
+  )
+  res.setHeader(
+    'x-content-type-options',
+    'nosniff',
+  )
+  res.setHeader(
+    'content-security-policy',
+    "sandbox; default-src 'none'",
+  )
+  res.setHeader(
+    'cross-origin-resource-policy',
+    'same-origin',
+  )
+  res.setHeader(
+    'referrer-policy',
+    'no-referrer',
+  )
+  res.setHeader(
+    'cache-control',
+    'private, max-age=3600',
+  )
 }
 
 function normalizeMultipartFiles(value) {

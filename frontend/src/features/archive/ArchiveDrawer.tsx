@@ -1,4 +1,9 @@
 import {
+  useRef,
+  useState,
+} from 'react'
+
+import {
   useMutation,
   useQuery,
   useQueryClient,
@@ -36,6 +41,18 @@ import {
 import {
   ItemPreview,
 } from './ItemPreview'
+
+import {
+  ArchiveQuickActions,
+} from './ArchiveQuickActions'
+
+import {
+  shouldFocusArchiveFallback,
+} from './archiveQuickActionLogic'
+
+import type {
+  ArchiveQuickActionResult,
+} from './archiveQuickActionLogic'
 
 import {
   ArchiveIndex,
@@ -84,6 +101,12 @@ export function ArchiveDrawer({
   onBack,
   onInspect,
 }: ArchiveDrawerProps) {
+  const [quickActionItem, setQuickActionItem] =
+    useState<PocketItemSummary | null>(null)
+
+  const quickActionTriggerRef =
+    useRef<HTMLButtonElement | null>(null)
+
   const queryClient =
     useQueryClient()
 
@@ -249,6 +272,51 @@ export function ArchiveDrawer({
     onInspect(item.id, trigger)
   }
 
+  function openQuickActions(
+    item: PocketItemSummary,
+    trigger: HTMLButtonElement,
+  ) {
+    quickActionTriggerRef.current = trigger
+    setQuickActionItem(item)
+  }
+
+  function closeQuickActions(
+    preferFallback = false,
+  ) {
+    setQuickActionItem(null)
+
+    window.requestAnimationFrame(() => {
+      const trigger = quickActionTriggerRef.current
+      const fallback =
+        document.querySelector<HTMLElement>(
+          '[data-archive-focus-fallback]',
+        )
+
+      if (
+        !preferFallback
+        && trigger?.isConnected
+      ) {
+        trigger.focus({ preventScroll: true })
+      } else {
+        fallback?.focus({ preventScroll: true })
+      }
+
+      quickActionTriggerRef.current = null
+    })
+  }
+
+  function completeQuickAction(
+    result: ArchiveQuickActionResult,
+  ) {
+    closeQuickActions(
+      shouldFocusArchiveFallback({
+        result,
+        slot,
+        collectionFilter: effectiveCollection,
+      }),
+    )
+  }
+
   return (
     <section
       className={styles.view}
@@ -407,11 +475,22 @@ export function ArchiveDrawer({
                     onOpen={
                       openPreview
                     }
+                    onQuickActions={
+                      openQuickActions
+                    }
                   />
                 ),
               )}
             </ol>
           )}
+
+        {quickActionItem && (
+          <ArchiveQuickActions
+            item={quickActionItem}
+            onClose={() => closeQuickActions()}
+            onComplete={completeQuickAction}
+          />
+        )}
       </section>
     </section>
   )

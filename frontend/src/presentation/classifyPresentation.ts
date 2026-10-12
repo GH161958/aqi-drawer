@@ -263,8 +263,22 @@ function attachmentFamily(
   return 'document'
 }
 
+export function isClipboardTextAttachment(
+  attachment: PocketAttachmentSummary,
+): boolean {
+  return (
+    attachment.mimeType
+      .trim()
+      .toLowerCase() === 'text/plain'
+    && /^Clipboard(?:\s.+)?\.txt$/iu.test(
+      attachment.name.trim(),
+    )
+  )
+}
+
 function attachmentPresentation(
   item: PocketItemSummary,
+  sourceFlavor: SourceFlavor,
 ): PresentationKind | null {
   if (item.attachments.length === 0) {
     return null
@@ -276,6 +290,21 @@ function attachmentPresentation(
         attachmentFamily,
       ),
     )
+
+  if (
+    sourceFlavor === 'xiaohongshu'
+    && families.has('photo')
+    && item.attachments.every(
+      (attachment) =>
+        attachmentFamily(attachment)
+          === 'photo'
+        || isClipboardTextAttachment(
+          attachment,
+        ),
+    )
+  ) {
+    return 'photo'
+  }
 
   if (families.size > 1) {
     return 'mixed'
@@ -329,7 +358,10 @@ export function classifyPresentation(
     classifySourceFlavor(item)
 
   const fromAttachments =
-    attachmentPresentation(item)
+    attachmentPresentation(
+      item,
+      sourceFlavor,
+    )
 
   if (fromAttachments) {
     return {
@@ -371,7 +403,10 @@ export function classifyPresentation(
     }
   }
 
-  if (item.kind === 'mixed') {
+  if (
+    item.kind === 'mixed'
+    && item.attachments.length > 0
+  ) {
     return {
       kind: 'mixed',
       sourceFlavor,

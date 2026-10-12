@@ -8,6 +8,11 @@
   position: relative;
   z-index: 2;
 
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: pan-y;
+
   isolation: isolate;
 
   display: block;
@@ -40,6 +45,12 @@
     rgba(52, 39, 30, .07);
 
   cursor: pointer;
+}
+
+.paper * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .previewPaperBundle {

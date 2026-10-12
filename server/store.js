@@ -14,7 +14,7 @@ const STATUSES = new Set(['inbox', 'tonight', 'discussed', 'deferred', 'memory_c
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000
 const MAX_XHS_IMAGES = 30
 const MAX_XHS_DOWNLOAD_BYTES = 80 * 1024 * 1024
-const ACTIVITY_TYPES = new Set(['received', 'seen_by_aqi', 'content_read', 'reply_added', 'status_changed', 'metadata_changed', 'source_refreshed', 'trashed', 'restored'])
+const ACTIVITY_TYPES = new Set(['received', 'seen_by_aqi', 'content_read', 'reply_added', 'status_changed', 'metadata_changed', 'source_refreshed', 'attachment_added', 'attachment_removed', 'trashed', 'restored'])
 
 export class PocketStore {
   constructor(dataDir) {
@@ -362,6 +362,237 @@ export class PocketStore {
     }
   }
 
+  async removeAttachment(
+    id,
+    attachmentId,
+  ) {
+    /*
+      Commit the item update before touching media.
+      A cleanup failure may leave an orphaned file,
+      but can never leave an item pointing at a file
+      that was already removed.
+    */
+    const run = async () => {
+      const state = await this.#read()
+
+        const item =
+          state.items.find(
+            (entry) =>
+              entry.id === id
+              && !entry.deletedAt,
+          )
+
+        if (!item) {
+          throw httpError(
+            404,
+            'Pocket item not found.',
+          )
+        }
+
+        const attachments =
+          Array.isArray(item.attachments)
+            ? item.attachments
+            : []
+
+        const attachmentIndex =
+          attachments.findIndex(
+            (entry) =>
+              entry.id === attachmentId,
+          )
+
+        if (attachmentIndex < 0) {
+          throw httpError(
+            404,
+            'Attachment not found on this item.',
+          )
+        }
+
+        const [attachment] =
+          attachments.splice(
+            attachmentIndex,
+            1,
+          )
+
+        item.attachments = attachments
+        item.updatedAt =
+          new Date().toISOString()
+        item.syncState = 'synced'
+
+        appendActivity(
+          item,
+          'attachment_removed',
+          'EE',
+          {
+            attachmentId:
+              attachment.id,
+            name:
+              attachment.name,
+            mimeType:
+              attachment.mimeType,
+          },
+          item.updatedAt,
+        )
+
+        const storageName =
+          clean(
+            attachment?.storageName,
+          )
+
+        const normalizedStorageName =
+          storageName
+            ? path.basename(storageName)
+            : ''
+
+        const stillReferenced =
+          normalizedStorageName
+          && state.items.some((entry) =>
+            (
+              Array.isArray(entry.attachments)
+                ? entry.attachments
+                : []
+            ).some(
+              (candidate) =>
+                path.basename(
+                  clean(
+                    candidate?.storageName,
+                  ),
+                ) === normalizedStorageName,
+            ),
+          )
+
+        const removal = {
+          item: publicItem(item),
+          attachment:
+            publicAttachment(
+              attachment,
+              item.id,
+            ),
+          orphanedStorageName:
+            normalizedStorageName
+            && !stillReferenced
+              ? normalizedStorageName
+              : '',
+        }
+
+      /*
+        Keep cleanup inside this Store queue turn.
+        The JSON update is committed first, while no
+        later mutation can add a new reference before
+        the final reference check and unlink finish.
+      */
+      await this.#write(state)
+
+      let mediaDeleted = 0
+      let mediaMissing = 0
+      const mediaCleanupFailed = []
+
+      if (removal.orphanedStorageName) {
+        try {
+          await unlink(
+            path.join(
+              this.mediaDir,
+              removal.orphanedStorageName,
+            ),
+          )
+          mediaDeleted = 1
+        } catch (error) {
+          if (error?.code === 'ENOENT') {
+            mediaMissing = 1
+          } else {
+            mediaCleanupFailed.push({
+              storageName:
+                removal.orphanedStorageName,
+              error:
+                error?.message
+                || 'Media cleanup failed.',
+            })
+          }
+        }
+      }
+
+      return {
+        item: removal.item,
+        attachment: removal.attachment,
+        mediaDeleted,
+        mediaMissing,
+        mediaCleanupFailed,
+      }
+    }
+
+    this.queue = this.queue.then(run, run)
+    return this.queue
+  }
+
+  async appendAttachments(
+    id,
+    attachments,
+    { actor = 'EE', requestId = '' } = {},
+  ) {
+    const incoming = Array.isArray(attachments)
+      ? attachments.map(normalizeAttachment)
+      : []
+    const normalizedRequestId = clean(requestId).slice(0, 160)
+
+    if (!incoming.length) {
+      throw httpError(400, 'At least one attachment is required.')
+    }
+
+    return this.#mutate((state) => {
+      const item = state.items.find(
+        (entry) => entry.id === id && !entry.deletedAt,
+      )
+      if (!item) throw httpError(404, 'Pocket item not found.')
+
+      if (
+        normalizedRequestId
+        && normalizeActivity(item.activity).some(
+          (entry) =>
+            entry.type === 'attachment_added'
+            && entry.detail.requestId === normalizedRequestId,
+        )
+      ) {
+        return {
+          item: publicItem(item),
+          addedAttachmentIds: [],
+          duplicate: true,
+        }
+      }
+
+      const existingIds = new Set(
+        item.attachments.map((entry) => entry.id),
+      )
+      if (incoming.some((entry) => existingIds.has(entry.id))) {
+        throw httpError(409, 'Attachment ID already exists on this item.')
+      }
+
+      item.attachments = [...item.attachments, ...incoming]
+      item.updatedAt = new Date().toISOString()
+      item.syncState = 'synced'
+
+      for (const attachment of incoming) {
+        appendActivity(
+          item,
+          'attachment_added',
+          actor,
+          {
+            attachmentId: attachment.id,
+            name: attachment.name,
+            mimeType: attachment.mimeType,
+            size: attachment.size,
+            requestId: normalizedRequestId,
+          },
+          item.updatedAt,
+        )
+      }
+
+      return {
+        item: publicItem(item),
+        addedAttachmentIds: incoming.map((entry) => entry.id),
+        duplicate: false,
+      }
+    })
+  }
+
   /* TRASH LIFECYCLE V1 END */
 
   async getForContentRead(id) {
@@ -487,10 +718,40 @@ export class PocketStore {
         }
       }
 
-      const attachments = [...nonXhsAttachments, ...imageAttachments]
+      const firstExistingXhsIndex =
+        existing?.attachments.findIndex(
+          (attachment) =>
+            attachment.sourceImage?.provider === 'xiaohongshu',
+        ) ?? -1
+      const existingAttachmentIds = new Set(
+        (existing?.attachments ?? []).map((attachment) => attachment.id),
+      )
+      const newNonXhsAttachments = nonXhsAttachments.filter(
+        (attachment) => !existingAttachmentIds.has(attachment.id),
+      )
+      const attachments = firstExistingXhsIndex >= 0
+        ? [
+            ...existing.attachments
+              .slice(0, firstExistingXhsIndex)
+              .filter((attachment) => attachment.sourceImage?.provider !== 'xiaohongshu'),
+            ...imageAttachments,
+            ...existing.attachments
+              .slice(firstExistingXhsIndex)
+              .filter((attachment) => attachment.sourceImage?.provider !== 'xiaohongshu'),
+            ...newNonXhsAttachments,
+          ]
+        : [...nonXhsAttachments, ...imageAttachments]
       const failedImages = imageRecords.filter((image) => image.status === 'failed').length
+      const captureTitle = clean(input.titleOrigin) === 'capture'
+        ? clean(input.title)
+        : ''
+      const manualTitle = captureTitle
+        || (clean(existing?.sourceData?.titleOrigin) === 'capture'
+          ? clean(existing?.title)
+          : '')
       const sourceData = normalizeSourceData({
         ...xhs,
+        ...(manualTitle ? { titleOrigin: 'capture' } : {}),
         parseStatus: failedImages ? 'partial' : xhs.parseStatus === 'failed' ? 'failed' : 'complete',
         images: imageRecords,
         imageCount: remoteImages.length,
@@ -502,7 +763,7 @@ export class PocketStore {
       })
       const normalized = normalizeItem({
         ...input,
-        title: clean(xhs.title) || input.title,
+        title: manualTitle || clean(xhs.title) || input.title,
         text: clean(xhs.desc) || input.text,
         sourceUrl: clean(xhs.canonicalUrl) || input.sourceUrl,
         sourceApp: '小红书',
@@ -1094,6 +1355,51 @@ export class PocketStore {
     return null
   }
 
+  async readItemAttachment(
+    itemId,
+    attachmentId,
+    maxBytes = 25 * 1024 * 1024,
+  ) {
+    const state = await this.#read()
+    const item = state.items.find(
+      (entry) =>
+        entry.id === itemId
+        && !entry.deletedAt,
+    )
+    if (!item) return null
+
+    const attachment =
+      item.attachments.find(
+        (entry) =>
+          entry.id === attachmentId
+          && entry.storageName,
+      )
+    if (!attachment) return null
+    if (attachment.size > maxBytes) {
+      throw httpError(
+        413,
+        'Attachment is too large to return.',
+      )
+    }
+
+    return {
+      attachment:
+        publicAttachment(
+          attachment,
+          item.id,
+        ),
+      data:
+        await readFile(
+          path.join(
+            this.mediaDir,
+            path.basename(
+              attachment.storageName,
+            ),
+          ),
+        ),
+    }
+  }
+
   async readAttachment(attachmentId, maxBytes = 5 * 1024 * 1024) {
     const state = await this.#read()
     for (const item of state.items) {
@@ -1214,6 +1520,15 @@ function mergeDuplicate(existing, incoming, now) {
       : entry.name === attachment.name && entry.size === attachment.size)
     if (!duplicate) attachments.push(attachment)
   }
+  const sourceData = incoming.sourceData
+    ? {
+        ...incoming.sourceData,
+        ...(clean(existing.sourceData?.titleOrigin) === 'capture'
+          && !clean(incoming.sourceData?.titleOrigin)
+          ? { titleOrigin: 'capture' }
+          : {}),
+      }
+    : existing.sourceData
   const merged = {
     ...existing,
     title: existing.title || incoming.title,
@@ -1226,7 +1541,7 @@ function mergeDuplicate(existing, incoming, now) {
     kind: attachments.length ? 'mixed' : existing.sourceUrl || incoming.sourceUrl ? 'link' : 'text',
     attachments,
     ...(incoming.sourceIdentity ? { sourceIdentity: incoming.sourceIdentity } : {}),
-    ...(incoming.sourceData ? { sourceData: incoming.sourceData } : {}),
+    ...(sourceData ? { sourceData } : {}),
     fingerprint: incoming.fingerprint,
     receivedCount: Math.max(1, Number(existing.receivedCount) || 1) + 1,
     lastReceivedAt: now,
@@ -1420,7 +1735,13 @@ function publicItem(item, { includeContentSnapshot = false } = {}) {
     replies: visibleReplies,
     hiddenReplies,
     hiddenReplyCount: hiddenReplies.length,
-    attachments: item.attachments.map(publicAttachment),
+    attachments: item.attachments.map(
+      (attachment) =>
+        publicAttachment(
+          attachment,
+          item.id,
+        ),
+    ),
     ...(contentSnapshot && !includeContentSnapshot ? { contentRead: summarizeContentSnapshot(contentSnapshot) } : {}),
   }
 }
@@ -1492,6 +1813,18 @@ function normalizeActivityDetail(type, detail = {}) {
     tagsAdded: normalizeTags(detail.tagsAdded),
     tagsRemoved: normalizeTags(detail.tagsRemoved),
   }
+  if (type === 'attachment_removed') return {
+    attachmentId: clean(detail.attachmentId).slice(0, 160),
+    name: clean(detail.name).slice(0, 240),
+    mimeType: clean(detail.mimeType).slice(0, 160),
+  }
+  if (type === 'attachment_added') return {
+    attachmentId: clean(detail.attachmentId).slice(0, 160),
+    name: clean(detail.name).slice(0, 240),
+    mimeType: clean(detail.mimeType).slice(0, 160),
+    size: Math.max(0, Number(detail.size) || 0),
+    requestId: clean(detail.requestId).slice(0, 160),
+  }
   return {}
 }
 
@@ -1520,8 +1853,29 @@ function summarizeContentSnapshot(snapshot) {
   }
 }
 
-function publicAttachment(attachment) {
+function safeExternalAttachmentUrl(value) {
+  if (typeof value !== 'string') return ''
+
+  try {
+    const parsed = new URL(value)
+    return ['http:', 'https:'].includes(parsed.protocol)
+      ? parsed.href
+      : ''
+  } catch {
+    return ''
+  }
+}
+
+function publicAttachment(
+  attachment,
+  itemId = '',
+) {
   const { storageName, ...safe } = clone(attachment)
+  if (safe.url) {
+    const externalUrl = safeExternalAttachmentUrl(safe.url)
+    if (externalUrl) safe.url = externalUrl
+    else delete safe.url
+  }
   if (safe.sourceImage) {
     const { remoteUrl, sourceKey, ...visibleSourceImage } = safe.sourceImage
     void remoteUrl
@@ -1530,7 +1884,13 @@ function publicAttachment(attachment) {
   }
   return {
     ...safe,
-    ...(storageName && !safe.url ? { url: `/api/pocket/media/${encodeURIComponent(attachment.id)}` } : {}),
+    ...(storageName && !safe.url
+      ? {
+          url: itemId
+            ? `/api/pocket/items/${encodeURIComponent(itemId)}/attachments/${encodeURIComponent(attachment.id)}/preview`
+            : `/api/pocket/media/${encodeURIComponent(attachment.id)}`,
+        }
+      : {}),
   }
 }
 

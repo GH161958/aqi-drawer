@@ -687,37 +687,6 @@
   outline-offset: 2px;
 }
 
-.discardPapers {
-  position: absolute;
-
-  top: -7px;
-  left: 23%;
-
-  width: 54%;
-  height: 8px;
-
-  border:
-    1px solid
-    var(--drawer-rule);
-
-  border-bottom: 0;
-
-  background:
-    var(--drawer-paper-soft);
-
-  opacity: 0;
-
-  transform:
-    rotate(.7deg);
-
-  pointer-events: none;
-}
-
-.discardTray[data-has-contents="true"]
-.discardPapers {
-  opacity: 1;
-}
-
 .discardCount {
   font-variant-numeric:
     tabular-nums;

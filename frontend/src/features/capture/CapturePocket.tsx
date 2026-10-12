@@ -41,6 +41,8 @@ export function CapturePocket() {
     useRef<HTMLElement | null>(null)
   const fileInput =
     useRef<HTMLInputElement | null>(null)
+  const titleRef =
+    useRef<HTMLInputElement | null>(null)
   const textareaRef =
     useRef<HTMLTextAreaElement | null>(null)
   const returnTimer =
@@ -55,6 +57,7 @@ export function CapturePocket() {
     useState(true)
   const [savedLabel, setSavedLabel] =
     useState('')
+  const [title, setTitle] = useState('')
   const [text, setText] = useState('')
   const [files, setFiles] =
     useState<File[]>([])
@@ -69,6 +72,7 @@ export function CapturePocket() {
     mutationFn: capturePocketItem,
     onSuccess: (result) => {
       setReceipt(result.receipt)
+      setTitle('')
       setText('')
       setFiles([])
       setLocalError('')
@@ -150,7 +154,7 @@ export function CapturePocket() {
 
     setReceipt(null)
     setLocalError('')
-    intake.mutate({ text, files })
+    intake.mutate({ title, text, files })
   }
 
   const mutationError =
@@ -177,7 +181,8 @@ export function CapturePocket() {
       : ''
 
   const hasDraft =
-    Boolean(text.trim())
+    Boolean(title.trim())
+    || Boolean(text.trim())
     || files.length > 0
 
   useEffect(() => {
@@ -239,7 +244,7 @@ export function CapturePocket() {
     setExpanded(true)
 
     window.requestAnimationFrame(() => {
-      textareaRef.current?.focus({
+      titleRef.current?.focus({
         preventScroll: true,
       })
       folioRef.current?.scrollIntoView({
@@ -321,28 +326,52 @@ export function CapturePocket() {
               aria-label="放回收件夹"
               onClick={closeCapture}
             >
-              放回
+              <span>放回</span>
             </button>
           </header>
 
           <form onSubmit={handleSubmit}>
-            <label className={styles.textLabel}>
-              <span className="visually-hidden">
-                粘贴链接或文字
-              </span>
-              <textarea
-                ref={textareaRef}
-                value={text}
-                rows={3}
-                disabled={draftFrozen}
-                placeholder="粘贴一个链接，或留下一段文字……"
-                onChange={(event) => {
-                  setText(event.currentTarget.value)
-                  setReceipt(null)
-                  intake.reset()
-                }}
-              />
-            </label>
+            <div className={styles.editorFields}>
+              <label className={styles.titleLabel}>
+                <span className={styles.fieldLabel}>
+                  标题 · 选填
+                </span>
+                <span className={styles.titleViewport}>
+                  <input
+                    ref={titleRef}
+                    type="text"
+                    value={title}
+                    disabled={draftFrozen}
+                    placeholder="给这张纸起个名字……"
+                    onChange={(event) => {
+                      setTitle(event.currentTarget.value)
+                      setReceipt(null)
+                      intake.reset()
+                    }}
+                  />
+                </span>
+              </label>
+
+              <label className={styles.textLabel}>
+                <span className={styles.fieldLabel}>
+                  正文／链接
+                </span>
+                <span className={styles.textViewport}>
+                  <textarea
+                    ref={textareaRef}
+                    value={text}
+                    rows={3}
+                    disabled={draftFrozen}
+                    placeholder="粘贴一个链接，或留下一段文字……"
+                    onChange={(event) => {
+                      setText(event.currentTarget.value)
+                      setReceipt(null)
+                      intake.reset()
+                    }}
+                  />
+                </span>
+              </label>
+            </div>
 
             <div
               className={styles.attachmentRow}
@@ -394,7 +423,7 @@ export function CapturePocket() {
                   fileInput.current?.click()
                 }}
               >
-                夹入文件
+                <span>夹入文件</span>
               </button>
 
               <span className={styles.dropHint}>
@@ -472,11 +501,13 @@ export function CapturePocket() {
                 || !hasDraft
               }
             >
-              {intake.isPending
-                ? '正在收进去……'
-                : intake.isError
-                  ? '再试一次 →'
-                  : '收好 →'}
+              <span>
+                {intake.isPending
+                  ? '正在收进去……'
+                  : intake.isError
+                    ? '再试一次 →'
+                    : '收好 →'}
+              </span>
             </button>
           </form>
         </article>

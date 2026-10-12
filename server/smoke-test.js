@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -391,11 +391,113 @@ try {
   const uploaded = await fetch(`${baseUrl}/api/pocket/items/upload`, { method: 'POST', body: form }).then(checkJson)
   assert.equal(uploaded.item.attachments[0].name, 'pixel.png')
   assert.equal('storageName' in uploaded.item.attachments[0], false)
+  const imagePreview =
+    await fetch(
+      `${baseUrl}${uploaded.item.attachments[0].url}`,
+    )
+  assert.equal(imagePreview.status, 200)
+  assert.match(
+    imagePreview.headers.get('content-disposition') ?? '',
+    /^inline;/,
+  )
+  assert.equal(
+    imagePreview.headers.get('x-content-type-options'),
+    'nosniff',
+  )
   const imageItem = await client.callTool({ name: 'pocket_get', arguments: { id: 'image-item' } })
   assert.equal(imageItem.content.some((entry) => entry.type === 'image'), true)
 
+  const appendTextBytes = Buffer.from('manual attachment text', 'utf8')
+  const appendPdfBytes = Buffer.from('%PDF manual attachment', 'utf8')
+  const appendRequestId = 'manual-attachment-smoke-request'
+  const appendForm = new FormData()
+  appendForm.set('payload', JSON.stringify({
+    expectedFileCount: 2,
+    requestId: appendRequestId,
+  }))
+  appendForm.append(
+    'files',
+    new Blob([appendTextBytes], { type: 'text/plain' }),
+    '补充说明.txt',
+  )
+  appendForm.append(
+    'files',
+    new Blob([appendPdfBytes], { type: 'application/pdf' }),
+    '补充资料.pdf',
+  )
+  const appended = await fetch(
+    `${baseUrl}/api/pocket/items/${source.id}/attachments`,
+    { method: 'POST', body: appendForm },
+  ).then(checkJson)
+  assert.equal(appended.duplicate, false)
+  assert.equal(appended.item.id, source.id)
+  assert.deepEqual(
+    appended.item.attachments.map((entry) => entry.name),
+    ['补充说明.txt', '补充资料.pdf'],
+  )
+  assert.equal(
+    appended.item.activity.filter((entry) => entry.type === 'attachment_added').length,
+    2,
+  )
+  assert.equal(
+    'storageName' in appended.item.attachments[0],
+    false,
+  )
+  const appendedDownload = await fetch(
+    `${baseUrl}/api/pocket/items/${source.id}/attachments/${appended.item.attachments[0].id}/download`,
+  )
+  assert.deepEqual(
+    Buffer.from(await appendedDownload.arrayBuffer()),
+    appendTextBytes,
+  )
+
+  const mediaBeforeDuplicateAppend =
+    (await readdir(path.join(dataDir, 'media'))).sort()
+  const duplicateAppendForm = new FormData()
+  duplicateAppendForm.set('payload', JSON.stringify({
+    expectedFileCount: 1,
+    requestId: appendRequestId,
+  }))
+  duplicateAppendForm.append(
+    'files',
+    new Blob([Buffer.from('duplicate request')], { type: 'text/plain' }),
+    'duplicate.txt',
+  )
+  const duplicateAppend = await fetch(
+    `${baseUrl}/api/pocket/items/${source.id}/attachments`,
+    { method: 'POST', body: duplicateAppendForm },
+  ).then(checkJson)
+  assert.equal(duplicateAppend.duplicate, true)
+  assert.equal(duplicateAppend.item.attachments.length, 2)
+  assert.deepEqual(
+    (await readdir(path.join(dataDir, 'media'))).sort(),
+    mediaBeforeDuplicateAppend,
+    'duplicate append request must clean its redundant upload',
+  )
+
   const mediaDir = path.join(dataDir, 'media')
   const listMediaFiles = async () => (await readdir(mediaDir)).sort()
+  const mediaBeforeFailedAppend = await listMediaFiles()
+  const failedAppendForm = new FormData()
+  failedAppendForm.set('payload', JSON.stringify({
+    expectedFileCount: 1,
+    requestId: 'missing-item-append-request',
+  }))
+  failedAppendForm.append(
+    'files',
+    new Blob([Buffer.from('must be cleaned')], { type: 'text/plain' }),
+    'cleanup.txt',
+  )
+  const failedAppend = await fetch(
+    `${baseUrl}/api/pocket/items/missing-item/attachments`,
+    { method: 'POST', body: failedAppendForm },
+  )
+  assert.equal(failedAppend.status, 404)
+  assert.deepEqual(
+    await listMediaFiles(),
+    mediaBeforeFailedAppend,
+    'failed item-scoped append must remove temporary media',
+  )
   const docxBytes = Buffer.from('PK\u0003\u0004aqi-drawer-docx-shaped-smoke-test')
   const docxFilename = '抽屉笔记.docx'
   const docxPayload = {
@@ -430,9 +532,135 @@ try {
     `${baseUrl}${docxUpload.item.attachments[0].url}`,
   )
   assert.equal(downloadedDocx.status, 200)
+  assert.match(
+    downloadedDocx.headers.get('content-disposition') ?? '',
+    /^attachment;/,
+  )
+  assert.match(
+    downloadedDocx.headers.get('content-disposition') ?? '',
+    /filename\*=UTF-8''%E6%8A%BD%E5%B1%89%E7%AC%94%E8%AE%B0\.docx/u,
+  )
   assert.deepEqual(
     Buffer.from(await downloadedDocx.arrayBuffer()),
     docxBytes,
+  )
+
+  const originalDocxDownload =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${docxUpload.item.id}/attachments/${docxUpload.item.attachments[0].id}/download`,
+    )
+  assert.equal(originalDocxDownload.status, 200)
+  assert.match(
+    originalDocxDownload.headers.get('content-disposition') ?? '',
+    /^attachment;/,
+  )
+  assert.deepEqual(
+    Buffer.from(
+      await originalDocxDownload.arrayBuffer(),
+    ),
+    docxBytes,
+  )
+
+  const wrongOwnerDownload =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${source.id}/attachments/${docxUpload.item.attachments[0].id}/download`,
+    )
+  assert.equal(wrongOwnerDownload.status, 404)
+
+  const activeContentForm = new FormData()
+  activeContentForm.set(
+    'payload',
+    JSON.stringify({
+      id: 'active-content-item',
+      title: 'Active content attachment regression',
+      expectedFileCount: 3,
+    }),
+  )
+  const htmlBytes =
+    Buffer.from(
+      '<script>globalThis.compromised=true</script>',
+      'utf8',
+    )
+  const svgBytes =
+    Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+      'utf8',
+    )
+  const pdfBytes =
+    Buffer.from(
+      '%PDF-1.4\n% synthetic safe preview fixture',
+      'utf8',
+    )
+  activeContentForm.append(
+    'file1',
+    new Blob([htmlBytes], { type: 'text/html' }),
+    'active.html',
+  )
+  activeContentForm.append(
+    'file2',
+    new Blob([svgBytes], { type: 'image/svg+xml' }),
+    'active.svg',
+  )
+  activeContentForm.append(
+    'file3',
+    new Blob([pdfBytes], { type: 'application/pdf' }),
+    'preview.pdf',
+  )
+  const activeContentUpload =
+    await fetch(
+      `${baseUrl}/api/pocket/items/upload`,
+      { method: 'POST', body: activeContentForm },
+    ).then(checkJson)
+  for (const [index, bytes] of [
+    htmlBytes,
+    svgBytes,
+  ].entries()) {
+    const attachment =
+      activeContentUpload.item.attachments[index]
+    const response =
+      await fetch(
+        `${baseUrl}${attachment.url}`,
+      )
+    assert.equal(response.status, 200)
+    assert.match(
+      response.headers.get('content-disposition') ?? '',
+      /^attachment;/,
+    )
+    assert.equal(
+      response.headers.get('x-content-type-options'),
+      'nosniff',
+    )
+    assert.equal(
+      response.headers.get('content-security-policy'),
+      "sandbox; default-src 'none'",
+    )
+    assert.deepEqual(
+      Buffer.from(await response.arrayBuffer()),
+      bytes,
+    )
+
+    const legacyResponse =
+      await fetch(
+        `${baseUrl}/api/pocket/media/${attachment.id}`,
+      )
+    assert.match(
+      legacyResponse.headers.get('content-disposition') ?? '',
+      /^attachment;/,
+    )
+  }
+
+  const pdfAttachment =
+    activeContentUpload.item.attachments[2]
+  const pdfPreview =
+    await fetch(`${baseUrl}${pdfAttachment.url}`)
+  assert.equal(pdfPreview.status, 200)
+  assert.match(
+    pdfPreview.headers.get('content-disposition') ?? '',
+    /^inline;/,
+  )
+  assert.deepEqual(
+    Buffer.from(await pdfPreview.arrayBuffer()),
+    pdfBytes,
   )
 
   const indexedFirstBytes = Buffer.from('indexed-first-file')
@@ -604,6 +832,307 @@ try {
   assert.deepEqual(
     Buffer.from(await originalDocxStillPresent.arrayBuffer()),
     docxBytes,
+  )
+
+  /*
+    Single-attachment removal regression.
+
+    Model the real XHS shape without copying any
+    private content: one Clipboard text attachment
+    plus fifteen distinct image attachments.
+  */
+  const attachmentRemovalItem =
+    await bridge.store.upsert({
+      id: 'attachment-removal-item',
+      title: 'Synthetic photo set',
+      text: 'Synthetic attachment removal fixture',
+      sourceApp: '小红书',
+      sourceUrl: 'https://www.xiaohongshu.com/explore/synthetic',
+    })
+
+  const removalState =
+    JSON.parse(
+      await readFile(storePath, 'utf8'),
+    )
+  const removalStoredItem =
+    removalState.items.find(
+      (item) =>
+        item.id === attachmentRemovalItem.id,
+    )
+  assert.ok(removalStoredItem)
+
+  const clipboardStorageName =
+    'synthetic-clipboard.txt'
+  await writeFile(
+    path.join(mediaDir, clipboardStorageName),
+    Buffer.from('synthetic clipboard', 'utf8'),
+  )
+
+  const clipboardAttachment = {
+    id: 'synthetic-clipboard-attachment',
+    name: 'Clipboard 2026-10-10.txt',
+    mimeType: 'text/plain',
+    size: Buffer.byteLength('synthetic clipboard'),
+    storageName: clipboardStorageName,
+  }
+
+  const imageAttachments = []
+  for (let index = 0; index < 15; index += 1) {
+    const storageName =
+      `synthetic-photo-${index}.jpeg`
+    const bytes =
+      Buffer.from(`synthetic-photo-${index}`)
+    await writeFile(
+      path.join(mediaDir, storageName),
+      bytes,
+    )
+    imageAttachments.push({
+      id: `synthetic-photo-${index}`,
+      name: `${index + 1}.jpeg`,
+      mimeType: 'image/jpeg',
+      size: bytes.length,
+      storageName,
+    })
+  }
+
+  removalStoredItem.attachments = [
+    clipboardAttachment,
+    ...imageAttachments,
+  ]
+  await writeFile(
+    storePath,
+    JSON.stringify(removalState, null, 2),
+    'utf8',
+  )
+
+  const removedClipboard =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${attachmentRemovalItem.id}/attachments/${clipboardAttachment.id}`,
+      { method: 'DELETE' },
+    ).then(checkJson)
+
+  assert.equal(
+    removedClipboard.item.attachments.length,
+    15,
+  )
+  assert.deepEqual(
+    removedClipboard.item.attachments.map(
+      (attachment) => attachment.id,
+    ),
+    imageAttachments.map(
+      (attachment) => attachment.id,
+    ),
+  )
+  assert.equal(removedClipboard.cleanup.status, 'ok')
+  assert.equal(
+    JSON.stringify(removedClipboard).includes('storageName'),
+    false,
+  )
+  await assert.rejects(
+    readFile(
+      path.join(mediaDir, clipboardStorageName),
+    ),
+    (error) => error?.code === 'ENOENT',
+  )
+  for (const attachment of imageAttachments) {
+    assert.equal(
+      (await readFile(
+        path.join(
+          mediaDir,
+          attachment.storageName,
+        ),
+      )).length,
+      attachment.size,
+    )
+  }
+
+  const repeatedRemoval =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${attachmentRemovalItem.id}/attachments/${clipboardAttachment.id}`,
+      { method: 'DELETE' },
+    )
+  assert.equal(repeatedRemoval.status, 404)
+  assert.equal(
+    (await bridge.store.get(
+      attachmentRemovalItem.id,
+    )).attachments.length,
+    15,
+  )
+  assert.equal(
+    (await bridge.store.get(
+      attachmentRemovalItem.id,
+    )).activity.at(-1).type,
+    'attachment_removed',
+  )
+
+  /*
+    A physical media file shared by two stored
+    attachment records must survive the first
+    reference removal and disappear only after
+    the final reference is committed away.
+  */
+  const sharedStorageName =
+    'shared-attachment.bin'
+  await writeFile(
+    path.join(mediaDir, sharedStorageName),
+    Buffer.from('shared-media', 'utf8'),
+  )
+
+  const sharedFirst =
+    await bridge.store.upsert({
+      id: 'shared-attachment-first',
+      text: 'first shared reference',
+    })
+  const sharedSecond =
+    await bridge.store.upsert({
+      id: 'shared-attachment-second',
+      text: 'second shared reference',
+    })
+  const sharedState =
+    JSON.parse(
+      await readFile(storePath, 'utf8'),
+    )
+  for (const [itemId, suffix] of [
+    [sharedFirst.id, 'first'],
+    [sharedSecond.id, 'second'],
+  ]) {
+    const storedItem =
+      sharedState.items.find(
+        (item) => item.id === itemId,
+      )
+    assert.ok(storedItem)
+    storedItem.attachments = [{
+      id: `shared-${suffix}`,
+      name: `shared-${suffix}.bin`,
+      mimeType: 'application/octet-stream',
+      size: Buffer.byteLength('shared-media'),
+      storageName: sharedStorageName,
+    }]
+  }
+  await writeFile(
+    storePath,
+    JSON.stringify(sharedState, null, 2),
+    'utf8',
+  )
+
+  const firstSharedRemoval =
+    await bridge.store.removeAttachment(
+      sharedFirst.id,
+      'shared-first',
+    )
+  assert.equal(firstSharedRemoval.mediaDeleted, 0)
+  assert.equal(
+    (await readFile(
+      path.join(mediaDir, sharedStorageName),
+    )).toString('utf8'),
+    'shared-media',
+  )
+
+  const secondSharedRemoval =
+    await bridge.store.removeAttachment(
+      sharedSecond.id,
+      'shared-second',
+    )
+  assert.equal(secondSharedRemoval.mediaDeleted, 1)
+  await assert.rejects(
+    readFile(
+      path.join(mediaDir, sharedStorageName),
+    ),
+    (error) => error?.code === 'ENOENT',
+  )
+
+  const missingMediaItem =
+    await bridge.store.upsert({
+      id: 'missing-media-item',
+      text: 'missing media cleanup fixture',
+    })
+  const missingMediaState =
+    JSON.parse(
+      await readFile(storePath, 'utf8'),
+    )
+  const missingMediaStoredItem =
+    missingMediaState.items.find(
+      (item) => item.id === missingMediaItem.id,
+    )
+  assert.ok(missingMediaStoredItem)
+  missingMediaStoredItem.attachments = [{
+    id: 'missing-media-attachment',
+    name: 'already-missing.txt',
+    mimeType: 'text/plain',
+    size: 12,
+    storageName: 'already-missing.txt',
+  }]
+  await writeFile(
+    storePath,
+    JSON.stringify(missingMediaState, null, 2),
+    'utf8',
+  )
+  const missingMediaRemoval =
+    await bridge.store.removeAttachment(
+      missingMediaItem.id,
+      'missing-media-attachment',
+    )
+  assert.equal(missingMediaRemoval.mediaMissing, 1)
+  assert.equal(
+    missingMediaRemoval.item.attachments.length,
+    0,
+  )
+
+  const failedCleanupItem =
+    await bridge.store.upsert({
+      id: 'failed-cleanup-item',
+      text: 'failed cleanup fixture',
+    })
+  const failedCleanupStorageName =
+    'cleanup-failure-directory'
+  await mkdir(
+    path.join(
+      mediaDir,
+      failedCleanupStorageName,
+    ),
+  )
+  const failedCleanupState =
+    JSON.parse(
+      await readFile(storePath, 'utf8'),
+    )
+  const failedCleanupStoredItem =
+    failedCleanupState.items.find(
+      (item) => item.id === failedCleanupItem.id,
+    )
+  assert.ok(failedCleanupStoredItem)
+  failedCleanupStoredItem.attachments = [{
+    id: 'failed-cleanup-attachment',
+    name: 'cleanup-failure.txt',
+    mimeType: 'text/plain',
+    size: 1,
+    storageName: failedCleanupStorageName,
+  }]
+  await writeFile(
+    storePath,
+    JSON.stringify(failedCleanupState, null, 2),
+    'utf8',
+  )
+  const failedCleanupResponse =
+    await fetch(
+      `${baseUrl}/api/pocket/items/${failedCleanupItem.id}/attachments/failed-cleanup-attachment`,
+      { method: 'DELETE' },
+    )
+  const failedCleanupPayload =
+    await failedCleanupResponse.json()
+  assert.equal(failedCleanupResponse.status, 200)
+  assert.equal(
+    failedCleanupPayload.cleanup.status,
+    'failed',
+  )
+  assert.equal(
+    failedCleanupPayload.item.attachments.length,
+    0,
+  )
+  assert.equal(
+    JSON.stringify(failedCleanupPayload).includes(
+      failedCleanupStorageName,
+    ),
+    false,
   )
 
   for (let index = 0; index < 2; index += 1) {
@@ -938,6 +1467,47 @@ try {
   )
 
   /* TRASH LIFECYCLE SMOKE V1 END */
+
+  await bridge.store.upsert({
+    id: 'attachment-url-scheme-fixture',
+    title: 'Attachment URL scheme fixture',
+    attachments: [
+      {
+        id: 'safe-external-attachment',
+        name: 'safe.pdf',
+        mimeType: 'application/pdf',
+        url: 'https://example.com/safe.pdf',
+      },
+      {
+        id: 'javascript-attachment',
+        name: 'active.html',
+        mimeType: 'text/html',
+        url: 'javascript:alert(1)',
+      },
+      {
+        id: 'data-attachment',
+        name: 'active.svg',
+        mimeType: 'image/svg+xml',
+        url: 'data:image/svg+xml,<svg onload=alert(1)>',
+      },
+    ],
+  })
+  const attachmentUrlSchemes =
+    await fetch(
+      `${baseUrl}/api/pocket/items/attachment-url-scheme-fixture`,
+    ).then(checkJson)
+  assert.equal(
+    attachmentUrlSchemes.item.attachments[0].url,
+    'https://example.com/safe.pdf',
+  )
+  assert.equal(
+    'url' in attachmentUrlSchemes.item.attachments[1],
+    false,
+  )
+  assert.equal(
+    'url' in attachmentUrlSchemes.item.attachments[2],
+    false,
+  )
 
   await client.close()
 

@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { XhsAdapter, extractXhsUrl, parseXhsInitialState } from './adapters/xhs.js'
+import { XhsAdapter, extractXhsNoteId, extractXhsUrl, parseXhsInitialState } from './adapters/xhs.js'
 import { PocketContentReader } from './content-reader.js'
 import { startBridge } from './index.js'
 import { inferSourceApp } from './share-normalizer.js'
@@ -127,6 +127,55 @@ try {
   assert.equal(fourth.attachments.length, 3)
   assert.equal(downloads, 4, 'only a newly added image should be downloaded')
 
+  await store.appendAttachments(
+    fourth.id,
+    [{
+      id: 'manual-xhs-attachment',
+      name: '手动补充.pdf',
+      mimeType: 'application/pdf',
+      size: 12,
+      url: 'https://example.com/manual.pdf',
+    }],
+    { requestId: 'manual-xhs-append' },
+  )
+  const refreshedWithManual = await store.upsertXhs(
+    { text: `第五次分享 ${FINAL_URL}`, sourceUrl: FINAL_URL, xhs: withNewImage },
+    { loadImage },
+  )
+  assert.equal(
+    refreshedWithManual.attachments.at(-1).id,
+    'manual-xhs-attachment',
+    'XHS refresh must preserve manually appended attachments',
+  )
+
+  const manualTitleXhs = {
+    ...parsed,
+    noteId: 'manual-title-note-id',
+    externalId: 'manual-title-note-id',
+  }
+  const manuallyTitled = await store.upsertXhs({
+    title: '手动标题',
+    titleOrigin: 'capture',
+    text: `手动标题测试 ${FINAL_URL}`,
+    sourceUrl: FINAL_URL,
+    xhs: manualTitleXhs,
+  }, { loadImage })
+  assert.equal(manuallyTitled.title, '手动标题')
+  assert.equal(manuallyTitled.sourceData.titleOrigin, 'capture')
+  const refreshedManualTitle = await store.upsertXhs({
+    text: `再次分享 ${FINAL_URL}`,
+    sourceUrl: FINAL_URL,
+    xhs: {
+      ...manualTitleXhs,
+      title: '刷新后的 XHS 标题',
+    },
+  }, { loadImage })
+  assert.equal(
+    refreshedManualTitle.title,
+    '手动标题',
+    'Capture manual titles must survive later XHS refreshes',
+  )
+
   let failSecondImage = true
   let partialDownloads = 0
   const partialXhs = { ...parsed, noteId: 'partial-note-id', externalId: 'partial-note-id' }
@@ -155,7 +204,7 @@ try {
   await restartedStore.init()
   const persisted = await restartedStore.get(first.id)
   assert.equal(persisted.sourceData.noteId, NOTE_ID)
-  assert.equal(persisted.attachments.length, 3)
+  assert.equal(persisted.attachments.length, 4)
   assert.equal((await restartedStore.readAttachment(persisted.attachments[0].id)).data.length, PIXEL.length)
 } finally {
   await rm(dataDir, { recursive: true, force: true })
@@ -226,6 +275,141 @@ try {
   if (client) await client.close()
   if (bridge) await bridge.stop()
   await rm(bridgeData, { recursive: true, force: true })
+}
+
+const fallbackData = await mkdtemp(path.join(os.tmpdir(), 'aqi-xhs-title-fallback-'))
+const MANUAL_ID = '6a7fa962000000000502ad61'
+const AUTO_ID = '6a7fa962000000000502ad62'
+const RESTART_ID = '6a7fa962000000000502ad63'
+const MULTIPART_ID = '6a7fa962000000000502ad64'
+const xhsUrl = (noteId) => `https://www.xiaohongshu.com/discovery/item/${noteId}`
+const failures = new Map([
+  [MANUAL_ID, 1],
+  [AUTO_ID, 1],
+  [RESTART_ID, 2],
+  [MULTIPART_ID, 1],
+])
+const fallbackAdapter = {
+  canHandle: (value) => Boolean(extractXhsUrl(value)),
+  parse: async (value) => {
+    const url = extractXhsUrl(value)
+    const noteId = extractXhsNoteId(url)
+    const remaining = failures.get(noteId) ?? 0
+    if (remaining > 0) {
+      failures.set(noteId, remaining - 1)
+      const error = new Error(`fixture parse failure for ${noteId}`)
+      error.finalUrl = url
+      throw error
+    }
+    return {
+      ...parsed,
+      noteId,
+      externalId: noteId,
+      title: `XHS title ${noteId}`,
+      canonicalUrl: url,
+    }
+  },
+  loadImage: async () => ({ buffer: PIXEL, mimeType: 'image/png', width: 1, height: 1 }),
+}
+let fallbackBridge
+try {
+  fallbackBridge = await startBridge({
+    dataDir: fallbackData,
+    port: 0,
+    host: '127.0.0.1',
+    xhsAdapter: fallbackAdapter,
+  })
+  let fallbackBaseUrl = `http://127.0.0.1:${fallbackBridge.address.port}`
+  const uploadJson = (payload) => fetch(`${fallbackBaseUrl}/api/pocket/items/upload`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then(checkJson)
+
+  const manualFallback = await uploadJson({
+    title: '手动保留标题',
+    titleOrigin: 'capture',
+    share: xhsUrl(MANUAL_ID),
+    expectedFileCount: 0,
+  })
+  assert.equal(manualFallback.item.title, '手动保留标题')
+  assert.equal(manualFallback.item.sourceData.parseStatus, 'failed')
+  assert.equal(manualFallback.item.sourceData.titleOrigin, 'capture')
+  const manualRecovered = await uploadJson({
+    share: xhsUrl(MANUAL_ID),
+    expectedFileCount: 0,
+  })
+  assert.equal(manualRecovered.item.id, manualFallback.item.id)
+  assert.equal(manualRecovered.item.title, '手动保留标题')
+  assert.equal(manualRecovered.item.sourceData.parseStatus, 'complete')
+  assert.equal(manualRecovered.item.sourceData.noteId, MANUAL_ID)
+  assert.equal(manualRecovered.item.attachments.length, 2)
+
+  const autoFallback = await uploadJson({
+    title: '分享菜单标题',
+    share: xhsUrl(AUTO_ID),
+    expectedFileCount: 0,
+  })
+  assert.equal(autoFallback.item.title, '分享菜单标题')
+  assert.equal(autoFallback.item.sourceData.parseStatus, 'failed')
+  assert.equal(autoFallback.item.sourceData.titleOrigin, undefined)
+  const autoRecovered = await uploadJson({
+    share: xhsUrl(AUTO_ID),
+    expectedFileCount: 0,
+  })
+  assert.equal(autoRecovered.item.id, autoFallback.item.id)
+  assert.equal(autoRecovered.item.title, `XHS title ${AUTO_ID}`)
+  assert.equal(autoRecovered.item.sourceData.titleOrigin, undefined)
+
+  const restartFallback = await uploadJson({
+    title: '重启后仍保留',
+    titleOrigin: 'capture',
+    share: xhsUrl(RESTART_ID),
+    expectedFileCount: 0,
+  })
+  const repeatedFallback = await uploadJson({
+    share: xhsUrl(RESTART_ID),
+    expectedFileCount: 0,
+  })
+  assert.equal(repeatedFallback.item.id, restartFallback.item.id)
+  assert.equal(repeatedFallback.item.title, '重启后仍保留')
+  assert.equal(repeatedFallback.item.sourceData.titleOrigin, 'capture')
+
+  await fallbackBridge.stop()
+  fallbackBridge = await startBridge({
+    dataDir: fallbackData,
+    port: 0,
+    host: '127.0.0.1',
+    xhsAdapter: fallbackAdapter,
+  })
+  fallbackBaseUrl = `http://127.0.0.1:${fallbackBridge.address.port}`
+  const restartedRecovery = await uploadJson({
+    share: xhsUrl(RESTART_ID),
+    expectedFileCount: 0,
+  })
+  assert.equal(restartedRecovery.item.id, restartFallback.item.id)
+  assert.equal(restartedRecovery.item.title, '重启后仍保留')
+  assert.equal(restartedRecovery.item.sourceData.titleOrigin, 'capture')
+  assert.equal(restartedRecovery.item.sourceData.parseStatus, 'complete')
+
+  const multipart = new FormData()
+  multipart.set('payload', JSON.stringify({
+    title: 'Multipart 手动标题',
+    titleOrigin: 'capture',
+    share: xhsUrl(MULTIPART_ID),
+    expectedFileCount: 1,
+  }))
+  multipart.append('files', new Blob(['fixture'], { type: 'text/plain' }), '附件.txt')
+  const multipartFallback = await fetch(`${fallbackBaseUrl}/api/pocket/items/upload`, {
+    method: 'POST',
+    body: multipart,
+  }).then(checkJson)
+  assert.equal(multipartFallback.item.title, 'Multipart 手动标题')
+  assert.equal(multipartFallback.item.sourceData.titleOrigin, 'capture')
+  assert.equal(multipartFallback.item.attachments.length, 1)
+} finally {
+  if (fallbackBridge) await fallbackBridge.stop()
+  await rm(fallbackData, { recursive: true, force: true })
 }
 
 console.log('Aqi Drawer XHS integration test passed.')

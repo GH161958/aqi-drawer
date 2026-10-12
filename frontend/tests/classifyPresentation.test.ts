@@ -1,0 +1,253 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+
+import {
+  classifyPresentation,
+  isClipboardTextAttachment,
+} from '../src/presentation/classifyPresentation.ts'
+
+import type {
+  PocketAttachmentSummary,
+  PocketItemSummary,
+} from '../src/types/pocket.ts'
+
+import {
+  attachmentRemovalMessage,
+  isImageAttachment,
+  photoIndexAfterRemoval,
+} from '../src/features/inspect/inspectAttachmentLogic.ts'
+
+import {
+  safeAttachmentUrl,
+} from '../src/api/attachmentUrls.ts'
+
+import {
+  capturePocketPayload,
+} from '../src/api/capturePayload.ts'
+
+function attachment(
+  name: string,
+  mimeType: string,
+): PocketAttachmentSummary {
+  return {
+    id: `${name}-${mimeType}`,
+    name,
+    mimeType,
+    url: `/media/${encodeURIComponent(name)}`,
+  }
+}
+
+function item(
+  attachments: PocketAttachmentSummary[],
+  sourceApp = '小红书',
+  sourceUrl = 'https://www.xiaohongshu.com/explore/test',
+): PocketItemSummary {
+  return {
+    id: 'presentation-test',
+    title: 'Presentation test',
+    text: '',
+    sourceApp,
+    sourceUrl,
+    kind: attachments.length ? 'mixed' : 'text',
+    status: 'inbox',
+    deletedAt: null,
+    note: '',
+    attachments,
+    replies: [],
+    hiddenReplies: [],
+    hiddenReplyCount: 0,
+    collection: null,
+    tags: [],
+    sourceTags: [],
+    activity: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    lastReceivedAt: '2026-01-01T00:00:00.000Z',
+  }
+}
+
+test('Capture payload includes only a non-empty manual title', () => {
+  assert.deepEqual(
+    capturePocketPayload({
+      title: '  手动标题  ',
+      text: '  正文  ',
+      expectedFileCount: 2,
+    }),
+    {
+      title: '手动标题',
+      titleOrigin: 'capture',
+      share: '正文',
+      expectedFileCount: 2,
+    },
+  )
+  assert.deepEqual(
+    capturePocketPayload({
+      title: '   ',
+      text: 'https://example.com',
+      expectedFileCount: 0,
+    }),
+    {
+      share: 'https://example.com',
+      expectedFileCount: 0,
+    },
+  )
+})
+
+test('recognizes only the known Clipboard text filename shape', () => {
+  assert.equal(
+    isClipboardTextAttachment(
+      attachment(
+        'Clipboard 2026-10-10 at 10.20.30.txt',
+        'text/plain',
+      ),
+    ),
+    true,
+  )
+  assert.equal(
+    isClipboardTextAttachment(
+      attachment('notes.txt', 'text/plain'),
+    ),
+    false,
+  )
+  assert.equal(
+    isClipboardTextAttachment(
+      attachment('Clipboard 2026.txt', 'application/pdf'),
+    ),
+    false,
+  )
+})
+
+test('keeps XHS photos primary when Clipboard text is auxiliary', () => {
+  const result = classifyPresentation(
+    item([
+      attachment('Clipboard 2026.txt', 'text/plain'),
+      attachment('01.jpeg', 'image/jpeg'),
+      attachment('02.jpeg', 'image/jpeg'),
+    ]),
+  )
+
+  assert.equal(result.kind, 'photo')
+})
+
+test('preserves genuinely mixed XHS attachments', () => {
+  const result = classifyPresentation(
+    item([
+      attachment('01.jpeg', 'image/jpeg'),
+      attachment('brief.pdf', 'application/pdf'),
+    ]),
+  )
+
+  assert.equal(result.kind, 'mixed')
+})
+
+test('does not special-case Clipboard files without photos or outside XHS', () => {
+  assert.equal(
+    classifyPresentation(
+      item([
+        attachment('Clipboard 2026.txt', 'text/plain'),
+      ]),
+    ).kind,
+    'document',
+  )
+
+  assert.equal(
+    classifyPresentation(
+      item(
+        [
+          attachment('Clipboard 2026.txt', 'text/plain'),
+          attachment('01.jpeg', 'image/jpeg'),
+        ],
+        'Generic Share',
+        'https://example.com/article',
+      ),
+    ).kind,
+    'mixed',
+  )
+
+  assert.equal(
+    classifyPresentation(
+      item([], '', ''),
+    ).kind,
+    'text',
+  )
+
+  const staleMixedWithoutAttachments =
+    item([], '', '')
+  staleMixedWithoutAttachments.kind = 'mixed'
+  staleMixedWithoutAttachments.text =
+    'The final attachment was removed.'
+  assert.equal(
+    classifyPresentation(
+      staleMixedWithoutAttachments,
+    ).kind,
+    'text',
+  )
+})
+
+test('keeps image and non-image attachment ownership separate', () => {
+  assert.equal(
+    isImageAttachment(
+      attachment('photo.jpeg', 'image/jpeg'),
+    ),
+    true,
+  )
+  assert.equal(
+    isImageAttachment(
+      attachment('active.svg', 'image/svg+xml'),
+    ),
+    false,
+  )
+  assert.equal(
+    isImageAttachment(
+      attachment('notes.txt', 'text/plain'),
+    ),
+    false,
+  )
+})
+
+test('selects the nearest surviving photo and closes after the last removal', () => {
+  assert.equal(photoIndexAfterRemoval(0, 1), null)
+  assert.equal(photoIndexAfterRemoval(0, 3), 0)
+  assert.equal(photoIndexAfterRemoval(1, 3), 1)
+  assert.equal(photoIndexAfterRemoval(2, 3), 1)
+})
+
+test('keeps a terminal attachment removal result available after the last file disappears', () => {
+  assert.equal(
+    attachmentRemovalMessage('ok'),
+    '附件已移除。',
+  )
+  assert.equal(
+    attachmentRemovalMessage('missing'),
+    '附件已从这张纸移除；原文件此前已不存在。',
+  )
+  assert.equal(
+    attachmentRemovalMessage('failed'),
+    '附件已从这张纸移除，但原文件清理没有完成。系统已留下排查记录。',
+  )
+})
+
+test('accepts only local attachment routes and external HTTP URLs', () => {
+  assert.equal(
+    safeAttachmentUrl(
+      '/api/pocket/items/item-1/attachments/file-1/preview',
+    ),
+    '/api/pocket/items/item-1/attachments/file-1/preview',
+  )
+  assert.equal(
+    safeAttachmentUrl('/api/pocket/media/file-1'),
+    '/api/pocket/media/file-1',
+  )
+  assert.equal(
+    safeAttachmentUrl('https://example.com/file.pdf'),
+    'https://example.com/file.pdf',
+  )
+  assert.equal(
+    safeAttachmentUrl('http://example.com/file.txt'),
+    'http://example.com/file.txt',
+  )
+  assert.equal(safeAttachmentUrl('javascript:alert(1)'), undefined)
+  assert.equal(safeAttachmentUrl('data:text/html,<script>1</script>'), undefined)
+  assert.equal(safeAttachmentUrl('blob:https://example.com/id'), undefined)
+  assert.equal(safeAttachmentUrl('//example.com/file.pdf'), undefined)
+  assert.equal(safeAttachmentUrl('/untrusted/relative/file.pdf'), undefined)
+})

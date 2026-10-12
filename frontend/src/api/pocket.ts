@@ -1,5 +1,9 @@
 import { drawerFetch } from './http'
 
+import {
+  capturePocketPayload,
+} from './capturePayload'
+
 import type {
   PocketItemsResponse,
 } from './contracts'
@@ -7,6 +11,10 @@ import type {
 import {
   pocketStatuses,
 } from '../types/pocket'
+
+import {
+  safeAttachmentUrl,
+} from './attachmentUrls'
 
 import type {
   PocketActivityEntry,
@@ -120,6 +128,8 @@ function parseAttachment(
     return null
   }
 
+  const url = safeAttachmentUrl(value.url)
+
   return {
     id: value.id,
 
@@ -135,8 +145,13 @@ function parseAttachment(
         'application/octet-stream',
       ),
 
-    ...(typeof value.url === 'string'
-      ? { url: value.url }
+    ...(typeof value.size === 'number'
+      && Number.isFinite(value.size)
+      ? { size: value.size }
+      : {}),
+
+    ...(url
+      ? { url }
       : {}),
   }
 }
@@ -1515,6 +1530,134 @@ export async function permanentlyDeletePocketItem(
   }
 }
 
+export interface RemovePocketAttachmentResult {
+  item: PocketItemSummary
+  cleanupStatus:
+    | 'ok'
+    | 'missing'
+    | 'failed'
+}
+
+export function pocketAttachmentDownloadUrl(
+  itemId: string,
+  attachmentId: string,
+): string {
+  return `/api/pocket/items/${
+    encodeURIComponent(itemId)
+  }/attachments/${
+    encodeURIComponent(attachmentId)
+  }/download`
+}
+
+export async function removePocketAttachment(
+  itemId: string,
+  attachmentId: string,
+): Promise<RemovePocketAttachmentResult> {
+  const response =
+    await drawerFetch(
+      `/api/pocket/items/${
+        encodeURIComponent(itemId)
+      }/attachments/${
+        encodeURIComponent(attachmentId)
+      }`,
+      {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: {
+          accept: 'application/json',
+        },
+      },
+    )
+
+  const payload: unknown =
+    await response
+      .json()
+      .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload)
+      && typeof payload.error === 'string'
+        ? payload.error
+        : `附件移除失败（${response.status}）`,
+    )
+  }
+
+  if (
+    !isRecord(payload)
+    || !('item' in payload)
+  ) {
+    throw new Error(
+      'Drawer returned an invalid attachment result.',
+    )
+  }
+
+  const item =
+    parsePocketItem(payload.item)
+
+  if (!item) {
+    throw new Error(
+      '移除附件后的纸暂时没有读回来。',
+    )
+  }
+
+  const cleanupStatus =
+    isRecord(payload.cleanup)
+    && (
+      payload.cleanup.status === 'ok'
+      || payload.cleanup.status === 'missing'
+      || payload.cleanup.status === 'failed'
+    )
+      ? payload.cleanup.status
+      : 'failed'
+
+  return {
+    item,
+    cleanupStatus,
+  }
+}
+
+export async function appendPocketAttachments(
+  itemId: string,
+  files: File[],
+  requestId: string,
+): Promise<PocketItemSummary> {
+  const body = new FormData()
+  body.set(
+    'payload',
+    JSON.stringify({
+      expectedFileCount: files.length,
+      requestId,
+    }),
+  )
+  for (const file of files) body.append('files', file)
+
+  const response = await drawerFetch(
+    `/api/pocket/items/${encodeURIComponent(itemId)}/attachments`,
+    {
+      method: 'POST',
+      body,
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
+    },
+  )
+  const payload: unknown = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      isRecord(payload) && typeof payload.error === 'string'
+        ? payload.error
+        : `附件补充失败（${response.status}）`,
+    )
+  }
+
+  const item = isRecord(payload)
+    ? parsePocketItem(payload.item)
+    : null
+  if (!item) throw new Error('补充附件后的纸暂时没有读回来。')
+  return item
+}
+
 
 function parseContentSnapshot(
   value: unknown,
@@ -1864,17 +2007,22 @@ function parseIntakeReceipt(
 }
 
 export async function capturePocketItem({
+  title,
   text,
   files,
 }: {
+  title: string
   text: string
   files: File[]
 }): Promise<PocketIntakeResult> {
+  const cleanTitle = title.trim()
   const cleanText = text.trim()
 
   if (!cleanText && files.length === 0) {
     throw new DrawerIntakeError(
-      '先放进一段文字、一个链接，或至少一个文件。',
+      cleanTitle
+        ? '标题不能单独收进抽屉；请再填写正文／链接，或添加至少一个文件。'
+        : '先放进一段文字、一个链接，或至少一个文件。',
       {
         status: 400,
         code: 'EMPTY_CAPTURE_DRAFT',
@@ -1888,13 +2036,11 @@ export async function capturePocketItem({
           const body = new FormData()
           body.set(
             'payload',
-            JSON.stringify({
-              ...(cleanText
-                ? { share: cleanText }
-                : {}),
-              expectedFileCount:
-                files.length,
-            }),
+            JSON.stringify(capturePocketPayload({
+              title,
+              text,
+              expectedFileCount: files.length,
+            })),
           )
           for (const file of files) {
             body.append('files', file)
@@ -1907,10 +2053,11 @@ export async function capturePocketItem({
             'content-type':
               'application/json',
           },
-          body: JSON.stringify({
-            share: cleanText,
+          body: JSON.stringify(capturePocketPayload({
+            title,
+            text,
             expectedFileCount: 0,
-          }),
+          })),
         }
 
   const response =
