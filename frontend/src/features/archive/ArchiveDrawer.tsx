@@ -55,6 +55,10 @@ import type {
 } from './archiveQuickActionLogic'
 
 import {
+  inspectPreviewState,
+} from '../inspect/inspectPresentationLogic'
+
+import {
   ArchiveIndex,
 } from './ArchiveIndex'
 
@@ -88,6 +92,18 @@ interface ArchiveDrawerProps {
       itemId: string,
       trigger: HTMLButtonElement,
     ) => void
+
+  activeInspectItemId:
+    string | null
+
+  failedInspectItemId:
+    string | null
+
+  presentedInspectItemId:
+    string | null
+
+  onRetryInspect:
+    (itemId: string) => void
 }
 
 export function ArchiveDrawer({
@@ -100,6 +116,10 @@ export function ArchiveDrawer({
   onTagFilterChange,
   onBack,
   onInspect,
+  activeInspectItemId,
+  failedInspectItemId,
+  presentedInspectItemId,
+  onRetryInspect,
 }: ArchiveDrawerProps) {
   const [quickActionItem, setQuickActionItem] =
     useState<PocketItemSummary | null>(null)
@@ -477,6 +497,18 @@ export function ArchiveDrawer({
                     }
                     onQuickActions={
                       openQuickActions
+                    }
+                    inspectState={inspectPreviewState({
+                      itemId: item.id,
+                      activeItemId:
+                        activeInspectItemId,
+                      presentedItemId:
+                        presentedInspectItemId,
+                      failedItemId:
+                        failedInspectItemId,
+                    })}
+                    onRetryInspect={
+                      onRetryInspect
                     }
                   />
                 ),

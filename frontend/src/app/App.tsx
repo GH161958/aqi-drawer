@@ -5,6 +5,14 @@ import {
 } from 'react'
 
 import {
+  useQueryClient,
+} from '@tanstack/react-query'
+
+import {
+  pocketQueryKeys,
+} from '../api/queryKeys'
+
+import {
   ArchiveDrawer,
 } from '../features/archive/ArchiveDrawer'
 
@@ -16,6 +24,10 @@ import {
   InspectStage,
 } from '../features/inspect/InspectStage'
 
+import {
+  isCurrentInspectItem,
+} from '../features/inspect/inspectPresentationLogic'
+
 import type {
   CabinetSlot,
 } from '../types/pocket'
@@ -23,6 +35,9 @@ import type {
 import styles from './App.module.css'
 
 export function App() {
+  const queryClient =
+    useQueryClient()
+
   const inspectFocusReturnRef =
     useRef<HTMLButtonElement | null>(
       null,
@@ -55,6 +70,12 @@ export function App() {
   const [
     presentedItemId,
     setPresentedItemId,
+  ] =
+    useState<string | null>(null)
+
+  const [
+    failedInspectItemId,
+    setFailedInspectItemId,
   ] =
     useState<string | null>(null)
 
@@ -95,6 +116,7 @@ export function App() {
 
   function returnToCabinet() {
     setPresentedItemId(null)
+    setFailedInspectItemId(null)
     setActiveItemId(null)
     setActiveSlot(null)
 
@@ -112,23 +134,58 @@ export function App() {
       window.scrollY
 
     setPresentedItemId(null)
+    setFailedInspectItemId(null)
     setActiveItemId(itemId)
   }
 
   const presentInspect =
     useCallback((itemId: string) => {
-      if (
-        activeItemIdRef.current
-        !== itemId
-      ) {
+      if (!isCurrentInspectItem(
+        activeItemIdRef.current,
+        itemId,
+      )) {
         return
       }
 
+      setFailedInspectItemId(null)
       setPresentedItemId(itemId)
     }, [])
 
+  const failInspect =
+    useCallback((itemId: string) => {
+      if (!isCurrentInspectItem(
+        activeItemIdRef.current,
+        itemId,
+      )) {
+        return
+      }
+
+      setPresentedItemId(null)
+      setFailedInspectItemId(itemId)
+    }, [])
+
+  const retryInspect =
+    useCallback((itemId: string) => {
+      if (!isCurrentInspectItem(
+        activeItemIdRef.current,
+        itemId,
+      )) {
+        return
+      }
+
+      setPresentedItemId(null)
+      setFailedInspectItemId(null)
+
+      void queryClient.refetchQueries({
+        queryKey:
+          pocketQueryKeys.item(itemId),
+        exact: true,
+      })
+    }, [queryClient])
+
   function returnToDrawer() {
     setPresentedItemId(null)
+    setFailedInspectItemId(null)
     setActiveItemId(null)
 
     window.requestAnimationFrame(
@@ -231,6 +288,16 @@ export function App() {
               returnToCabinet
             }
             onInspect={inspectItem}
+            activeInspectItemId={
+              activeItemId
+            }
+            failedInspectItemId={
+              failedInspectItemId
+            }
+            presentedInspectItemId={
+              presentedItemId
+            }
+            onRetryInspect={retryInspect}
           />
         </div>
       )}
@@ -241,6 +308,9 @@ export function App() {
           presented={inspectPresented}
           onPresentationReady={
             presentInspect
+          }
+          onPresentationError={
+            failInspect
           }
           onBack={returnToDrawer}
         />
