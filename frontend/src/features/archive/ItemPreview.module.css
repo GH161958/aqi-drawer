@@ -137,7 +137,10 @@
 }
 
 .inspectPaperTab[data-state='failure'] {
+  z-index: 3;
+
   appearance: none;
+  clip-path: inset(6px 0 0);
   pointer-events: auto;
   cursor: pointer;
 }
