@@ -3,6 +3,11 @@ import {
   presentationKindLabels,
 } from '../../presentation/classifyPresentation'
 
+import {
+  useEffect,
+  useState,
+} from 'react'
+
 import type {
   PocketItemSummary,
 } from '../../types/pocket'
@@ -12,6 +17,11 @@ import styles from './ItemPreview.module.css'
 import {
   useArchiveQuickActionGesture,
 } from './useArchiveQuickActionGesture'
+
+import {
+  INSPECT_TAB_DELAY_MS,
+  inspectPaperTabView,
+} from '../inspect/inspectPresentationLogic'
 
 interface ItemPreviewProps {
   item: PocketItemSummary
@@ -26,6 +36,14 @@ interface ItemPreviewProps {
       item: PocketItemSummary,
       trigger: HTMLButtonElement,
     ) => void
+
+  inspectState:
+    | 'idle'
+    | 'preparing'
+    | 'failed'
+
+  onRetryInspect:
+    (itemId: string) => void
 }
 
 function previewPhotoAttachments(
@@ -153,12 +171,39 @@ export function ItemPreview({
   item,
   onOpen,
   onQuickActions,
+  inspectState,
+  onRetryInspect,
 }: ItemPreviewProps) {
+  const [showLoadingTab, setShowLoadingTab] =
+    useState(false)
+
+  useEffect(() => {
+    if (inspectState !== 'preparing') {
+      setShowLoadingTab(false)
+      return
+    }
+
+    const timer = window.setTimeout(
+      () => setShowLoadingTab(true),
+      INSPECT_TAB_DELAY_MS,
+    )
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [inspectState])
+
   const quickActions =
     useArchiveQuickActionGesture({
       onOpen: (trigger) =>
         onQuickActions(item, trigger),
     })
+
+  const paperTab =
+    inspectPaperTabView(
+      inspectState,
+      showLoadingTab,
+    )
 
   const image =
     firstPreviewImage(item)
@@ -321,6 +366,34 @@ export function ItemPreview({
 
   return (
     <li className={styles.row}>
+      {inspectState === 'failed' ? (
+        <button
+          className={styles.inspectPaperTab}
+          data-visible="true"
+          data-state="failure"
+          type="button"
+          aria-label={`重试打开${item.title || '这张纸'}`}
+          onClick={() =>
+            onRetryInspect(item.id)
+          }
+        >
+          {paperTab.label}
+        </button>
+      ) : (
+        <span
+          className={styles.inspectPaperTab}
+          data-visible={
+            paperTab.visible
+              ? 'true'
+              : undefined
+          }
+          data-state="loading"
+          aria-hidden="true"
+        >
+          {paperTab.label}
+        </span>
+      )}
+
       <button
         className={
           isDocument
@@ -340,6 +413,21 @@ export function ItemPreview({
         data-source-flavor={
           presentation.sourceFlavor
         }
+        data-inspect-preparing={
+          inspectState === 'preparing'
+            ? 'true'
+            : undefined
+        }
+        aria-busy={
+          inspectState === 'preparing'
+            ? true
+            : undefined
+        }
+        aria-label={
+          inspectState === 'failed'
+            ? `重试打开${item.title || '这张纸'}`
+            : undefined
+        }
         type="button"
         onPointerDown={quickActions.onPointerDown}
         onPointerMove={quickActions.onPointerMove}
@@ -349,6 +437,15 @@ export function ItemPreview({
         onKeyDown={quickActions.onKeyDown}
         onClick={(event) => {
           if (quickActions.consumeSuppressedClick()) {
+            return
+          }
+
+          if (inspectState === 'preparing') {
+            return
+          }
+
+          if (inspectState === 'failed') {
+            onRetryInspect(item.id)
             return
           }
 
@@ -1157,6 +1254,16 @@ export function ItemPreview({
           </>
         )}
       </button>
+
+      <span
+        className="visually-hidden"
+        role="status"
+        aria-live="polite"
+      >
+        {inspectState === 'failed'
+          ? `${item.title || '这张纸'}打开失败，可以重试。`
+          : ''}
+      </span>
 
     </li>
   )

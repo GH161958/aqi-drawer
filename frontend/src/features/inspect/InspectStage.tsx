@@ -49,6 +49,9 @@ interface InspectStageProps {
   onPresentationReady: (
     itemId: string,
   ) => void
+  onPresentationError: (
+    itemId: string,
+  ) => void
   onBack: () => void
 }
 
@@ -80,6 +83,7 @@ export function InspectStage({
   itemId,
   presented,
   onPresentationReady,
+  onPresentationError,
   onBack,
 }: InspectStageProps) {
   const query =
@@ -172,6 +176,14 @@ export function InspectStage({
 
   const readyNotificationRef =
     useRef<string | null>(null)
+
+  const errorNotificationAtRef =
+    useRef(0)
+
+  useEffect(() => {
+    readyNotificationRef.current = null
+    errorNotificationAtRef.current = 0
+  }, [itemId])
 
   const cancelFilingReveal =
     useCallback(() => {
@@ -272,35 +284,48 @@ export function InspectStage({
 
   useEffect(
     () => {
-      const readyItemId =
-        query.isError
-          ? itemId
-          : inspectedItemId
-
       if (
-        !readyItemId
-        || (
-          !query.isError
-          && !presentationReady
-        )
+        !inspectedItemId
+        || !presentationReady
         || readyNotificationRef.current
-          === readyItemId
+          === inspectedItemId
       ) {
         return
       }
 
       readyNotificationRef.current =
-        readyItemId
-      onPresentationReady(readyItemId)
+        inspectedItemId
+      onPresentationReady(inspectedItemId)
     },
     [
       inspectedItemId,
-      itemId,
       onPresentationReady,
       presentationReady,
-      query.isError,
     ],
   )
+
+  useEffect(
+    () => {
+      if (
+        !query.isError
+        || query.isFetching
+        || query.errorUpdatedAt === 0
+        || errorNotificationAtRef.current
+          === query.errorUpdatedAt
+      ) {
+        return
+      }
+
+      errorNotificationAtRef.current =
+        query.errorUpdatedAt
+      onPresentationError(itemId)
+    }, [
+      itemId,
+      onPresentationError,
+      query.errorUpdatedAt,
+      query.isError,
+      query.isFetching,
+    ])
 
   useLayoutEffect(
     () => {
