@@ -80,8 +80,16 @@
   position: absolute;
   z-index: 1;
 
-  right: 12px;
-  bottom: -14px;
+  right:
+    var(
+      --inspect-paper-anchor-right,
+      12px
+    );
+  bottom:
+    var(
+      --inspect-paper-anchor-bottom,
+      -14px
+    );
 
   display: grid;
   place-items: end center;
@@ -129,7 +137,10 @@
 }
 
 .inspectPaperTab[data-state='failure'] {
+  z-index: 3;
+
   appearance: none;
+  clip-path: inset(6px 0 0);
   pointer-events: auto;
   cursor: pointer;
 }
@@ -139,82 +150,6 @@
     1px solid
     rgba(72, 83, 68, .72);
   outline-offset: 2px;
-}
-
-.row:has(
-  .paper[data-presentation-kind='text']
-) .inspectPaperTab {
-  right: 22px;
-}
-
-.row:has(
-  .paper[data-presentation-kind='video']
-) .inspectPaperTab {
-  right: 24px;
-}
-
-.row:has(
-  .paper[data-presentation-kind='audio']
-) .inspectPaperTab {
-  right:
-    calc(
-      (
-        100%
-        - min(
-          calc(100% - 58px),
-          286px
-        )
-      ) / 2
-      + 12px
-    );
-}
-
-.row:has(
-  .paper[data-presentation-kind='product']
-) .inspectPaperTab {
-  right:
-    calc(
-      (
-        100%
-        - min(
-          calc(100% - 22px),
-          368px
-        )
-      ) / 2
-      + 12px
-    );
-}
-
-.row:has(
-  .paper[data-presentation-kind='repository']
-) .inspectPaperTab {
-  right:
-    calc(
-      (
-        100%
-        - min(
-          calc(100% - 50px),
-          350px
-        )
-      ) / 2
-      + 12px
-    );
-}
-
-.row:has(
-  .paper[data-presentation-kind='mixed']
-) .inspectPaperTab {
-  right:
-    calc(
-      (
-        100%
-        - min(
-          calc(100% - 34px),
-          356px
-        )
-      ) / 2
-      + 12px
-    );
 }
 
 .paper * {
@@ -240,14 +175,6 @@
 
   .paper[data-inspect-preparing='true'] {
     translate: 0 0;
-  }
-}
-
-@media (max-width: 520px) {
-  .row:has(
-    .paper[data-presentation-kind='text']
-  ) .inspectPaperTab {
-    right: 20px;
   }
 }
 
