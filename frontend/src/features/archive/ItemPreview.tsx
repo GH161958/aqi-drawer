@@ -23,6 +23,10 @@ import {
   inspectPaperTabView,
 } from '../inspect/inspectPresentationLogic'
 
+import {
+  useInspectPaperAnchor,
+} from './useInspectPaperAnchor'
+
 interface ItemPreviewProps {
   item: PocketItemSummary
   onOpen:
@@ -211,6 +215,12 @@ export function ItemPreview({
   const presentation =
     classifyPresentation(item)
 
+  const rowRef = useInspectPaperAnchor({
+    enabled: inspectState !== 'idle',
+    anchorKey:
+      `${item.id}:${presentation.kind}:${presentation.sourceFlavor}`,
+  })
+
   const hasEeNote =
     Boolean(item.note.trim())
 
@@ -365,7 +375,10 @@ export function ItemPreview({
     ) : null
 
   return (
-    <li className={styles.row}>
+    <li
+      ref={rowRef}
+      className={styles.row}
+    >
       {inspectState === 'failed' ? (
         <button
           className={styles.inspectPaperTab}
@@ -412,6 +425,14 @@ export function ItemPreview({
         }
         data-source-flavor={
           presentation.sourceFlavor
+        }
+        data-visible-paper-anchor={
+          !isDocument
+          && !isArticle
+          && !isXhsPhoto
+          && !isPhoto
+            ? 'true'
+            : undefined
         }
         data-inspect-preparing={
           inspectState === 'preparing'
@@ -469,6 +490,7 @@ export function ItemPreview({
             className={
               `${styles.documentFolder} ${styles.previewPaperBundle}`
             }
+            data-visible-paper-anchor="true"
           >
             {attachedTabs}
 
@@ -584,6 +606,7 @@ export function ItemPreview({
               className={
                 styles.articleClipping
               }
+              data-visible-paper-anchor="true"
             >
               <header
                 className={
@@ -656,6 +679,7 @@ export function ItemPreview({
             className={
               `${styles.xhsStorageObject} ${styles.previewPaperBundle}`
             }
+            data-visible-paper-anchor="true"
           >
             {attachedTabs}
 
@@ -868,6 +892,7 @@ export function ItemPreview({
               className={
                 styles.photoArchiveLabel
               }
+              data-visible-paper-anchor="true"
             >
               <h2>
                 {item.title
