@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
 } from 'react'
@@ -32,11 +33,32 @@ import type {
   CabinetSlot,
 } from '../types/pocket'
 
+import {
+  readDrawerHistoryEntry,
+  withDrawerHistoryEntry,
+  type ArchiveSnapshot,
+  type DrawerHistoryEntry,
+} from './drawerNavigation'
+
+import {
+  useArchiveOutsideDismiss,
+} from './useArchiveOutsideDismiss'
+
 import styles from './App.module.css'
 
 export function App() {
   const queryClient =
     useQueryClient()
+
+  const initialHistoryEntryRef =
+    useRef(
+      readDrawerHistoryEntry(
+        window.history.state,
+      ),
+    )
+
+  const initialHistoryEntry =
+    initialHistoryEntryRef.current
 
   const inspectFocusReturnRef =
     useRef<HTMLButtonElement | null>(
@@ -51,7 +73,11 @@ export function App() {
     setActiveSlot,
   ] =
     useState<CabinetSlot | null>(
-      null,
+      initialHistoryEntry
+      && initialHistoryEntry.view
+        !== 'cabinet'
+        ? initialHistoryEntry.slot
+        : null,
     )
 
   const [
@@ -59,7 +85,10 @@ export function App() {
     setActiveItemId,
   ] =
     useState<string | null>(
-      null,
+      initialHistoryEntry?.view
+        === 'inspect'
+        ? initialHistoryEntry.itemId
+        : null,
     )
 
   const activeItemIdRef =
@@ -87,19 +116,193 @@ export function App() {
     archiveCollection,
     setArchiveCollection,
   ] =
-    useState('')
+    useState(
+      initialHistoryEntry
+      && initialHistoryEntry.view
+        !== 'cabinet'
+        ? initialHistoryEntry.collection
+        : '',
+    )
 
   const [
     archiveSource,
     setArchiveSource,
   ] =
-    useState('')
+    useState(
+      initialHistoryEntry
+      && initialHistoryEntry.view
+        !== 'cabinet'
+        ? initialHistoryEntry.source
+        : '',
+    )
 
   const [
     archiveTag,
     setArchiveTag,
   ] =
-    useState('')
+    useState(
+      initialHistoryEntry
+      && initialHistoryEntry.view
+        !== 'cabinet'
+        ? initialHistoryEntry.tag
+        : '',
+    )
+
+  const archiveSnapshot =
+    useCallback((
+      slot: CabinetSlot,
+      scrollY = window.scrollY,
+    ): ArchiveSnapshot => ({
+      slot,
+      collection: archiveCollection,
+      source: archiveSource,
+      tag: archiveTag,
+      scrollY,
+    }), [
+      archiveCollection,
+      archiveSource,
+      archiveTag,
+    ])
+
+  function replaceHistory(
+    entry: DrawerHistoryEntry,
+  ) {
+    window.history.replaceState(
+      withDrawerHistoryEntry(
+        window.history.state,
+        entry,
+      ),
+      '',
+    )
+  }
+
+  function pushHistory(
+    entry: DrawerHistoryEntry,
+  ) {
+    window.history.pushState(
+      withDrawerHistoryEntry(
+        window.history.state,
+        entry,
+      ),
+      '',
+    )
+  }
+
+  const applyHistoryEntry =
+    useCallback((
+      entry: DrawerHistoryEntry,
+    ) => {
+      setPresentedItemId(null)
+      setFailedInspectItemId(null)
+
+      if (entry.view === 'cabinet') {
+        const previousSlot =
+          activeSlot
+
+        setActiveItemId(null)
+        setActiveSlot(null)
+        setArchiveCollection('')
+        setArchiveSource('')
+        setArchiveTag('')
+
+        window.requestAnimationFrame(() => {
+          window.scrollTo(0, 0)
+
+          document
+            .querySelector<HTMLElement>(
+              previousSlot
+                ? `[data-cabinet-slot="${previousSlot}"]`
+                : '[data-cabinet-focus-fallback]',
+            )
+            ?.focus({ preventScroll: true })
+        })
+
+        return
+      }
+
+      setActiveSlot(entry.slot)
+      setArchiveCollection(entry.collection)
+      setArchiveSource(entry.source)
+      setArchiveTag(entry.tag)
+      inspectScrollYRef.current =
+        entry.scrollY
+
+      if (entry.view === 'inspect') {
+        setActiveItemId(entry.itemId)
+        return
+      }
+
+      setActiveItemId(null)
+
+      window.requestAnimationFrame(() => {
+        window.scrollTo(0, entry.scrollY)
+
+        const origin =
+          inspectFocusReturnRef.current
+
+        const fallback =
+          document.querySelector<HTMLElement>(
+            '[data-archive-focus-fallback]',
+          )
+
+        if (origin?.isConnected) {
+          origin.focus({ preventScroll: true })
+        } else {
+          fallback?.focus({ preventScroll: true })
+        }
+
+        inspectFocusReturnRef.current = null
+      })
+    }, [activeSlot])
+
+  const applyHistoryEntryRef =
+    useRef(applyHistoryEntry)
+  applyHistoryEntryRef.current =
+    applyHistoryEntry
+
+  useEffect(() => {
+    if (!initialHistoryEntryRef.current) {
+      replaceHistory({
+        version: 1,
+        view: 'cabinet',
+      })
+    }
+
+    const previousRestoration =
+      window.history.scrollRestoration
+
+    window.history.scrollRestoration =
+      'manual'
+
+    const onPopState = (
+      event: PopStateEvent,
+    ) => {
+      const entry =
+        readDrawerHistoryEntry(
+          event.state,
+        )
+
+      if (entry) {
+        applyHistoryEntryRef.current(
+          entry,
+        )
+      }
+    }
+
+    window.addEventListener(
+      'popstate',
+      onPopState,
+    )
+
+    return () => {
+      window.removeEventListener(
+        'popstate',
+        onPopState,
+      )
+      window.history.scrollRestoration =
+        previousRestoration
+    }
+  }, [])
 
   function resetArchiveIndex() {
     setArchiveCollection('')
@@ -111,16 +314,36 @@ export function App() {
     slot: CabinetSlot,
   ) {
     resetArchiveIndex()
+    pushHistory({
+      version: 1,
+      view: 'archive',
+      slot,
+      collection: '',
+      source: '',
+      tag: '',
+      scrollY: 0,
+    })
     setActiveSlot(slot)
   }
 
   function returnToCabinet() {
-    setPresentedItemId(null)
-    setFailedInspectItemId(null)
-    setActiveItemId(null)
-    setActiveSlot(null)
+    const current =
+      readDrawerHistoryEntry(
+        window.history.state,
+      )
 
-    resetArchiveIndex()
+    if (current?.view === 'archive') {
+      window.history.back()
+      return
+    }
+
+    const cabinet: DrawerHistoryEntry = {
+      version: 1,
+      view: 'cabinet',
+    }
+
+    replaceHistory(cabinet)
+    applyHistoryEntry(cabinet)
   }
 
   function inspectItem(
@@ -132,6 +355,27 @@ export function App() {
 
     inspectScrollYRef.current =
       window.scrollY
+
+    if (activeSlot) {
+      replaceHistory({
+        version: 1,
+        view: 'archive',
+        ...archiveSnapshot(
+          activeSlot,
+          inspectScrollYRef.current,
+        ),
+      })
+
+      pushHistory({
+        version: 1,
+        view: 'inspect',
+        itemId,
+        ...archiveSnapshot(
+          activeSlot,
+          inspectScrollYRef.current,
+        ),
+      })
+    }
 
     setPresentedItemId(null)
     setFailedInspectItemId(null)
@@ -184,46 +428,142 @@ export function App() {
     }, [queryClient])
 
   function returnToDrawer() {
-    setPresentedItemId(null)
-    setFailedInspectItemId(null)
-    setActiveItemId(null)
+    const current =
+      readDrawerHistoryEntry(
+        window.history.state,
+      )
 
-    window.requestAnimationFrame(
-      () => {
-        window.scrollTo(
-          0,
-          inspectScrollYRef.current,
-        )
+    if (current?.view === 'inspect') {
+      window.history.back()
+      return
+    }
 
-        const origin =
-          inspectFocusReturnRef.current
+    if (!activeSlot) {
+      returnToCabinet()
+      return
+    }
 
-        const fallback =
-          document.querySelector<HTMLElement>(
-            '[data-archive-focus-fallback]',
-          )
+    const archive: DrawerHistoryEntry = {
+      version: 1,
+      view: 'archive',
+      ...archiveSnapshot(
+        activeSlot,
+        inspectScrollYRef.current,
+      ),
+    }
 
-        if (origin?.isConnected) {
-          origin.focus({
-            preventScroll: true,
-          })
-        } else {
-          fallback?.focus({
-            preventScroll: true,
-          })
-        }
-
-        inspectFocusReturnRef.current =
-          null
-
-      },
-    )
+    replaceHistory(archive)
+    applyHistoryEntry(archive)
   }
+
+  useEffect(() => {
+    if (!activeSlot) {
+      return
+    }
+
+    const current =
+      readDrawerHistoryEntry(
+        window.history.state,
+      )
+
+    if (
+      !current
+      || current.view === 'cabinet'
+    ) {
+      return
+    }
+
+    replaceHistory({
+      ...current,
+      ...archiveSnapshot(
+        activeSlot,
+        current.view === 'inspect'
+          ? inspectScrollYRef.current
+          : window.scrollY,
+      ),
+    })
+  }, [
+    activeSlot,
+    archiveCollection,
+    archiveSource,
+    archiveTag,
+    archiveSnapshot,
+  ])
+
+  useEffect(() => {
+    if (
+      !activeSlot
+      || activeItemId
+    ) {
+      return
+    }
+
+    let frame = 0
+
+    const saveArchiveScroll = () => {
+      if (frame) {
+        return
+      }
+
+      frame = window.requestAnimationFrame(
+        () => {
+          frame = 0
+
+          const current =
+            readDrawerHistoryEntry(
+              window.history.state,
+            )
+
+          if (current?.view !== 'archive') {
+            return
+          }
+
+          replaceHistory({
+            ...current,
+            ...archiveSnapshot(
+              activeSlot,
+              window.scrollY,
+            ),
+          })
+        },
+      )
+    }
+
+    window.addEventListener(
+      'scroll',
+      saveArchiveScroll,
+      { passive: true },
+    )
+
+    return () => {
+      window.removeEventListener(
+        'scroll',
+        saveArchiveScroll,
+      )
+
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+      }
+    }
+  }, [
+    activeItemId,
+    activeSlot,
+    archiveSnapshot,
+  ])
+
+  useArchiveOutsideDismiss(
+    Boolean(
+      activeSlot
+      && !activeItemId,
+    ),
+    returnToCabinet,
+  )
 
   return (
     <main className={styles.shell}>
       <header
         className={styles.header}
+        data-archive-dismiss-ignore
         data-cabinet-home={
           !activeItemId
           && !activeSlot
