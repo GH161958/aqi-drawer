@@ -46,8 +46,27 @@ export async function createBridgeApp(config = {}) {
     mcpPath: normalizeMcpPath(config.mcpPath ?? (cleanEnvironmentValue(process.env.C_POCKET_MCP_PATH) || '/mcp')),
     temporaryPublicMcp: config.temporaryPublicMcp ?? process.argv.includes('--temporary-public-mcp'),
     enableMcpCapture: config.enableMcpCapture ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_CAPTURE) === 'true'),
+    captureMcpPath: cleanEnvironmentValue(config.captureMcpPath ?? process.env.C_POCKET_MCP_CAPTURE_PATH),
     dropSecret: config.dropSecret ?? (cleanEnvironmentValue(process.env.C_POCKET_DROP_SECRET) || `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`),
   }
+  // The existing MCP URL never gains Capture from a global feature flag.
+  // An owner-issued second capability path is required for the writer lane.
+  if (settings.enableMcpCapture) {
+    if (settings.temporaryPublicMcp) {
+      throw new Error('MCP Capture cannot be enabled in temporary-public-MCP mode.')
+    }
+    if (!settings.captureMcpPath) {
+      throw new Error('C_POCKET_MCP_CAPTURE_PATH is required when MCP Capture is enabled.')
+    }
+    settings.captureMcpPath = normalizeMcpPath(settings.captureMcpPath)
+    if (
+      !/^\/mcp\/[A-Za-z0-9_-]{43,}$/u.test(settings.captureMcpPath)
+      || settings.captureMcpPath === settings.mcpPath
+    ) {
+      throw new Error('MCP Capture requires a distinct /mcp/<43+ character secret> path.')
+    }
+  }
+
   const store = new PocketStore(settings.dataDir)
   await store.init()
   const cmemory = new CMemoryClient({ baseUrl: settings.cmemoryBaseUrl, token: settings.cmemoryToken })
@@ -807,41 +826,58 @@ export async function createBridgeApp(config = {}) {
     } catch (error) { next(error) }
   })
 
-  const handleMcpPost = async (req, res) => {
-    try {
-      const sessionId = req.headers['mcp-session-id']
-      let transport = sessionId ? transports.get(sessionId) : undefined
-      if (!transport) {
-        if (sessionId || !isInitializeRequest(req.body)) {
-          return res.status(400).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Bad Request: no valid MCP session.' }, id: null })
-        }
-        transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => crypto.randomUUID(),
-          onsessioninitialized: (id) => transports.set(id, transport),
-        })
-        transport.onclose = () => {
-          if (transport.sessionId) transports.delete(transport.sessionId)
-        }
-        const server = createPocketMcpServer({ store, cmemory, contentReader, vault, enableMcpCapture: settings.enableMcpCapture })
-        await server.connect(transport)
-      }
-      await transport.handleRequest(req, res, req.body)
-    } catch (error) {
-      if (!res.headersSent) res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: error.message }, id: null })
-    }
+  // Each transport/session is bound to the path on which it was initialized.
+  // A read-lane MCP session cannot be replayed against the write lane.
+  const sessionFor = (req, lane) => {
+    const id = req.headers['mcp-session-id']
+    const found = id ? transports.get(id) : null
+    return found?.lane === lane ? found.transport : null
   }
 
-  app.post(settings.mcpPath, handleMcpPost)
-  app.get(settings.mcpPath, async (req, res) => {
-    const transport = transports.get(req.headers['mcp-session-id'])
-    if (!transport) return res.status(400).send('Invalid or missing MCP session.')
-    await transport.handleRequest(req, res)
-  })
-  app.delete(settings.mcpPath, async (req, res) => {
-    const transport = transports.get(req.headers['mcp-session-id'])
-    if (!transport) return res.status(400).send('Invalid or missing MCP session.')
-    await transport.handleRequest(req, res)
-  })
+  const registerMcpLane = (mcpPath, lane) => {
+    app.post(mcpPath, async (req, res) => {
+      try {
+        const sessionId = req.headers['mcp-session-id']
+        let transport = sessionFor(req, lane)
+        if (!transport) {
+          if (sessionId || !isInitializeRequest(req.body)) {
+            return res.status(400).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Bad Request: no valid MCP session for this route.' }, id: null })
+          }
+          transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => crypto.randomUUID(),
+            onsessioninitialized: (id) => transports.set(id, { transport, lane }),
+          })
+          transport.onclose = () => {
+            if (transport.sessionId) transports.delete(transport.sessionId)
+          }
+          const server = createPocketMcpServer({
+            store, cmemory, contentReader, vault,
+            enableMcpCapture: lane === 'capture' && settings.enableMcpCapture,
+          })
+          await server.connect(transport)
+        }
+        await transport.handleRequest(req, res, req.body)
+      } catch (error) {
+        if (!res.headersSent) res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: error.message }, id: null })
+      }
+    })
+    app.get(mcpPath, async (req, res) => {
+      const transport = sessionFor(req, lane)
+      if (!transport) return res.status(400).send('Invalid or mismatched MCP session.')
+      await transport.handleRequest(req, res)
+    })
+    app.delete(mcpPath, async (req, res) => {
+      const transport = sessionFor(req, lane)
+      if (!transport) return res.status(400).send('Invalid or mismatched MCP session.')
+      await transport.handleRequest(req, res)
+    })
+  }
+
+  registerMcpLane(settings.mcpPath, 'standard')
+  if (settings.enableMcpCapture) {
+    // The capture path is itself a capability URL. Never log or return it.
+    registerMcpLane(settings.captureMcpPath, 'capture')
+  }
 
   app.use((error, _req, res, _next) => {
     void _next
@@ -862,7 +898,7 @@ export async function createBridgeApp(config = {}) {
     vault,
     xhsAdapter,
     async close() {
-      await Promise.allSettled([...transports.values()].map((transport) => transport.close()))
+      await Promise.allSettled([...transports.values()].map(({ transport }) => transport.close()))
       transports.clear()
     },
   }
