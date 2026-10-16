@@ -69,3 +69,42 @@ test('MCP capture rejects empty input, unsafe URLs and short retry keys', async 
   await assert.rejects(() => store.captureFromMcp({ requestId: 'bad', text: 'Example' }), /stable requestId/)
   assert.equal((await store.list({})).length, 0)
 })
+
+test('unified owner Capture reuses registered taxonomy only and preserves idempotency', async (t) => {
+  const store = await fixture(t)
+  await store.createTag('Research')
+  await store.createTag('文章')
+  await store.createCollection('Academic')
+  const base = {
+    requestId: 'owner:registered:001',
+    title: 'A small research idea',
+    text: 'Notebook note',
+    tags: ['research', '文章'],
+    collection: 'academic',
+    onlyExistingTaxonomy: true,
+  }
+  const beforeTags = await store.listTags()
+  const beforeCollections = await store.listCollections()
+  const first = await store.captureFromMcp(base)
+  assert.equal(first.duplicate, false)
+  assert.deepEqual(first.item.tags, ['Research', '文章'])
+  assert.equal(first.item.collection, 'Academic')
+  assert.deepEqual(await store.listTags(), beforeTags)
+  assert.deepEqual(await store.listCollections(), beforeCollections)
+  const duplicate = await store.captureFromMcp(base)
+  assert.equal(duplicate.duplicate, true)
+  assert.equal(duplicate.item.id, first.item.id)
+  const originalCount = (await store.list({ limit: 30 })).length
+  for (const invalid of [
+    { requestId: 'owner:newtag:002', tags: ['Research', 'Unauthorized'] },
+    { requestId: 'owner:newcollection:003', collection: 'New Category' },
+  ]) {
+    await assert.rejects(
+      () => store.captureFromMcp({ ...base, ...invalid }),
+      /Unknown Tag|Unknown Collection/,
+    )
+  }
+  assert.deepEqual(await store.listTags(), beforeTags)
+  assert.deepEqual(await store.listCollections(), beforeCollections)
+  assert.equal((await store.list({ limit: 30 })).length, originalCount)
+})
