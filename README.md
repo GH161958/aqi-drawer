@@ -161,7 +161,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ### PR B · Owner 安全整理权限边界（候选）
 
 在 **Unified Owner** MCP 上新增：
-- `pocket_organize_existing(id, request_id, tags_add, tags_remove, collection?, clear_collection?, reason?)`：限于已有 Tag/Collection，单物件、小批量 Tag（最多八项变更），返回修改前后、实际增删的 Tag、Collection 变化、操作 ID 和时间；要在操作后给 EE 简洁回执。若需要新词汇，建议名称但不自动创建。
+- `pocket_organize_existing(id, request_id, expected_updated_at, tags_add, tags_remove, collection?, clear_collection?, reason?)`：限于已有 Tag/Collection，单物件、小批量 Tag（最多八项变更）；提交前必须先通过 `pocket_get` 读取并携带其 `updatedAt`，否则拒绝过时更新，返回修改前后、实际增删的 Tag、Collection 变化、操作 ID 和时间；要在操作后给 EE 简洁回执。若需要新词汇，建议名称但不自动创建。
 - `pocket_organize_undo(id, operation_id, request_id)`：按原回执撤回一次操作，若后续有人调整过 Tag/Collection，或原词汇已删除，则拒绝自动撤回而转由 EE 检查。重试不会重复撤回。
 - 只在 `C_POCKET_ENABLE_UNIFIED_OWNER=true` 且 Capture 已在独立私密 Owner URL 启用时注册；原有老 MCP 和单独 Capture 的工具清单均不增加整理能力。旧 `pocket_edit_metadata` 在 Owner 中继续拒绝注册。
 - 操作不影响 item 原文、来源数据、附件、Memory 或 Vault；整理是对物件的低风险元数据修改，不构成订阅式后台自动任务。平台若要求用户确认写操作，仍须遵守。
