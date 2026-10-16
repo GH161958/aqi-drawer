@@ -77,7 +77,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
 
   server.registerTool('pocket_capture_create', {
     title: 'Keep a text or link in Aqi Drawer',
-    description: 'Create one durable text/HTTP(S)-link Drawer object only when EE explicitly asks to keep it. Not a transcript logger, file uploader or Memory write. Requires stable request_id for idempotency; disabled unless owner explicitly enables MCP capture in service configuration.',
+    description: 'Create one durable text/HTTP(S)-link Drawer object only when EE explicitly asks to keep it. Not a transcript logger, file uploader or Memory write. Requires stable request_id for idempotency; only available through the separately authorized owner writer MCP endpoint after capture is enabled. The regular Drawer MCP endpoint cannot create items.',
     inputSchema: {
       request_id: z.string().regex(/^[A-Za-z0-9_.:-]{8,120}$/u),
       title: z.string().max(160).default(''),
@@ -89,7 +89,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false, idempotentHint: true },
   }, async ({ request_id, title, text, source_url, collection, tags }) => {
     if (!enableMcpCapture) {
-      return errorResult('MCP capture is disabled. EE must enable C_POCKET_ENABLE_MCP_CAPTURE=true after scoped-access/security review.')
+      return errorResult('MCP Capture is not available on this endpoint. A separately configured owner writer lane and deployment approval are required.')
     }
     try {
       const saved = await store.captureFromMcp({
