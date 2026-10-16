@@ -20,7 +20,7 @@ test('MCP write lane fails closed without a distinct long capability path', asyn
   await assert.rejects(createBridgeApp({
     dataDir, enableMcpCapture: true, mcpPath: '/mcp',
     captureMcpPath: '/mcp/too-short',
-  }), /distinct.*43\+/)
+  }), /C_POCKET_MCP_PATH must be \/mcp/)
   const same = privatePath()
   await assert.rejects(createBridgeApp({
     dataDir, enableMcpCapture: true, mcpPath: same, captureMcpPath: same,
