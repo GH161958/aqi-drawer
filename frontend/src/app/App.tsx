@@ -490,6 +490,67 @@ export function App() {
     archiveSnapshot,
   ])
 
+  useEffect(() => {
+    if (
+      !activeSlot
+      || activeItemId
+    ) {
+      return
+    }
+
+    let frame = 0
+
+    const saveArchiveScroll = () => {
+      if (frame) {
+        return
+      }
+
+      frame = window.requestAnimationFrame(
+        () => {
+          frame = 0
+
+          const current =
+            readDrawerHistoryEntry(
+              window.history.state,
+            )
+
+          if (current?.view !== 'archive') {
+            return
+          }
+
+          replaceHistory({
+            ...current,
+            ...archiveSnapshot(
+              activeSlot,
+              window.scrollY,
+            ),
+          })
+        },
+      )
+    }
+
+    window.addEventListener(
+      'scroll',
+      saveArchiveScroll,
+      { passive: true },
+    )
+
+    return () => {
+      window.removeEventListener(
+        'scroll',
+        saveArchiveScroll,
+      )
+
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+      }
+    }
+  }, [
+    activeItemId,
+    activeSlot,
+    archiveSnapshot,
+  ])
+
   useArchiveOutsideDismiss(
     Boolean(
       activeSlot
