@@ -143,3 +143,28 @@ test('no-op is idempotent and organizer is bounded to one object per call', asyn
     operationId: first.operationId, requestId: 'undo:noop:0001',
   }), /Newer metadata changes/)
 })
+
+test('one organization or undo request key cannot affect a second item or operation', async (t) => {
+  const { store, item } = await fixture(t)
+  const other = await store.upsert({ title: 'Other item', text: 'Independent item', tags: ['Research'] })
+  const first = await store.organizeExistingMetadata(item.id, {
+    requestId: 'owner:global-key:0001', tagsAdd: ['Design'], reason: 'Fixture',
+  })
+  await assert.rejects(() => store.organizeExistingMetadata(other.id, {
+    requestId: 'owner:global-key:0001', tagsAdd: ['Reference'],
+  }), /different item/)
+  const second = await store.organizeExistingMetadata(other.id, {
+    requestId: 'owner:global-key:0002', tagsAdd: ['Reference'], reason: 'Fixture',
+  })
+  await assert.rejects(() => store.undoExistingOrganization(item.id, {
+    operationId: first.operationId, requestId: 'owner:global-key:0001',
+  }), /already used/)
+  const undo = await store.undoExistingOrganization(item.id, {
+    operationId: first.operationId, requestId: 'owner:undo-key:0001',
+  })
+  assert.equal(undo.changed, true)
+  await assert.rejects(() => store.undoExistingOrganization(other.id, {
+    operationId: second.operationId, requestId: 'owner:undo-key:0001',
+  }), /already used/)
+  assert.deepEqual((await store.get(other.id)).tags, ['Research', 'Reference'])
+})
