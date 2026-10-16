@@ -46,8 +46,18 @@ export async function createBridgeApp(config = {}) {
     mcpPath: normalizeMcpPath(config.mcpPath ?? (cleanEnvironmentValue(process.env.C_POCKET_MCP_PATH) || '/mcp')),
     temporaryPublicMcp: config.temporaryPublicMcp ?? process.argv.includes('--temporary-public-mcp'),
     enableMcpCapture: config.enableMcpCapture ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_CAPTURE) === 'true'),
+    enableUnifiedOwner: config.enableUnifiedOwner ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_UNIFIED_OWNER) === 'true'),
+    enableLegacyMcp: config.enableLegacyMcp ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_LEGACY_MCP) !== 'false'),
     captureMcpPath: cleanEnvironmentValue(config.captureMcpPath ?? process.env.C_POCKET_MCP_CAPTURE_PATH),
     dropSecret: config.dropSecret ?? (cleanEnvironmentValue(process.env.C_POCKET_DROP_SECRET) || `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`),
+  }
+  // Two-stage cutover: the old client URL retains its existing privileges and
+  // NEVER gains Capture. The future owner client uses a separate capability URL.
+  if (settings.enableUnifiedOwner && !settings.enableMcpCapture) {
+    throw new Error('Unified owner MCP requires Capture to be explicitly enabled.')
+  }
+  if (!settings.enableLegacyMcp && !settings.enableUnifiedOwner) {
+    throw new Error('Cannot disable legacy MCP before the unified owner endpoint is enabled.')
   }
   // The existing MCP URL never gains Capture from a global feature flag.
   // An owner-issued second capability path is required for the writer lane.
@@ -853,7 +863,7 @@ export async function createBridgeApp(config = {}) {
           }
           const server = createPocketMcpServer({
             store, cmemory, contentReader, vault,
-            enableMcpCapture: lane === 'capture' && settings.enableMcpCapture,
+            enableMcpCapture: lane !== 'standard' && settings.enableMcpCapture,
             lane,
           })
           await server.connect(transport)
@@ -875,10 +885,12 @@ export async function createBridgeApp(config = {}) {
     })
   }
 
-  registerMcpLane(settings.mcpPath, 'standard')
+  if (settings.enableLegacyMcp) registerMcpLane(settings.mcpPath, 'standard')
   if (settings.enableMcpCapture) {
-    // The capture path is itself a capability URL. Never log or return it.
-    registerMcpLane(settings.captureMcpPath, 'capture')
+    // Same private capability URL as the pre-existing capture candidate.
+    // During migration the old read endpoint remains available. After the
+    // owner ChatGPT connection is verified, it can be retired separately.
+    registerMcpLane(settings.captureMcpPath, settings.enableUnifiedOwner ? 'owner' : 'capture')
   }
 
   app.use((error, _req, res, _next) => {
