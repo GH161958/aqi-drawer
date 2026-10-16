@@ -143,7 +143,7 @@ export class PocketStore {
       .slice(0, Math.max(1, Math.min(Number(limit) || 20, 50)))
   }
 
-  async captureFromMcp({ requestId, title = '', text = '', sourceUrl = '', collection = '', tags = [] } = {}) {
+  async captureFromMcp({ requestId, title = '', text = '', sourceUrl = '', collection = '', tags = [], onlyExistingTaxonomy = false } = {}) {
     const key = clean(requestId)
     if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(key)) {
       throw httpError(422, 'A stable requestId (8–120 safe characters) is required.')
@@ -172,14 +172,42 @@ export class PocketStore {
         if (existing.deletedAt) throw httpError(409, 'Capture requestId points to a trashed item.')
         return { item: publicItem(existing), duplicate: true }
       }
+      // Owner MCP must never mint vocabulary without a separate human approval.
+      // Resolve against the *current* Store in the same transaction so a
+      // concurrent taxonomy change cannot bypass this restriction.
+      let selectedTags = cleanTags
+      let selectedCollection = normalizeCollection(collection)
+      if (onlyExistingTaxonomy) {
+        const knownTags = new Map(
+          [...(state.tags || []), ...state.items.filter((entry) => !entry.deletedAt)
+            .flatMap((entry) => normalizeTags(entry.tags))]
+            .map((tag) => [tag.toLocaleLowerCase(), tag]),
+        )
+        const knownCollections = new Map(
+          [...(state.collections || []), ...state.items.filter((entry) => !entry.deletedAt)
+            .map((entry) => normalizeCollection(entry.collection)).filter(Boolean)]
+            .map((name) => [name.toLocaleLowerCase(), name]),
+        )
+        for (const tag of cleanTags) {
+          if (!knownTags.has(tag.toLocaleLowerCase())) {
+            throw httpError(422, 'Unknown Tag: propose it to EE before creating a new label.')
+          }
+        }
+        if (selectedCollection && !knownCollections.has(selectedCollection.toLocaleLowerCase())) {
+          throw httpError(422, 'Unknown Collection: propose it to EE before creating a new label.')
+        }
+        selectedTags = cleanTags.map((tag) => knownTags.get(tag.toLocaleLowerCase()))
+        selectedCollection = selectedCollection
+          ? knownCollections.get(selectedCollection.toLocaleLowerCase()) : null
+      }
       const now = new Date().toISOString()
       const item = normalizeItem({
         title: clean(title),
         text: clean(text),
         sourceUrl: url,
         sourceApp: 'ChatGPT / Aqi',
-        collection: normalizeCollection(collection),
-        tags: cleanTags,
+        collection: selectedCollection,
+        tags: selectedTags,
         status: 'inbox',
         sourceIdentity: { provider: 'aqi-mcp-capture', externalId: key },
         sourceData: { provider: 'chatgpt', captureVersion: 1, captureRequestHash: requestHash },

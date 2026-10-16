@@ -181,6 +181,133 @@ test('existing MCP path cannot capture, distinct writer path can, sessions canno
   assert.equal((await bridge.store.list()).length, 1)
 })
 
+test('unified owner cutover is explicit and fails closed', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-owner-config-'))
+  t.after(async () => rm(dataDir, { recursive: true, force: true }))
+  await assert.rejects(createBridgeApp({
+    dataDir, enableUnifiedOwner: true, enableMcpCapture: false,
+  }), /requires Capture to be explicitly enabled/)
+  await assert.rejects(createBridgeApp({
+    dataDir, enableLegacyMcp: false, enableUnifiedOwner: false,
+  }), /Cannot disable legacy MCP/)
+  await assert.rejects(createBridgeApp({
+    dataDir, enableUnifiedOwner: true, enableMcpCapture: true,
+    captureMcpPath: '',
+  }), /C_POCKET_MCP_CAPTURE_PATH is required/)
+})
+
+test('unified owner MCP preserves legacy tools and adds Capture on one URL', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-owner-integration-'))
+  const captureMcpPath = privatePath()
+  const bridge = await startBridge({
+    dataDir, port: 0, host: '127.0.0.1',
+    mcpPath: '/mcp', captureMcpPath,
+    enableMcpCapture: true, enableUnifiedOwner: true,
+  })
+  const base = 'http://127.0.0.1:' + bridge.address.port
+  const oldClient = new Client({ name: 'legacy-read', version: '1' })
+  const owner = new Client({ name: 'unified-owner', version: '1' })
+  const legacyTransport = new StreamableHTTPClientTransport(new URL(base + '/mcp'))
+  const ownerTransport = new StreamableHTTPClientTransport(new URL(base + captureMcpPath))
+  t.after(async () => {
+    await Promise.allSettled([oldClient.close(), owner.close()])
+    await bridge.stop()
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  await oldClient.connect(legacyTransport)
+  await owner.connect(ownerTransport)
+
+  const names = (await owner.listTools()).tools.map((entry) => entry.name)
+  for (const tool of [
+    'pocket_capture_create', 'pocket_search', 'pocket_taxonomy',
+    'pocket_list', 'pocket_get', 'pocket_start_context',
+    'pocket_reply', 'pocket_review', 'pocket_read_content',
+    'memory_turn_pre', 'memory_turn_post', 'vault_read', 'vault_update',
+  ]) assert.ok(names.includes(tool), `Unified owner tool missing: ${tool}`)
+  assert.ok(!names.includes('pocket_edit_metadata'), 'Unsafe metadata edit must wait for PR B')
+  const legacyNames = (await oldClient.listTools()).tools.map((entry) => entry.name)
+  assert.ok(legacyNames.includes('pocket_edit_metadata'))
+  assert.ok(legacyNames.includes('vault_update'))
+
+  const args = {
+    request_id: 'owner:one:00001',
+    title: 'Single MCP trial',
+    text: 'Safe content for a disposable test Store',
+  }
+  const legacyWrite = await oldClient.callTool({ name: 'pocket_capture_create', arguments: args })
+  assert.equal(legacyWrite.isError, true)
+  const created = await owner.callTool({ name: 'pocket_capture_create', arguments: args })
+  assert.equal(created.isError, undefined)
+  assert.equal(created.structuredContent.duplicate, false)
+  assert.equal((await bridge.store.list({ limit: 20 })).length, 1)
+  const repeated = await owner.callTool({ name: 'pocket_capture_create', arguments: args })
+  assert.equal(repeated.structuredContent.duplicate, true)
+  assert.equal((await bridge.store.list({ limit: 20 })).length, 1)
+  const savedId = created.structuredContent.id
+  const lookup = await owner.callTool({ name: 'pocket_get', arguments: { id: savedId } })
+  assert.equal(lookup.structuredContent.item.id, savedId)
+  const search = await owner.callTool({ name: 'pocket_search', arguments: { query: 'Single MCP' } })
+  assert.equal(search.structuredContent.matches[0].id, savedId)
+
+  const unknownTags = await owner.callTool({
+    name: 'pocket_capture_create', arguments: {
+      ...args, request_id: 'owner:tag:00002', tags: ['Unapproved Tag'],
+    },
+  })
+  assert.equal(unknownTags.isError, true)
+  const unknownCollection = await owner.callTool({
+    name: 'pocket_capture_create', arguments: {
+      ...args, request_id: 'owner:collection:00003', collection: 'Unknown Collection',
+    },
+  })
+  assert.equal(unknownCollection.isError, true)
+  assert.equal((await bridge.store.list({ limit: 20 })).length, 1)
+  assert.deepEqual(await bridge.store.listTags(), [])
+  assert.deepEqual(await bridge.store.listCollections(), [])
+
+  // Session created on the legacy path is not reusable on the owner path.
+  assert.ok(legacyTransport.sessionId)
+  const cross = await fetch(base + captureMcpPath, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'mcp-session-id': legacyTransport.sessionId,
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: 27, method: 'tools/call',
+      params: { name: 'pocket_capture_create', arguments: {
+        ...args, request_id: 'owner:cross:00004',
+      } },
+    }),
+  })
+  assert.equal(cross.status, 400)
+  assert.equal((await bridge.store.list({ limit: 20 })).length, 1)
+})
+
+test('legacy MCP can be retired after owner cutover without disabling owner tools', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-owner-retire-'))
+  const ownerMcpPath = privatePath()
+  const bridge = await startBridge({
+    dataDir, port: 0, host: '127.0.0.1',
+    mcpPath: '/mcp', captureMcpPath: ownerMcpPath,
+    enableMcpCapture: true, enableUnifiedOwner: true, enableLegacyMcp: false,
+  })
+  t.after(async () => {
+    await bridge.stop()
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  const base = 'http://127.0.0.1:' + bridge.address.port
+  assert.equal((await fetch(base + '/mcp', { method: 'GET' })).status, 404)
+  const client = new Client({ name: 'retired-owner', version: '1' })
+  t.after(async () => client.close())
+  await client.connect(new StreamableHTTPClientTransport(new URL(base + ownerMcpPath)))
+  const names = (await client.listTools()).tools.map((entry) => entry.name)
+  assert.ok(names.includes('pocket_capture_create'))
+  assert.ok(names.includes('pocket_search'))
+  assert.ok(names.includes('vault_read'))
+})
+
 test('capture endpoint absent when feature remains disabled', async (t) => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-lane-disabled-'))
   const captureMcpPath = privatePath()
