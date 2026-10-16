@@ -90,19 +90,38 @@ try {
     'memory_health',
     'memory_turn_post',
     'memory_turn_pre',
+    'pocket_capture_create',
     'pocket_get',
     'pocket_edit_metadata',
     'pocket_list',
     'pocket_read_content',
     'pocket_reply',
     'pocket_review',
+    'pocket_search',
     'pocket_start_context',
+    'pocket_taxonomy',
     'pocket_turn_open',
     'vault_list',
     'vault_read',
     'vault_update',
   ].sort())
   assert.equal(names.some((name) => /ledger|training|health_room/.test(name)), false)
+
+  const searched = await client.callTool({
+    name: 'pocket_search',
+    arguments: { query: '给阿栖看', limit: 5 },
+  })
+  assert.equal(searched.isError, undefined)
+  assert.equal(searched.structuredContent.matches.some((item) => item.id === source.id), true)
+  const taxonomy = await client.callTool({ name: 'pocket_taxonomy', arguments: {} })
+  assert.equal(taxonomy.isError, undefined)
+  assert.equal(Array.isArray(taxonomy.structuredContent.tags), true)
+  const blockedCapture = await client.callTool({
+    name: 'pocket_capture_create',
+    arguments: { request_id: 'smoke-capture-001', text: 'Do not persist this' },
+  })
+  assert.equal(blockedCapture.isError, true)
+  assert.equal((await bridge.store.list({ limit: 10 })).some((item) => item.text === 'Do not persist this'), false)
 
   const vaultListed = await client.callTool({ name: 'vault_list', arguments: {} })
   assert.equal(vaultListed.isError, undefined)
