@@ -20,7 +20,7 @@ const WRITER_TOOLS = [
 ]
 
 async function assertToolUnavailable(client, name, args) {
-  let rejected = false
+  let rejected
   try {
     const response = await client.callTool({ name, arguments: args })
     rejected = response.isError === true
