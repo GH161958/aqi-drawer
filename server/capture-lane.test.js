@@ -269,10 +269,12 @@ test('unified owner MCP preserves legacy tools and adds Capture on one URL', asy
   assert.deepEqual(await bridge.store.listCollections(), [])
 
   // Owner organizer must fail closed before vocabulary registration.
+  const initialRevision = (await bridge.store.get(savedId)).updatedAt
   const deniedOrganize = await owner.callTool({
     name: 'pocket_organize_existing',
     arguments: {
-      id: savedId, request_id: 'owner:organize:00001', tags_add: ['New label'],
+      id: savedId, request_id: 'owner:organize:00001',
+      expected_updated_at: initialRevision, tags_add: ['New label'],
       reason: 'Proposal only',
     },
   })
@@ -287,6 +289,7 @@ test('unified owner MCP preserves legacy tools and adds Capture on one URL', asy
     name: 'pocket_organize_existing',
     arguments: {
       id: savedId, request_id: 'owner:organize:00002',
+      expected_updated_at: initialRevision,
       tags_add: ['academic', 'Reference'], collection: 'research',
       reason: 'Categorize the research note',
     },
@@ -300,6 +303,7 @@ test('unified owner MCP preserves legacy tools and adds Capture on one URL', asy
     name: 'pocket_organize_existing',
     arguments: {
       id: savedId, request_id: 'owner:organize:00002',
+      expected_updated_at: initialRevision,
       tags_add: ['academic', 'Reference'], collection: 'research',
       reason: 'Categorize the research note',
     },
@@ -310,6 +314,7 @@ test('unified owner MCP preserves legacy tools and adds Capture on one URL', asy
     name: 'pocket_organize_existing',
     arguments: {
       id: savedId, request_id: 'owner:organize:00003',
+      expected_updated_at: (await bridge.store.get(savedId)).updatedAt,
       collection: 'Secretly created Collection',
     },
   })
@@ -328,7 +333,7 @@ test('unified owner MCP preserves legacy tools and adds Capture on one URL', asy
   assert.equal((await bridge.store.get(savedId)).collection, null)
   await assertToolUnavailable(oldClient, 'pocket_organize_existing', {
     id: savedId, request_id: 'legacy:organize:00001',
-    tags_add: ['Academic'],
+    expected_updated_at: initialRevision, tags_add: ['Academic'],
   })
 
   // Session created on the legacy path is not reusable on the owner path.
