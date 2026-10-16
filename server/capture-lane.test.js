@@ -223,11 +223,14 @@ test('unified owner MCP preserves legacy tools and adds Capture on one URL', asy
     'pocket_list', 'pocket_get', 'pocket_start_context',
     'pocket_reply', 'pocket_review', 'pocket_read_content',
     'memory_turn_pre', 'memory_turn_post', 'vault_read', 'vault_update',
+    'pocket_organize_existing', 'pocket_organize_undo',
   ]) assert.ok(names.includes(tool), `Unified owner tool missing: ${tool}`)
   assert.ok(!names.includes('pocket_edit_metadata'), 'Unsafe metadata edit must wait for PR B')
   const legacyNames = (await oldClient.listTools()).tools.map((entry) => entry.name)
   assert.ok(legacyNames.includes('pocket_edit_metadata'))
   assert.ok(legacyNames.includes('vault_update'))
+  assert.ok(!legacyNames.includes('pocket_organize_existing'))
+  assert.ok(!legacyNames.includes('pocket_organize_undo'))
 
   const args = {
     request_id: 'owner:one:00001',
@@ -264,6 +267,74 @@ test('unified owner MCP preserves legacy tools and adds Capture on one URL', asy
   assert.equal((await bridge.store.list({ limit: 20 })).length, 1)
   assert.deepEqual(await bridge.store.listTags(), [])
   assert.deepEqual(await bridge.store.listCollections(), [])
+
+  // Owner organizer must fail closed before vocabulary registration.
+  const initialRevision = (await bridge.store.get(savedId)).updatedAt
+  const deniedOrganize = await owner.callTool({
+    name: 'pocket_organize_existing',
+    arguments: {
+      id: savedId, request_id: 'owner:organize:00001',
+      expected_updated_at: initialRevision, tags_add: ['New label'],
+      reason: 'Proposal only',
+    },
+  })
+  assert.equal(deniedOrganize.isError, true)
+  assert.deepEqual((await bridge.store.get(savedId)).tags, [])
+
+  // Fixture-only vocabulary registration simulates labels EE has approved.
+  await bridge.store.createTag('Academic')
+  await bridge.store.createTag('Reference')
+  await bridge.store.createCollection('Research')
+  const organized = await owner.callTool({
+    name: 'pocket_organize_existing',
+    arguments: {
+      id: savedId, request_id: 'owner:organize:00002',
+      expected_updated_at: initialRevision,
+      tags_add: ['academic', 'Reference'], collection: 'research',
+      reason: 'Categorize the research note',
+    },
+  })
+  assert.equal(organized.isError, undefined)
+  assert.equal(organized.structuredContent.changed, true)
+  assert.deepEqual(organized.structuredContent.tagsAdded, ['Academic', 'Reference'])
+  assert.equal(organized.structuredContent.collectionTo, 'Research')
+  const operationId = organized.structuredContent.operationId
+  const replay = await owner.callTool({
+    name: 'pocket_organize_existing',
+    arguments: {
+      id: savedId, request_id: 'owner:organize:00002',
+      expected_updated_at: initialRevision,
+      tags_add: ['academic', 'Reference'], collection: 'research',
+      reason: 'Categorize the research note',
+    },
+  })
+  assert.equal(replay.structuredContent.duplicate, true)
+  assert.equal(replay.structuredContent.operationId, operationId)
+  const proposedNewCollection = await owner.callTool({
+    name: 'pocket_organize_existing',
+    arguments: {
+      id: savedId, request_id: 'owner:organize:00003',
+      expected_updated_at: (await bridge.store.get(savedId)).updatedAt,
+      collection: 'Secretly created Collection',
+    },
+  })
+  assert.equal(proposedNewCollection.isError, true)
+  assert.deepEqual(await bridge.store.listCollections(), ['Research'])
+  const undo = await owner.callTool({
+    name: 'pocket_organize_undo',
+    arguments: {
+      id: savedId, operation_id: operationId,
+      request_id: 'owner:undo:00001',
+    },
+  })
+  assert.equal(undo.isError, undefined)
+  assert.equal(undo.structuredContent.undone, true)
+  assert.deepEqual((await bridge.store.get(savedId)).tags, [])
+  assert.equal((await bridge.store.get(savedId)).collection, null)
+  await assertToolUnavailable(oldClient, 'pocket_organize_existing', {
+    id: savedId, request_id: 'legacy:organize:00001',
+    expected_updated_at: initialRevision, tags_add: ['Academic'],
+  })
 
   // Session created on the legacy path is not reusable on the owner path.
   assert.ok(legacyTransport.sessionId)

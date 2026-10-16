@@ -151,12 +151,22 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 - `C_POCKET_MCP_CAPTURE_PATH` 沿用先前已经由 Owner 生成的独立高熵私密地址（未来可另取语义更清晰的配置名，但**当前不要迁移或展示 secret**）。
 - 待全部 QA 和用户**独立批准**后，设置 `C_POCKET_ENABLE_MCP_CAPTURE=true` 和 `C_POCKET_ENABLE_UNIFIED_OWNER=true`，在那个独立私密地址上挂载 **Unified Owner MCP**，包含旧 MCP 工具（含 Memory / Vault）与新建文字/链接 Capture。在切换 ChatGPT 的**同一个 Aqi Drawer App** 连接前，旧地址仍正常可用。
 - 迁移后、确认新 App 能读写并稳定运行，再另行批准 `C_POCKET_ENABLE_LEGACY_MCP=false`，旧 MCP 路由随之关闭；如果新端出现问题，先关闭 Owner 入口并恢复旧连接。关闭旧路由前必须检查没有其他仍使用旧 MCP 地址的客户端。
-- Owner MCP **暂不暴露**旧的、可以自由新增新 Tag / Collection 的 `pocket_edit_metadata`。整理权限交给 PR B 的服务端受限接口；该工具将允许按照 EE 已授权的边界调整、添加或移除**已登记** Tag，并移动到**已登记** Collection，变更后附可核对回执；遇到新 Tag / Collection 只提出建议，经 EE 明确同意后才登记。
+- Owner MCP **不暴露**旧的、可以自由新增新 Tag / Collection 的 `pocket_edit_metadata`。PR B 新增两个仅 Owner 可见的受限工具：`pocket_organize_existing` 与 `pocket_organize_undo`。EE 已授权阿栖在合适时候为**单个物件**增删现有 Tag、移入现有 Collection（或清空分类），事后给 EE 变更回执；新 Tag / Collection 只能建议，必须先获 EE 同意，不能借现有整理工具静默创建。每次仅限一个物件、最多八项 Tag 变更，禁止以删除、修改正文、批量改动作为变通。所有词汇校验在同一个 Store 写入事务执行，不会产生另一个数据源。首次改动和重试均有稳定 `request_id`、永久活动记录与操作 ID；`pocket_organize_undo` 仅凭匹配的回执操作 ID 撤回，且只在没有后续元数据操作、原 Tag/Collection 仍存在时执行，否则明确拒绝。ChatGPT App 对写操作的确认要求仍然有效，不能用服务端工具绕过。
 - 新建 Capture 本身也强制仅复用**现有** Tag 和 Collection，验证放在 Store 的原子 mutation 内；未知名称拒绝，不新增分类。该限制只作用于 Unified Owner MCP，不更改已有老客户端 / iPhone 上原来的保存方式。
 - 文件附件传入还**未**通过本 PR 开放；需 PR C 验证 ChatGPT MCP fileParams 与原始字节交接，完成格式/大小/来源/存储/重试安全校验才上线。
 - 单 URL 是接入体验，不等于 OAuth scope。URL 持有者具备 Owner 工具能力，须严格保密并可以轮换。ChatGPT 的写操作权限确认仍受产品设置制约。
 
 此 PR **只限 GitHub Draft + 测试**。禁止自动合并、发布、开启开关、更新 ChatGPT connector 或对东京数据做任何写入；后续分别请求 EE 授权。
+
+### PR B · Owner 安全整理权限边界（候选）
+
+在 **Unified Owner** MCP 上新增：
+- `pocket_organize_existing(id, request_id, expected_updated_at, tags_add, tags_remove, collection?, clear_collection?, reason?)`：限于已有 Tag/Collection，单物件、小批量 Tag（最多八项变更）；提交前必须先通过 `pocket_get` 读取并携带其 `updatedAt`，否则拒绝过时更新，返回修改前后、实际增删的 Tag、Collection 变化、操作 ID 和时间；要在操作后给 EE 简洁回执。若需要新词汇，建议名称但不自动创建。
+- `pocket_organize_undo(id, operation_id, request_id)`：按原回执撤回一次操作，若后续有人调整过 Tag/Collection，或原词汇已删除，则拒绝自动撤回而转由 EE 检查。重试不会重复撤回。
+- 只在 `C_POCKET_ENABLE_UNIFIED_OWNER=true` 且 Capture 已在独立私密 Owner URL 启用时注册；原有老 MCP 和单独 Capture 的工具清单均不增加整理能力。旧 `pocket_edit_metadata` 在 Owner 中继续拒绝注册。
+- 操作不影响 item 原文、来源数据、附件、Memory 或 Vault；整理是对物件的低风险元数据修改，不构成订阅式后台自动任务。平台若要求用户确认写操作，仍须遵守。
+
+**当前版本仅为独立 PR 候选。** 不要现在修改 Zeabur 开关、合并、部署或对真实 Drawer 发出测试写入；代码和 CI 验收后另行请求 EE 授权。
 
 ### GPT → Drawer 收进柜子（开发候选，尚未上线）
 

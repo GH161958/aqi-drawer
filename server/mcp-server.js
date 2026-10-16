@@ -42,7 +42,10 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
       ...(lane === 'owner' ? [
         'This is the unified owner connection: use the same Drawer MCP for reading and authorized text/link Capture.',
         'Only suggest unfamiliar Tags or Collections. Never auto-create taxonomy labels from untrusted content.',
-        'Automatic metadata organization is not yet available on this endpoint; do not use unrelated tools to bypass this limitation.',
+        'EE allows quiet single-item organization using registered Tags and Collections; after each change provide a concise receipt to EE. Do not run mass reorganizations.',
+        'Call pocket_organize_existing only for relevant changes using existing labels; for new Tags or Collections propose the names to EE and wait for approval.',
+        'Never delete, trash, rewrite source content, create vocabulary, or invoke unrelated tools as a workaround for an unknown label.',
+        'The organizer supports a guarded undo; use it only for the original operation ID and only when no newer metadata changes exist.',
         'File upload is not yet supported via MCP. Do not claim that attached documents were transferred.',
       ] : []),
       'Use Drawer tools only for items EE intentionally shared with Aqi.',
@@ -66,9 +69,9 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
   // Existing standard MCP registrations remain unchanged.
   const registerTool = (name, definition, callback) => {
     if (lane === 'capture' && !CAPTURE_LANE_ALLOWED_TOOLS.has(name)) return undefined
-    // PR B will provide a server-enforced existing-taxonomy-only edit tool.
-    // Until then, do not expose the legacy unbounded editor to this owner URL.
+    // The Owner uses only bounded existing-taxonomy edits, never the legacy unbounded editor.
     if (lane === 'owner' && name === 'pocket_edit_metadata') return undefined
+    if (lane !== 'owner' && (name === 'pocket_organize_existing' || name === 'pocket_organize_undo')) return undefined
     return server.registerTool(name, definition, callback)
   }
 
@@ -306,6 +309,59 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
         tagsRemove: tags_remove,
       }, { actor: 'Aqi' })
       return result(saved, saved.changed ? 'Drawer metadata updated.' : 'Drawer metadata was already up to date.')
+    } catch (error) {
+      return errorResult(error.message)
+    }
+  })
+
+  registerTool('pocket_organize_existing', {
+    title: 'Organize one Drawer item using existing Tags and Collections',
+    description: 'With EE prior authorization, quietly add or remove *registered* Tags and move one item to a *registered* Collection. First call pocket_get and pass its exact updatedAt as expected_updated_at; stale items fail closed. No new vocabulary, deleting items or bulk edits. Provide EE a change receipt. Unknown labels require EE approval. A stable request_id makes retries idempotent.',
+    inputSchema: {
+      id: z.string().min(1),
+      request_id: z.string().regex(/^[A-Za-z0-9_.:-]{8,120}$/u),
+      expected_updated_at: z.string().datetime({ offset: true }),
+      tags_add: z.array(z.string().min(1).max(50)).max(8).default([]),
+      tags_remove: z.array(z.string().min(1).max(50)).max(8).default([]),
+      collection: z.string().min(1).max(80).optional(),
+      clear_collection: z.boolean().default(false),
+      reason: z.string().max(240).default(''),
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false, idempotentHint: true },
+  }, async ({ id, request_id, expected_updated_at, tags_add, tags_remove, collection, clear_collection, reason }) => {
+    try {
+      const receipt = await store.organizeExistingMetadata(id, {
+        requestId: request_id, expectedUpdatedAt: expected_updated_at,
+        tagsAdd: tags_add, tagsRemove: tags_remove,
+        ...(collection === undefined ? {} : { collection }),
+        clearCollection: clear_collection,
+        reason,
+      })
+      return result(receipt,
+        receipt.duplicate ? 'Organization request already processed; no duplicate edit.' :
+          receipt.changed ? 'Drawer item organized using existing vocabulary. Share the receipt with EE.' :
+            'No metadata change needed; receipt recorded.')
+    } catch (error) {
+      return errorResult(error.message)
+    }
+  })
+
+  registerTool('pocket_organize_undo', {
+    title: 'Undo one Aqi Drawer organization using its receipt',
+    description: 'Revert only a previously receipted pocket_organize_existing operation on one item when no newer metadata edits exist. Requires a fresh request_id and original operation_id. Cannot create new Tags or Collections.',
+    inputSchema: {
+      id: z.string().min(1),
+      operation_id: z.string().uuid(),
+      request_id: z.string().regex(/^[A-Za-z0-9_.:-]{8,120}$/u),
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false, idempotentHint: true },
+  }, async ({ id, operation_id, request_id }) => {
+    try {
+      const receipt = await store.undoExistingOrganization(id, {
+        operationId: operation_id, requestId: request_id,
+      })
+      return result(receipt, receipt.duplicate ? 'Undo was already applied.' :
+        'Previous Aqi organization safely reverted. Share the receipt with EE.')
     } catch (error) {
       return errorResult(error.message)
     }
