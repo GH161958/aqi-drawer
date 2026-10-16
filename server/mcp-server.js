@@ -316,10 +316,11 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
 
   registerTool('pocket_organize_existing', {
     title: 'Organize one Drawer item using existing Tags and Collections',
-    description: 'With EE prior authorization, quietly add or remove *registered* Tags and move one item to a *registered* Collection; no new vocabulary, no deleting items, no bulk edits. Provide EE a change receipt after success. Unknown labels require separate EE approval before creation. A stable request_id makes retries idempotent.',
+    description: 'With EE prior authorization, quietly add or remove *registered* Tags and move one item to a *registered* Collection. First call pocket_get and pass its exact updatedAt as expected_updated_at; stale items fail closed. No new vocabulary, deleting items or bulk edits. Provide EE a change receipt. Unknown labels require EE approval. A stable request_id makes retries idempotent.',
     inputSchema: {
       id: z.string().min(1),
       request_id: z.string().regex(/^[A-Za-z0-9_.:-]{8,120}$/u),
+      expected_updated_at: z.string().datetime({ offset: true }),
       tags_add: z.array(z.string().min(1).max(50)).max(8).default([]),
       tags_remove: z.array(z.string().min(1).max(50)).max(8).default([]),
       collection: z.string().min(1).max(80).optional(),
@@ -327,10 +328,11 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
       reason: z.string().max(240).default(''),
     },
     annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false, idempotentHint: true },
-  }, async ({ id, request_id, tags_add, tags_remove, collection, clear_collection, reason }) => {
+  }, async ({ id, request_id, expected_updated_at, tags_add, tags_remove, collection, clear_collection, reason }) => {
     try {
       const receipt = await store.organizeExistingMetadata(id, {
-        requestId: request_id, tagsAdd: tags_add, tagsRemove: tags_remove,
+        requestId: request_id, expectedUpdatedAt: expected_updated_at,
+        tagsAdd: tags_add, tagsRemove: tags_remove,
         ...(collection === undefined ? {} : { collection }),
         clearCollection: clear_collection,
         reason,
