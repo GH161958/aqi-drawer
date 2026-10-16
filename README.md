@@ -69,6 +69,8 @@ npm start
 | `C_POCKET_DRAWER_SECRET` | 独立的网页 Drawer 登录秘密；只用于换取 HttpOnly session cookie |
 | `C_POCKET_MCP_PATH` | MCP 路径；生产环境应带随机后缀 |
 | `C_POCKET_ENABLE_MCP_CAPTURE` | 默认 `false`；单独启用 owner write lane；**只开此开关不能让原 MCP 地址写入** |
+| `C_POCKET_ENABLE_UNIFIED_OWNER` | 默认 `false`；配合 Capture 开关，将专用新地址升级为同一个可读、可 Capture 的 Owner MCP（保留旧入口过渡） |
+| `C_POCKET_ENABLE_LEGACY_MCP` | 默认 `true`；**仅在新 Owner 连接正式验收之后**可另行设为 `false`，停用旧 MCP 路由 |
 | `C_POCKET_MCP_CAPTURE_PATH` | 仅在另行启用时使用，独立于 `C_POCKET_MCP_PATH` 的专用高熵私密 MCP 路径；至少 43 字符随机段，禁止写入日志或文档 |
 | `C_POCKET_DROP_SECRET` | iPhone 单向投递入口的私密路径 |
 | `C_POCKET_ALLOWED_ORIGINS` | 可选 CORS 白名单 |
@@ -138,6 +140,23 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | `pocket_reply` | 对卡片追加幂等回复 |
 | `pocket_review` | 讨论、稍后、归档或暂存记忆候选 |
 | `memory_*` | 可选 C-Memory 边界代理 |
+
+### 统一 Owner MCP · 分阶段迁移（PR A，代码候选）
+
+最终使用体验：**一个 Aqi Drawer MCP App，一个外部 Owner 地址，一个 PocketStore/Media**；该 App 的同一个连接可继续使用原有读取 / Memory / Vault 工具，并按边界调用创建收藏、未来文件 Intake、受限整理工具。不要为附件再创建第三套数据库或 ChatGPT 连接。
+
+本 PR 实现的是安全切换底座，不是整套最终功能：
+
+- 默认所有新开关均关闭，旧 MCP 原样正常工作；原有私密 MCP 地址**永远不会因为打开新开关而意外获得 Capture**。
+- `C_POCKET_MCP_CAPTURE_PATH` 沿用先前已经由 Owner 生成的独立高熵私密地址（未来可另取语义更清晰的配置名，但**当前不要迁移或展示 secret**）。
+- 待全部 QA 和用户**独立批准**后，设置 `C_POCKET_ENABLE_MCP_CAPTURE=true` 和 `C_POCKET_ENABLE_UNIFIED_OWNER=true`，在那个独立私密地址上挂载 **Unified Owner MCP**，包含旧 MCP 工具（含 Memory / Vault）与新建文字/链接 Capture。在切换 ChatGPT 的**同一个 Aqi Drawer App** 连接前，旧地址仍正常可用。
+- 迁移后、确认新 App 能读写并稳定运行，再另行批准 `C_POCKET_ENABLE_LEGACY_MCP=false`，旧 MCP 路由随之关闭；如果新端出现问题，先关闭 Owner 入口并恢复旧连接。关闭旧路由前必须检查没有其他仍使用旧 MCP 地址的客户端。
+- Owner MCP **暂不暴露**旧的、可以自由新增新 Tag / Collection 的 `pocket_edit_metadata`。整理权限交给 PR B 的服务端受限接口；该工具将允许按照 EE 已授权的边界调整、添加或移除**已登记** Tag，并移动到**已登记** Collection，变更后附可核对回执；遇到新 Tag / Collection 只提出建议，经 EE 明确同意后才登记。
+- 新建 Capture 本身也强制仅复用**现有** Tag 和 Collection，验证放在 Store 的原子 mutation 内；未知名称拒绝，不新增分类。该限制只作用于 Unified Owner MCP，不更改已有老客户端 / iPhone 上原来的保存方式。
+- 文件附件传入还**未**通过本 PR 开放；需 PR C 验证 ChatGPT MCP fileParams 与原始字节交接，完成格式/大小/来源/存储/重试安全校验才上线。
+- 单 URL 是接入体验，不等于 OAuth scope。URL 持有者具备 Owner 工具能力，须严格保密并可以轮换。ChatGPT 的写操作权限确认仍受产品设置制约。
+
+此 PR **只限 GitHub Draft + 测试**。禁止自动合并、发布、开启开关、更新 ChatGPT connector 或对东京数据做任何写入；后续分别请求 EE 授权。
 
 ### GPT → Drawer 收进柜子（开发候选，尚未上线）
 
