@@ -342,6 +342,7 @@ export function ArchiveDrawer({
       className={styles.view}
       aria-labelledby="archive-title"
       data-archive-focus-fallback
+      data-archive-physical-boundary
       tabIndex={-1}
     >
       <div

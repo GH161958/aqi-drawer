@@ -227,6 +227,9 @@ export function TrashDrawer({
     <section
       className={styles.view}
       aria-labelledby="trash-title"
+      data-archive-physical-boundary
+      data-archive-focus-fallback
+      tabIndex={-1}
     >
       <div
         className={styles.toolbar}

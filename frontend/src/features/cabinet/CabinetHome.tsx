@@ -126,6 +126,8 @@ export function CabinetHome({
     <section
       className={styles.home}
       aria-labelledby="cabinet-title"
+      data-cabinet-focus-fallback
+      tabIndex={-1}
     >
       <h2
         id="cabinet-title"
@@ -145,6 +147,7 @@ export function CabinetHome({
         <TypeCabinet />
         <button
           className={styles.plaque}
+          data-cabinet-slot="all"
           type="button"
           aria-pressed={
             activeSlot === 'all'
@@ -179,6 +182,7 @@ export function CabinetHome({
                 <button
                   key={status}
                   className={styles.drawer}
+                  data-cabinet-slot={status}
                   data-has-contents={
                     hasContents
                       ? 'true'
@@ -261,6 +265,7 @@ export function CabinetHome({
 
         <button
           className={styles.discardTray}
+          data-cabinet-slot="trash"
           type="button"
           aria-pressed={
             activeSlot === 'trash'
