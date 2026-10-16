@@ -16,8 +16,11 @@ const CAPTURE_LANE_ALLOWED_TOOLS = new Set([
 
 export function createPocketMcpServer({ store, cmemory, contentReader, vault, enableMcpCapture = false, lane = 'standard' }) {
   if (!['standard', 'capture', 'owner'].includes(lane)) throw new Error('Unknown MCP tool lane.')
-  if (lane !== 'standard' && enableMcpCapture !== true) {
-    throw new Error('Capture and owner lanes cannot register tools unless Capture is enabled.')
+  if (lane === 'capture' && enableMcpCapture !== true) {
+    throw new Error('Capture lane cannot register tools unless Capture is enabled.')
+  }
+  if (lane === 'owner' && enableMcpCapture !== true) {
+    throw new Error('Owner lane cannot register tools unless Capture is enabled.')
   }
   if (lane === 'standard' && enableMcpCapture === true) {
     throw new Error('Standard MCP lane cannot enable Capture.')
