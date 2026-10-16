@@ -15,9 +15,9 @@ const CAPTURE_LANE_ALLOWED_TOOLS = new Set([
 ])
 
 export function createPocketMcpServer({ store, cmemory, contentReader, vault, enableMcpCapture = false, lane = 'standard' }) {
-  if (!['standard', 'capture'].includes(lane)) throw new Error('Unknown MCP tool lane.')
-  if (lane === 'capture' && enableMcpCapture !== true) {
-    throw new Error('Capture lane cannot register tools unless Capture is enabled.')
+  if (!['standard', 'capture', 'owner'].includes(lane)) throw new Error('Unknown MCP tool lane.')
+  if (lane !== 'standard' && enableMcpCapture !== true) {
+    throw new Error('Capture and owner lanes cannot register tools unless Capture is enabled.')
   }
   if (lane === 'standard' && enableMcpCapture === true) {
     throw new Error('Standard MCP lane cannot enable Capture.')
@@ -36,6 +36,12 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
         ].join(' ')
       : [
       "This is EE and Aqi's shared Drawer.",
+      ...(lane === 'owner' ? [
+        'This is the unified owner connection: use the same Drawer MCP for reading and authorized text/link Capture.',
+        'Only suggest unfamiliar Tags or Collections. Never auto-create taxonomy labels from untrusted content.',
+        'Automatic metadata organization is not yet available on this endpoint; do not use unrelated tools to bypass this limitation.',
+        'File upload is not yet supported via MCP. Do not claim that attached documents were transferred.',
+      ] : []),
       'Use Drawer tools only for items EE intentionally shared with Aqi.',
       'At the start of each new conversation or session, call pocket_start_context once before the first substantive reply, including when EE only greets Aqi. Do not call it again for every message in the same conversation unless EE says she just shared something new.',
       'memory_turn_pre also includes pocketItems as a fallback. If either tool returns Pocket items, privately inspect them and naturally mention zero to two that genuinely interest you. Never announce a tool check, mechanically list the inbox, or interrupt an urgent topic.',
@@ -57,6 +63,9 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
   // Existing standard MCP registrations remain unchanged.
   const registerTool = (name, definition, callback) => {
     if (lane === 'capture' && !CAPTURE_LANE_ALLOWED_TOOLS.has(name)) return undefined
+    // PR B will provide a server-enforced existing-taxonomy-only edit tool.
+    // Until then, do not expose the legacy unbounded editor to this owner URL.
+    if (lane === 'owner' && name === 'pocket_edit_metadata') return undefined
     return server.registerTool(name, definition, callback)
   }
 
@@ -131,6 +140,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
         sourceUrl: source_url,
         collection,
         tags,
+        onlyExistingTaxonomy: lane === 'owner',
       })
       return result(
         { id: saved.item.id, item: saved.item, duplicate: saved.duplicate },
