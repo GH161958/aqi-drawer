@@ -149,6 +149,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 **部署安全 gate：** `pocket_capture_create` 默认拒绝写入。原有 `C_POCKET_MCP_PATH` 继续作为旧 MCP 入口，即使打开 `C_POCKET_ENABLE_MCP_CAPTURE=true`，**原入口也不能创建新物件**。要启用写入，必须另设 `C_POCKET_MCP_CAPTURE_PATH=/mcp/<43+ random URL-safe characters>`，且与旧 MCP 路径不同；只在开关启用时才挂载该写入端点。每个 MCP Session 只绑定到其初始化端点，不允许把原入口的 Session ID 带去写入端点。生成示例：本地执行 `node -e "console.log('/mcp/'+require('crypto').randomBytes(32).toString('base64url'))"`；**生成值绝不能发到聊天、GitHub、Vault、录屏或可公开日志**。
 
+新写入口在服务端采用 **注册时工具白名单**，只开放 `pocket_capture_create`、`pocket_search`、`pocket_taxonomy`、`pocket_list`、`pocket_get` 五项；不注册 `vault_update`、`pocket_edit_metadata`、`pocket_reply`、`pocket_review`、Memory 写操作或其他工具。原有旧 MCP 入口的工具集合与行为不变。
+
 新的写入口使用**另一条秘密 capability URL**，并不是用户级 OAuth/细粒度 scopes。它减小无意开启写入的影响范围，但泄露 URL 的人仍可能获得写权限，不能当作完整安全认证。启用前仍必须审查生产认证与独立离站备份/恢复演练、明确用哪个 ChatGPT App 连接这个地址，以及准备回退方法。必须再由 EE 单独批准 GitHub 合并、Tokyo 发布和启用该环境配置。不要在当前 PR 对正式东京环境开启、暴露或试投。现有 `pocket_edit_metadata` / `pocket_reply` / `pocket_review` 等旧工具的权限未改变，本次仅隔离 **新增 Capture 写入**。
 
 **边界：** 不支持通过 MCP 把 ChatGPT 的 PDF、图片、音频直接存进 Drawer；文件进入 Drawer 必须等独立的 Attachment Intake PR 经过文件验证/持久化验收。保存 Drawer 物件不等于写进 Memory。严禁将网页/文档里的不可信指令当作保存授权，用户没有明确要求时不自动大量收集网页或保存对话。

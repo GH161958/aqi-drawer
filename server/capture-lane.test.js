@@ -7,8 +7,44 @@ import test from 'node:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { createBridgeApp, startBridge } from './index.js'
+import { createPocketMcpServer } from './mcp-server.js'
 
 const privatePath = () => '/mcp/' + randomBytes(32).toString('base64url')
+
+const WRITER_TOOLS = [
+  'pocket_capture_create',
+  'pocket_get',
+  'pocket_list',
+  'pocket_search',
+  'pocket_taxonomy',
+]
+
+async function assertToolUnavailable(client, name, args) {
+  let rejected
+  try {
+    const response = await client.callTool({ name, arguments: args })
+    rejected = response.isError === true
+  } catch {
+    rejected = true
+  }
+  assert.equal(rejected, true, `Tool ${name} must not be executable on the Capture lane.`)
+}
+
+test('MCP tool registry rejects contradictory lane privileges', () => {
+  assert.throws(
+    () => createPocketMcpServer({ lane: 'unrecognized' }),
+    /Unknown MCP tool lane/,
+  )
+  assert.throws(
+    () => createPocketMcpServer({ lane: 'capture', enableMcpCapture: false }),
+    /Capture lane cannot register tools/,
+  )
+  assert.throws(
+    () => createPocketMcpServer({ lane: 'standard', enableMcpCapture: true }),
+    /Standard MCP lane cannot enable Capture/,
+  )
+})
+
 
 test('MCP write lane fails closed without a distinct long capability path', async (t) => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-lane-config-'))
@@ -51,6 +87,26 @@ test('existing MCP path cannot capture, distinct writer path can, sessions canno
   await reader.connect(readerTransport)
   await writer.connect(writerTransport)
 
+  // The write-capability URL exposes only the five approved tools, no other
+  // Store mutation, Memory or canonical Vault tools.
+  const readerNames = (await reader.listTools()).tools.map((entry) => entry.name)
+  const writerNames = (await writer.listTools()).tools.map((entry) => entry.name)
+  assert.deepEqual([...writerNames].sort(), WRITER_TOOLS)
+  for (const legacyTool of [
+    'pocket_capture_create', 'pocket_edit_metadata', 'pocket_reply',
+    'pocket_review', 'memory_confirm_surface', 'memory_turn_post',
+    'vault_update', 'pocket_start_context',
+  ]) {
+    assert.ok(readerNames.includes(legacyTool), `Legacy tool missing: ${legacyTool}`)
+  }
+  for (const excludedTool of [
+    'pocket_edit_metadata', 'pocket_reply', 'pocket_review',
+    'memory_confirm_surface', 'memory_turn_post', 'vault_update',
+    'pocket_turn_open', 'pocket_read_content',
+  ]) {
+    assert.equal(writerNames.includes(excludedTool), false)
+  }
+
   const config = await fetch(base + '/local/config').then((res) => res.json())
   assert.equal(config.mcpPath, '/mcp')
   assert.equal(JSON.stringify(config).includes(captureMcpPath), false)
@@ -76,6 +132,33 @@ test('existing MCP path cannot capture, distinct writer path can, sessions canno
   assert.equal(repeat.structuredContent.duplicate, true)
   assert.equal(repeat.structuredContent.id, first.structuredContent.id)
   assert.equal((await bridge.store.list()).length, 1)
+
+  // All of these arguments would cause a real mutation on the standard lane.
+  // Calling them on the scoped writer must fail without changing the fixture.
+  const snapshot = await bridge.store.get(first.structuredContent.id)
+  await assertToolUnavailable(writer, 'pocket_edit_metadata', {
+    id: first.structuredContent.id, tags_add: ['unapproved-tag'],
+  })
+  await assertToolUnavailable(writer, 'pocket_reply', {
+    id: first.structuredContent.id, text: 'Unapproved reply',
+  })
+  await assertToolUnavailable(writer, 'pocket_review', {
+    id: first.structuredContent.id, action: 'archived',
+  })
+  await assertToolUnavailable(writer, 'vault_update', {
+    path: '00_HOME/Current.md', content: '# unapproved',
+    expectedSha: '1234567', approved: true,
+  })
+  assert.deepEqual(await bridge.store.get(first.structuredContent.id), snapshot)
+
+  // Read-only lookup and taxonomy remain available on the writer lane.
+  const writerSearch = await writer.callTool({ name: 'pocket_search', arguments: { query: 'fixture' } })
+  assert.equal(writerSearch.structuredContent.matches[0].id, first.structuredContent.id)
+  const taxonomy = await writer.callTool({ name: 'pocket_taxonomy', arguments: {} })
+  assert.ok(taxonomy.structuredContent.tags.includes('capture-test'))
+  assert.ok(taxonomy.structuredContent.collections.includes('Examples'))
+  const writerGet = await writer.callTool({ name: 'pocket_get', arguments: { id: first.structuredContent.id } })
+  assert.equal(writerGet.structuredContent.item.id, first.structuredContent.id)
 
   const matched = await reader.callTool({ name: 'pocket_search', arguments: { query: 'fixture' } })
   assert.equal(matched.structuredContent.matches[0].id, first.structuredContent.id)

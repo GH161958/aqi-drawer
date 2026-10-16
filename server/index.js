@@ -854,6 +854,7 @@ export async function createBridgeApp(config = {}) {
           const server = createPocketMcpServer({
             store, cmemory, contentReader, vault,
             enableMcpCapture: lane === 'capture' && settings.enableMcpCapture,
+            lane,
           })
           await server.connect(transport)
         }
