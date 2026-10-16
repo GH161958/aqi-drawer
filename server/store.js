@@ -1456,11 +1456,12 @@ export class PocketStore {
   // One existing object per call; all vocabulary checks and mutation happen
   // inside one serialized Store transaction (no time-of-check/time-of-use gap).
   async organizeExistingMetadata(id, {
-    requestId, tagsAdd = [], tagsRemove = [], collection, clearCollection = false,
+    requestId, expectedUpdatedAt, tagsAdd = [], tagsRemove = [], collection, clearCollection = false,
     reason = '',
   } = {}) {
     const key = clean(requestId)
     if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(key)) throw httpError(422, 'A stable organization requestId is required.')
+    if (!validIso(expectedUpdatedAt)) throw httpError(422, 'A fresh expectedUpdatedAt from pocket_get is required.')
     if (!Array.isArray(tagsAdd) || !Array.isArray(tagsRemove)
       || tagsAdd.length > 8 || tagsRemove.length > 8
       || tagsAdd.length + tagsRemove.length > 8) {
@@ -1487,6 +1488,7 @@ export class PocketStore {
       setCollection: collection !== undefined,
       clearCollection: clearCollection === true,
       reason: clean(reason),
+      expectedUpdatedAt,
     }
     const requestHash = createHash('sha256').update(JSON.stringify(canonicalInput)).digest('hex')
     return this.#mutate((state) => {
@@ -1508,6 +1510,9 @@ export class PocketStore {
         return organizationReceipt(item, previous, { duplicate: true })
       }
 
+      if (item.updatedAt !== expectedUpdatedAt) {
+        throw httpError(409, 'Item changed since pocket_get. Re-read it before organizing.')
+      }
       const tagsBefore = normalizeTags(item.tags)
       const collectionFrom = normalizeCollection(item.collection)
       const availableTags = new Map(
