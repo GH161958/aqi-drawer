@@ -45,6 +45,7 @@ export async function createBridgeApp(config = {}) {
     serverHost: config.host ?? (cleanEnvironmentValue(process.env.HOST) || '127.0.0.1'),
     mcpPath: normalizeMcpPath(config.mcpPath ?? (cleanEnvironmentValue(process.env.C_POCKET_MCP_PATH) || '/mcp')),
     temporaryPublicMcp: config.temporaryPublicMcp ?? process.argv.includes('--temporary-public-mcp'),
+    enableMcpCapture: config.enableMcpCapture ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_CAPTURE) === 'true'),
     dropSecret: config.dropSecret ?? (cleanEnvironmentValue(process.env.C_POCKET_DROP_SECRET) || `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`),
   }
   const store = new PocketStore(settings.dataDir)
@@ -821,7 +822,7 @@ export async function createBridgeApp(config = {}) {
         transport.onclose = () => {
           if (transport.sessionId) transports.delete(transport.sessionId)
         }
-        const server = createPocketMcpServer({ store, cmemory, contentReader, vault })
+        const server = createPocketMcpServer({ store, cmemory, contentReader, vault, enableMcpCapture: settings.enableMcpCapture })
         await server.connect(transport)
       }
       await transport.handleRequest(req, res, req.body)
