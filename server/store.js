@@ -87,6 +87,113 @@ export class PocketStore {
       .map(publicItem)
   }
 
+  async search({ query = '', tag = '', collection = '', status, limit = 20 } = {}) {
+    const words = clean(query).toLocaleLowerCase().split(/\s+/u).filter(Boolean)
+    const requiredTag = normalizeTags([tag])[0] || ''
+    const requiredCollection = normalizeCollection(collection)
+    if (!words.length && !requiredTag && !requiredCollection) {
+      throw httpError(422, 'Search requires a query, tag, or collection.')
+    }
+    const state = await this.#read()
+    return state.items
+      .filter((item) => !item.deletedAt && (!status || item.status === status))
+      .filter((item) => !requiredTag || normalizeTags(item.tags).some((value) => value.toLocaleLowerCase() === requiredTag.toLocaleLowerCase()))
+      .filter((item) => !requiredCollection || clean(item.collection).toLocaleLowerCase() === requiredCollection.toLocaleLowerCase())
+      .map((item) => {
+        const fields = {
+          title: clean(item.title),
+          tags: normalizeTags(item.tags).join(' '),
+          collection: clean(item.collection),
+          text: clean(item.text),
+          note: clean(item.note),
+          sourceUrl: clean(item.sourceUrl),
+          sourceApp: clean(item.sourceApp),
+          cachedContent: clean(item.contentSnapshot?.text).slice(0, 20000),
+        }
+        const lowered = Object.fromEntries(
+          Object.entries(fields).map(([key, value]) => [key, value.toLocaleLowerCase()]),
+        )
+        if (words.some((word) => !Object.values(lowered).some((value) => value.includes(word)))) return null
+        const matchingFields = words.length
+          ? Object.keys(lowered).filter((key) => words.some((word) => lowered[key].includes(word)))
+          : []
+        const weights = { title: 12, tags: 10, collection: 9, text: 5, note: 4, sourceUrl: 3, sourceApp: 2, cachedContent: 2 }
+        const score = matchingFields.reduce((sum, key) => sum + weights[key], 1)
+        const excerptSource = [fields.text, fields.note, fields.cachedContent].find((value) => (
+          words.some((word) => value.toLocaleLowerCase().includes(word))
+        )) || fields.text || fields.note || fields.cachedContent
+        const excerpt = excerptSource.replace(/\s+/gu, ' ').slice(0, 240)
+        return {
+          id: item.id,
+          title: item.title,
+          status: item.status,
+          sourceUrl: item.sourceUrl,
+          sourceApp: item.sourceApp,
+          collection: item.collection || null,
+          tags: normalizeTags(item.tags),
+          updatedAt: item.updatedAt,
+          attachmentCount: item.attachments?.length || 0,
+          excerpt,
+          matchedFields: matchingFields,
+          score,
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score || b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, Math.max(1, Math.min(Number(limit) || 20, 50)))
+  }
+
+  async captureFromMcp({ requestId, title = '', text = '', sourceUrl = '', collection = '', tags = [] } = {}) {
+    const key = clean(requestId)
+    if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(key)) {
+      throw httpError(422, 'A stable requestId (8–120 safe characters) is required.')
+    }
+    const url = clean(sourceUrl)
+    if (url) {
+      let parsed
+      try { parsed = new URL(url) } catch { throw httpError(422, 'Invalid source URL.') }
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+        throw httpError(422, 'Only HTTP(S) source URLs without credentials are allowed.')
+      }
+    }
+    if (!clean(text) && !url) throw httpError(422, 'Text or source URL is required.')
+    const cleanTags = normalizeTags(tags)
+    const captureFields = [clean(title), clean(text), url, normalizeCollection(collection), [...cleanTags].sort()]
+    const requestHash = createHash('sha256').update(JSON.stringify(captureFields)).digest('hex')
+    return this.#mutate((state) => {
+      const existing = state.items.find((item) => (
+        item.sourceIdentity?.provider === 'aqi-mcp-capture'
+        && item.sourceIdentity?.externalId === key
+      ))
+      if (existing) {
+        if (existing.sourceData?.captureRequestHash !== requestHash) {
+          throw httpError(409, 'Capture requestId already used for different content.')
+        }
+        if (existing.deletedAt) throw httpError(409, 'Capture requestId points to a trashed item.')
+        return { item: publicItem(existing), duplicate: true }
+      }
+      const now = new Date().toISOString()
+      const item = normalizeItem({
+        title: clean(title),
+        text: clean(text),
+        sourceUrl: url,
+        sourceApp: 'ChatGPT / Aqi',
+        collection: normalizeCollection(collection),
+        tags: cleanTags,
+        status: 'inbox',
+        sourceIdentity: { provider: 'aqi-mcp-capture', externalId: key },
+        sourceData: { provider: 'chatgpt', captureVersion: 1, captureRequestHash: requestHash },
+      }, now)
+      appendActivity(item, 'received', 'Aqi', { count: 1 }, now)
+      state.items.push(item)
+      if (item.collection) {
+        state.collections = [...new Set([...(state.collections || []), item.collection])].sort((a, b) => a.localeCompare(b))
+      }
+      state.tags = [...new Set([...(state.tags || []), ...item.tags])].sort((a, b) => a.localeCompare(b))
+      return { item: publicItem(item), duplicate: false }
+    })
+  }
+
   async get(id) {
     const state = await this.#read()
     const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)

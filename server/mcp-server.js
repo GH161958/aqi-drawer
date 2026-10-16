@@ -4,7 +4,7 @@ import { VAULT_ALLOWED_PATHS } from './vault-client.js'
 
 const statuses = ['inbox', 'tonight', 'discussed', 'deferred', 'memory_candidate', 'archived']
 
-export function createPocketMcpServer({ store, cmemory, contentReader, vault }) {
+export function createPocketMcpServer({ store, cmemory, contentReader, vault, enableMcpCapture = false }) {
   const server = new McpServer({
     name: 'aqi-drawer',
     version: '2.5.0',
@@ -39,6 +39,74 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault }) 
   }, async ({ status, limit }) => {
     const items = await store.list({ status, limit })
     return result({ items }, `${items.length} pocket item(s).`)
+  })
+
+  server.registerTool('pocket_search', {
+    title: 'Search saved Drawer objects',
+    description: 'Read-only keyword search across saved titles, text, EE notes, metadata and bounded cached source text. Optional Tag, Collection and status filters; returns item IDs and short excerpts. Trash is excluded.',
+    inputSchema: {
+      query: z.string().max(160).default(''),
+      tag: z.string().max(50).default(''),
+      collection: z.string().max(80).default(''),
+      status: z.enum(statuses).optional(),
+      limit: z.number().int().min(1).max(50).default(20),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
+  }, async ({ query, tag, collection, status, limit }) => {
+    try {
+      const matches = await store.search({ query, tag, collection, status, limit })
+      return result({ matches }, String(matches.length) + ' matching Drawer item(s). Use pocket_get for a full item.')
+    } catch (error) {
+      return errorResult(error.message)
+    }
+  })
+
+  server.registerTool('pocket_taxonomy', {
+    title: 'Read existing Drawer tags and collections',
+    description: 'Read-only list of existing shared Tag and Collection vocabulary. Reuse established labels when organizing items; never rewrite EE-authored tags without permission.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
+  }, async () => {
+    try {
+      const [tags, collections] = await Promise.all([store.listTags(), store.listCollections()])
+      return result({ tags, collections }, String(tags.length) + ' tags and ' + String(collections.length) + ' collections.')
+    } catch (error) {
+      return errorResult(error.message)
+    }
+  })
+
+  server.registerTool('pocket_capture_create', {
+    title: 'Keep a text or link in Aqi Drawer',
+    description: 'Create one durable text/HTTP(S)-link Drawer object only when EE explicitly asks to keep it. Not a transcript logger, file uploader or Memory write. Requires stable request_id for idempotency; disabled unless owner explicitly enables MCP capture in service configuration.',
+    inputSchema: {
+      request_id: z.string().regex(/^[A-Za-z0-9_.:-]{8,120}$/u),
+      title: z.string().max(160).default(''),
+      text: z.string().max(20000).default(''),
+      source_url: z.string().max(2048).default(''),
+      collection: z.string().max(80).default(''),
+      tags: z.array(z.string().min(1).max(50)).max(12).default([]),
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false, idempotentHint: true },
+  }, async ({ request_id, title, text, source_url, collection, tags }) => {
+    if (!enableMcpCapture) {
+      return errorResult('MCP capture is disabled. EE must enable C_POCKET_ENABLE_MCP_CAPTURE=true after scoped-access/security review.')
+    }
+    try {
+      const saved = await store.captureFromMcp({
+        requestId: request_id,
+        title,
+        text,
+        sourceUrl: source_url,
+        collection,
+        tags,
+      })
+      return result(
+        { id: saved.item.id, item: saved.item, duplicate: saved.duplicate },
+        saved.duplicate ? 'Item already saved with this request ID; no duplicate created.' : 'Text/link item durably saved in Drawer.',
+      )
+    } catch (error) {
+      return errorResult(error.message)
+    }
   })
 
   server.registerTool('pocket_start_context', {
