@@ -1490,11 +1490,17 @@ export class PocketStore {
     }
     const requestHash = createHash('sha256').update(JSON.stringify(canonicalInput)).digest('hex')
     return this.#mutate((state) => {
+      const usedOnOtherItem = state.items.some((entry) => entry.id !== id
+        && entry.activity.some((activity) => activity.detail?.organizeRequestId === key))
+      if (usedOnOtherItem) throw httpError(409, 'Organization requestId already used for a different item.')
       const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
       if (!item) throw httpError(404, 'Pocket item not found.')
       const previous = item.activity.find((entry) =>
         entry.type === 'metadata_changed' && entry.detail?.organizeRequestId === key
         && !entry.detail?.organizeUndoOf)
+      if (item.activity.some((activity) => activity.detail?.organizeRequestId === key && activity !== previous)) {
+        throw httpError(409, 'Organization requestId already used by another operation.')
+      }
       if (previous) {
         if (previous.detail.organizeRequestHash !== requestHash) {
           throw httpError(409, 'Organization requestId already used for different changes.')
@@ -1560,6 +1566,10 @@ export class PocketStore {
     return this.#mutate((state) => {
       const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
       if (!item) throw httpError(404, 'Pocket item not found.')
+      const conflictingKey = state.items.some((entry) => entry.activity.some((activity) =>
+        activity.detail?.organizeRequestId === key
+        && (entry.id !== id || activity.detail?.organizeUndoOf !== operationId)))
+      if (conflictingKey) throw httpError(409, 'Undo requestId already used by another operation.')
       const index = item.activity.findIndex((entry) => entry.id === operationId
         && entry.type === 'metadata_changed' && entry.actor === 'Aqi'
         && entry.detail?.organizeRequestId && !entry.detail?.organizeUndoOf)
