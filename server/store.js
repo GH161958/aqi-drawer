@@ -1452,6 +1452,170 @@ export class PocketStore {
     })
   }
 
+  // Autonomous organization is deliberately narrower than editMetadata.
+  // One existing object per call; all vocabulary checks and mutation happen
+  // inside one serialized Store transaction (no time-of-check/time-of-use gap).
+  async organizeExistingMetadata(id, {
+    requestId, tagsAdd = [], tagsRemove = [], collection, clearCollection = false,
+    reason = '',
+  } = {}) {
+    const key = clean(requestId)
+    if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(key)) throw httpError(422, 'A stable organization requestId is required.')
+    if (!Array.isArray(tagsAdd) || !Array.isArray(tagsRemove)
+      || tagsAdd.length > 8 || tagsRemove.length > 8
+      || tagsAdd.length + tagsRemove.length > 8) {
+      throw httpError(422, 'At most eight tag changes per item are permitted.')
+    }
+    if (tagsAdd.some((value) => typeof value !== 'string' || !value.trim() || value.length > 50)
+      || tagsRemove.some((value) => typeof value !== 'string' || !value.trim() || value.length > 50)) {
+      throw httpError(422, 'Tags must have nonempty names of at most 50 characters.')
+    }
+    const add = normalizeTags(tagsAdd)
+    const remove = normalizeTags(tagsRemove)
+    if (add.some((tag) => remove.some((old) => old.toLocaleLowerCase() === tag.toLocaleLowerCase()))) {
+      throw httpError(422, 'Cannot add and remove the same Tag in one change.')
+    }
+    if (clearCollection && collection !== undefined) throw httpError(422, 'Cannot clear and set a Collection together.')
+    if (collection !== undefined && (typeof collection !== 'string' || !collection.trim() || collection.length > 80)) {
+      throw httpError(422, 'Collection must be a nonempty existing name.')
+    }
+    if (typeof reason !== 'string' || reason.length > 240) throw httpError(422, 'Reason is limited to 240 characters.')
+    const canonicalInput = {
+      tagsAdd: [...add].map((tag) => tag.toLocaleLowerCase()).sort(),
+      tagsRemove: [...remove].map((tag) => tag.toLocaleLowerCase()).sort(),
+      collection: collection === undefined ? null : normalizeCollection(collection).toLocaleLowerCase(),
+      setCollection: collection !== undefined,
+      clearCollection: clearCollection === true,
+      reason: clean(reason),
+    }
+    const requestHash = createHash('sha256').update(JSON.stringify(canonicalInput)).digest('hex')
+    return this.#mutate((state) => {
+      const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
+      if (!item) throw httpError(404, 'Pocket item not found.')
+      const previous = item.activity.find((entry) =>
+        entry.type === 'metadata_changed' && entry.detail?.organizeRequestId === key
+        && !entry.detail?.organizeUndoOf)
+      if (previous) {
+        if (previous.detail.organizeRequestHash !== requestHash) {
+          throw httpError(409, 'Organization requestId already used for different changes.')
+        }
+        return organizationReceipt(item, previous, { duplicate: true })
+      }
+
+      const tagsBefore = normalizeTags(item.tags)
+      const collectionFrom = normalizeCollection(item.collection)
+      const availableTags = new Map(
+        [...(state.tags || []), ...state.items.filter((entry) => !entry.deletedAt)
+          .flatMap((entry) => normalizeTags(entry.tags))]
+          .map((tag) => [tag.toLocaleLowerCase(), tag]),
+      )
+      const availableCollections = new Map(
+        [...(state.collections || []), ...state.items.filter((entry) => !entry.deletedAt)
+          .map((entry) => normalizeCollection(entry.collection)).filter(Boolean)]
+          .map((name) => [name.toLocaleLowerCase(), name]),
+      )
+      const lookupTag = (tag) => {
+        const found = availableTags.get(tag.toLocaleLowerCase())
+        if (!found) throw httpError(422, 'Unknown Tag. Suggest a new label to EE first.')
+        return found
+      }
+      const resolvedAdd = add.map(lookupTag)
+      const resolvedRemove = remove.map(lookupTag)
+      const removalSet = new Set(resolvedRemove.map((tag) => tag.toLocaleLowerCase()))
+      const tagsTo = normalizeTags([
+        ...tagsBefore.filter((tag) => !removalSet.has(tag.toLocaleLowerCase())),
+        ...resolvedAdd,
+      ])
+      let collectionTo = collectionFrom
+      if (clearCollection) collectionTo = null
+      else if (collection !== undefined) {
+        collectionTo = availableCollections.get(collection.toLocaleLowerCase())
+        if (!collectionTo) throw httpError(422, 'Unknown Collection. Suggest a new Collection to EE first.')
+      }
+      const previousSet = new Set(tagsBefore.map((tag) => tag.toLocaleLowerCase()))
+      const nextSet = new Set(tagsTo.map((tag) => tag.toLocaleLowerCase()))
+      const tagsAdded = tagsTo.filter((tag) => !previousSet.has(tag.toLocaleLowerCase()))
+      const tagsRemoved = tagsBefore.filter((tag) => !nextSet.has(tag.toLocaleLowerCase()))
+      const changed = Boolean(tagsAdded.length || tagsRemoved.length || collectionFrom !== collectionTo)
+      const now = new Date().toISOString()
+      if (changed) {
+        item.tags = tagsTo
+        item.collection = collectionTo
+        item.updatedAt = now
+        item.syncState = 'synced'
+      }
+      appendActivity(item, 'metadata_changed', 'Aqi', {
+        collectionFrom, collectionTo, tagsAdded, tagsRemoved,
+        tagsBefore, tagsAfter: tagsTo, organizeRequestId: key,
+        organizeRequestHash: requestHash, organizeReason: clean(reason),
+      }, now)
+      return organizationReceipt(item, item.activity.at(-1), { changed })
+    })
+  }
+
+  async undoExistingOrganization(id, { operationId, requestId } = {}) {
+    const key = clean(requestId)
+    if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(key)) throw httpError(422, 'A stable undo requestId is required.')
+    if (!/^[0-9a-f-]{36}$/iu.test(String(operationId || ''))) throw httpError(422, 'A valid operationId is required.')
+    return this.#mutate((state) => {
+      const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
+      if (!item) throw httpError(404, 'Pocket item not found.')
+      const index = item.activity.findIndex((entry) => entry.id === operationId
+        && entry.type === 'metadata_changed' && entry.actor === 'Aqi'
+        && entry.detail?.organizeRequestId && !entry.detail?.organizeUndoOf)
+      if (index < 0) throw httpError(404, 'Aqi organization receipt not found.')
+      const original = item.activity[index]
+      const existingUndo = item.activity.find((entry) => entry.detail?.organizeUndoOf === operationId)
+      if (existingUndo) {
+        if (existingUndo.detail?.organizeRequestId !== key) throw httpError(409, 'This organization was already undone.')
+        return organizationReceipt(item, existingUndo, { duplicate: true, undone: true })
+      }
+      if (item.activity.slice(index + 1).some((entry) => entry.type === 'metadata_changed')) {
+        throw httpError(409, 'Newer metadata changes exist. Review the item before undoing.')
+      }
+      const from = original.detail
+      if (JSON.stringify(normalizeTags(item.tags)) !== JSON.stringify(from.tagsAfter)
+        || normalizeCollection(item.collection) !== from.collectionTo) {
+        throw httpError(409, 'Item metadata has changed. Undo was not applied.')
+      }
+      const knownTags = new Set([
+        ...(state.tags || []),
+        ...state.items.filter((entry) => !entry.deletedAt)
+          .flatMap((entry) => normalizeTags(entry.tags)),
+      ].map((tag) => tag.toLocaleLowerCase()))
+      const knownCollections = new Set([
+        ...(state.collections || []),
+        ...state.items.filter((entry) => !entry.deletedAt)
+          .map((entry) => normalizeCollection(entry.collection)).filter(Boolean),
+      ].map((name) => name.toLocaleLowerCase()))
+      if (from.tagsBefore.some((tag) => !knownTags.has(tag.toLocaleLowerCase()))
+        || (from.collectionFrom && !knownCollections.has(from.collectionFrom.toLocaleLowerCase()))) {
+        throw httpError(409, 'Original taxonomy was removed. Undo requires EE review.')
+      }
+      const currentTags = normalizeTags(item.tags)
+      const currentCollection = normalizeCollection(item.collection)
+      const nextTags = normalizeTags(from.tagsBefore)
+      const nextCollection = normalizeCollection(from.collectionFrom)
+      const now = new Date().toISOString()
+      const changed = JSON.stringify(currentTags) !== JSON.stringify(nextTags)
+        || currentCollection !== nextCollection
+      if (changed) {
+        item.tags = nextTags
+        item.collection = nextCollection
+        item.updatedAt = now
+        item.syncState = 'synced'
+      }
+      appendActivity(item, 'metadata_changed', 'Aqi', {
+        collectionFrom: currentCollection, collectionTo: nextCollection,
+        tagsAdded: nextTags.filter((tag) => !currentTags.includes(tag)),
+        tagsRemoved: currentTags.filter((tag) => !nextTags.includes(tag)),
+        tagsBefore: currentTags, tagsAfter: nextTags,
+        organizeRequestId: key, organizeUndoOf: operationId,
+      }, now)
+      return organizationReceipt(item, item.activity.at(-1), { changed, undone: true })
+    })
+  }
+
   async recordContentRead(id, { mode = 'compact', actor = 'system', sourceRefreshed = false } = {}) {
     return this.#mutate((state) => {
       const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
@@ -1908,6 +2072,29 @@ function normalizeTags(value) {
   return result
 }
 
+
+function organizationReceipt(item, activity, { changed = false, duplicate = false, undone = false } = {}) {
+  const detail = activity.detail
+  return {
+    id: item.id,
+    operationId: activity.id,
+    requestId: detail.organizeRequestId,
+    changed: duplicate ? false : changed,
+    duplicate,
+    undone: undone || false,
+    collectionFrom: detail.collectionFrom,
+    collectionTo: detail.collectionTo,
+    tagsAdded: detail.tagsAdded,
+    tagsRemoved: detail.tagsRemoved,
+    before: { tags: detail.tagsBefore, collection: detail.collectionFrom },
+    after: { tags: detail.tagsAfter, collection: detail.collectionTo },
+    reason: detail.organizeReason || '',
+    at: activity.at,
+    // Idempotent retry never applies again; it returns the stored receipt.
+    undoHint: undone ? null : 'Use pocket_organize_undo with operation_id and a fresh request_id; undo fails closed after newer metadata changes.',
+  }
+}
+
 function normalizeActivity(value) {
   if (!Array.isArray(value)) return []
   return value.map((entry) => normalizeActivityEntry(entry)).filter(Boolean)
@@ -1947,6 +2134,14 @@ function normalizeActivityDetail(type, detail = {}) {
     collectionTo: normalizeCollection(detail.collectionTo),
     tagsAdded: normalizeTags(detail.tagsAdded),
     tagsRemoved: normalizeTags(detail.tagsRemoved),
+    ...(detail.organizeRequestId ? {
+      organizeRequestId: clean(detail.organizeRequestId).slice(0, 120),
+      ...(detail.organizeRequestHash ? { organizeRequestHash: clean(detail.organizeRequestHash).slice(0, 64) } : {}),
+      ...(detail.organizeReason ? { organizeReason: clean(detail.organizeReason).slice(0, 240) } : {}),
+      ...(detail.organizeUndoOf ? { organizeUndoOf: clean(detail.organizeUndoOf).slice(0, 36) } : {}),
+      tagsBefore: normalizeTags(detail.tagsBefore),
+      tagsAfter: normalizeTags(detail.tagsAfter),
+    } : {}),
   }
   if (type === 'attachment_removed') return {
     attachmentId: clean(detail.attachmentId).slice(0, 160),
