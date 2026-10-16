@@ -228,7 +228,8 @@ export async function createBridgeApp(config = {}) {
       error: settings.bridgeToken || settings.drawerSecret ? 'Unauthorized.' : 'Drawer access is not configured for non-loopback requests.',
     })
   })
-  app.use(settings.mcpPath, (req, res, next) => {
+  app.use((req, res, next) => {
+    if (req.path !== settings.mcpPath) return next()
     // A non-default path is a high-entropy capability URL for temporary developer-mode testing.
     if (settings.temporaryPublicMcp || settings.mcpPath !== '/mcp' || isAuthorized(req, settings.bridgeToken)) return next()
     res.status(settings.bridgeToken ? 401 : 503).json({
