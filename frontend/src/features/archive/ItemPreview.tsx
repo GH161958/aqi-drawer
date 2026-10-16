@@ -599,6 +599,7 @@ export function ItemPreview({
               className={
                 styles.articleMount
               }
+              data-visible-paper-anchor="true"
               aria-hidden="true"
             />
 
@@ -606,7 +607,6 @@ export function ItemPreview({
               className={
                 styles.articleClipping
               }
-              data-visible-paper-anchor="true"
             >
               <header
                 className={

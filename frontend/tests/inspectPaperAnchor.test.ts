@@ -60,3 +60,48 @@ test('anchors every paper type to its measured visible edge', () => {
     )
   })
 })
+
+test('anchors an Article tab to its backing sheet silhouette', () => {
+  const row = {
+    right: 454.83,
+    bottom: 802.49,
+  }
+  const frontClipping = {
+    right: 408.99,
+    bottom: 765.64,
+  }
+  const backingSheet = {
+    right: 414.45,
+    bottom: 778.09,
+  }
+
+  const offsets =
+    inspectPaperAnchorOffsets(
+      row,
+      backingSheet,
+    )
+
+  const tabRight =
+    row.right - offsets.right
+  const tabBottom =
+    row.bottom
+    - offsets.bottom
+    + INSPECT_PAPER_TAB_VISIBLE_TRANSLATE
+
+  assert.equal(
+    tabRight,
+    backingSheet.right
+    - INSPECT_PAPER_TAB_RIGHT_INSET,
+  )
+  assert.equal(
+    tabBottom,
+    backingSheet.bottom
+    + INSPECT_PAPER_TAB_EXPOSURE,
+  )
+  assert.ok(
+    tabBottom
+    - frontClipping.bottom
+    > INSPECT_PAPER_TAB_EXPOSURE,
+    'the backing sheet extends below the front clipping',
+  )
+})
