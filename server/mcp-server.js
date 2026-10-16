@@ -4,7 +4,24 @@ import { VAULT_ALLOWED_PATHS } from './vault-client.js'
 
 const statuses = ['inbox', 'tonight', 'discussed', 'deferred', 'memory_candidate', 'archived']
 
-export function createPocketMcpServer({ store, cmemory, contentReader, vault, enableMcpCapture = false }) {
+// The Capture URL is a separate minimum-privilege capability lane.
+// Deny registration of every tool not explicitly allowlisted here.
+const CAPTURE_LANE_ALLOWED_TOOLS = new Set([
+  'pocket_capture_create',
+  'pocket_search',
+  'pocket_taxonomy',
+  'pocket_list',
+  'pocket_get',
+])
+
+export function createPocketMcpServer({ store, cmemory, contentReader, vault, enableMcpCapture = false, lane = 'standard' }) {
+  if (!['standard', 'capture'].includes(lane)) throw new Error('Unknown MCP tool lane.')
+  if (lane === 'capture' && enableMcpCapture !== true) {
+    throw new Error('Capture lane cannot register tools unless Capture is enabled.')
+  }
+  if (lane === 'standard' && enableMcpCapture === true) {
+    throw new Error('Standard MCP lane cannot enable Capture.')
+  }
   const server = new McpServer({
     name: 'aqi-drawer',
     version: '2.5.0',
@@ -28,7 +45,14 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     ].join(' '),
   })
 
-  server.registerTool('pocket_list', {
+  // Register only the five explicitly approved tools on the writer lane.
+  // Existing standard MCP registrations remain unchanged.
+  const registerTool = (name, definition, callback) => {
+    if (lane === 'capture' && !CAPTURE_LANE_ALLOWED_TOOLS.has(name)) return undefined
+    return server.registerTool(name, definition, callback)
+  }
+
+  registerTool('pocket_list', {
     title: 'List Aqi Drawer items',
     description: 'List shared Pocket items, optionally filtered by review status.',
     inputSchema: {
@@ -41,7 +65,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     return result({ items }, `${items.length} pocket item(s).`)
   })
 
-  server.registerTool('pocket_search', {
+  registerTool('pocket_search', {
     title: 'Search saved Drawer objects',
     description: 'Read-only keyword search across saved titles, text, EE notes, metadata and bounded cached source text. Optional Tag, Collection and status filters; returns item IDs and short excerpts. Trash is excluded.',
     inputSchema: {
@@ -61,7 +85,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     }
   })
 
-  server.registerTool('pocket_taxonomy', {
+  registerTool('pocket_taxonomy', {
     title: 'Read existing Drawer tags and collections',
     description: 'Read-only list of existing shared Tag and Collection vocabulary. Reuse established labels when organizing items; never rewrite EE-authored tags without permission.',
     inputSchema: {},
@@ -75,7 +99,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     }
   })
 
-  server.registerTool('pocket_capture_create', {
+  registerTool('pocket_capture_create', {
     title: 'Keep a text or link in Aqi Drawer',
     description: 'Create one durable text/HTTP(S)-link Drawer object only when EE explicitly asks to keep it. Not a transcript logger, file uploader or Memory write. Requires stable request_id for idempotency; only available through the separately authorized owner writer MCP endpoint after capture is enabled. The regular Drawer MCP endpoint cannot create items.',
     inputSchema: {
@@ -109,7 +133,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     }
   })
 
-  server.registerTool('pocket_start_context', {
+  registerTool('pocket_start_context', {
     title: 'Start a chat with EE’s new Drawer context',
     description: 'Use this when beginning a new conversation with EE, even if her first message is only a greeting. Read the newly shared Drawer items before replying, then naturally mention zero to two only when relevant. Do not call again on every message in the same conversation.',
     inputSchema: {
@@ -131,7 +155,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     return result({ items, instruction: 'Mention zero to two naturally; leave the rest unmentioned.' }, text)
   })
 
-  server.registerTool('pocket_turn_open', {
+  registerTool('pocket_turn_open', {
     title: 'Check what EE newly shared',
     description: 'Call once near the start of a new conversation/session, not once per message. It returns unseen shared items and marks them seen by Aqi. Inspect privately, then naturally mention zero to two only when Aqi genuinely wants to discuss them.',
     inputSchema: {
@@ -146,7 +170,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     return result({ items }, text)
   })
 
-  server.registerTool('pocket_get', {
+  registerTool('pocket_get', {
     title: 'Read one Aqi Drawer item',
     description: 'Read one shared Pocket item, its source, notes, attachments, and replies.',
     inputSchema: { id: z.string().min(1) },
@@ -166,7 +190,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     return { structuredContent: { item }, content: [{ type: 'text', text: renderItem(item) }, ...images] }
   })
 
-  server.registerTool('pocket_read_content', {
+  registerTool('pocket_read_content', {
     title: 'Read inside one shared link',
     description: 'Fetch and inspect the actual content behind one Pocket item. Start with compact for low token use; use full only for deeper reading. Images and up to three video keyframes are returned only when requested and available.',
     inputSchema: {
@@ -223,7 +247,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     }
   })
 
-  server.registerTool('pocket_reply', {
+  registerTool('pocket_reply', {
     title: 'Reply in Aqi Drawer',
     description: 'Add Aqi’s reply to a Drawer item. Reusing reply_id is idempotent.',
     inputSchema: {
@@ -241,7 +265,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     }
   })
 
-  server.registerTool('pocket_edit_metadata', {
+  registerTool('pocket_edit_metadata', {
     title: 'Edit Drawer collection and tags',
     description: 'Set or clear one primary Collection and incrementally add or remove shared Tags. Source tags remain read-only in sourceData.',
     inputSchema: {
@@ -266,7 +290,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     }
   })
 
-  server.registerTool('pocket_review', {
+  registerTool('pocket_review', {
     title: 'Review an Aqi Drawer item',
     description: 'Move an item through the Pocket workflow. memory_candidate stages a pending C-Memory candidate only.',
     inputSchema: {
@@ -288,7 +312,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     }
   })
 
-  server.registerTool('memory_health', {
+  registerTool('memory_health', {
     title: 'Check C-Memory',
     description: 'Check whether the reviewed C-Memory service is reachable.',
     inputSchema: {},
@@ -298,7 +322,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     catch (error) { return errorResult(error.message) }
   })
 
-  server.registerTool('memory_turn_pre', {
+  registerTool('memory_turn_pre', {
     title: 'Recall reviewed personal memory',
     description: 'Recall C-Memory candidates for the current user message. Only surfaceableMemories may be mentioned.',
     inputSchema: {
@@ -323,7 +347,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     return result({ ...memory, pocketItems }, text)
   })
 
-  server.registerTool('memory_confirm_surface', {
+  registerTool('memory_confirm_surface', {
     title: 'Confirm a surfaced memory',
     description: 'Record that one recalled memory was actually used. Repeated confirmation is safe.',
     inputSchema: { recallId: z.string().min(1), memoryId: z.string().min(1) },
@@ -333,7 +357,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     catch (error) { return errorResult(error.message) }
   })
 
-  server.registerTool('memory_turn_post', {
+  registerTool('memory_turn_post', {
     title: 'Close a memory-aware turn',
     description: 'Close the turn once after the final reply is drafted. This gateway always keeps remember=false.',
     inputSchema: {
@@ -351,7 +375,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
   })
 
 
-  server.registerTool('vault_list', {
+  registerTool('vault_list', {
     title: 'List Aqi canonical Vault documents',
     description: 'List the small fixed allowlist of canonical documents available through Aqi Vault. This does not expose arbitrary repository or filesystem paths.',
     inputSchema: {},
@@ -366,7 +390,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     }
   })
 
-  server.registerTool('vault_read', {
+  registerTool('vault_read', {
     title: 'Read one Aqi canonical document',
     description: 'Read one allowlisted canonical document and return its current content and SHA. Always use this immediately before proposing or performing a canonical update.',
     inputSchema: {
@@ -383,7 +407,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, en
     }
   })
 
-  server.registerTool('vault_update', {
+  registerTool('vault_update', {
     title: 'Update one approved Aqi canonical document',
     description: 'Update one allowlisted canonical document only after EE explicitly approved the change. Requires the fresh SHA returned by vault_read; stale writes are rejected. Seed, Voice, and Work Handoff receive a History snapshot before replacement.',
     inputSchema: {
