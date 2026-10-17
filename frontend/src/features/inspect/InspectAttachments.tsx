@@ -26,6 +26,7 @@ import styles from './InspectAttachments.module.css'
 
 interface InspectAttachmentsProps {
   item: PocketItemSummary
+  primary?: boolean
 }
 
 function createAttachmentRequestId(): string {
@@ -80,6 +81,7 @@ function selectedFileMeta(file: File): string {
 
 export function InspectAttachments({
   item,
+  primary = false,
 }: InspectAttachmentsProps) {
   const [confirmingId, setConfirmingId] =
     useState<string | null>(null)
@@ -146,7 +148,11 @@ export function InspectAttachments({
 
   return (
     <section
-      className={styles.attachments}
+      className={
+        primary
+          ? `${styles.attachments} ${styles.primary}`
+          : styles.attachments
+      }
       {...(
         attachments.length > 0
           ? {
@@ -159,7 +165,7 @@ export function InspectAttachments({
       <div className={styles.sectionHead}>
         {attachments.length > 0 && (
           <h2 id={`attachment-title-${item.id}`}>
-            其他附件 · {attachments.length}
+            {primary ? '文件原件' : '其他附件'} · {attachments.length}
           </h2>
         )}
 

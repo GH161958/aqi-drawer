@@ -609,6 +609,9 @@
   left: 20px;
 
   min-height: 137px;
+  max-height: 143px;
+  box-sizing: border-box;
+  overflow: hidden;
 
   padding:
     15px 17px 39px 24px;
@@ -650,7 +653,13 @@
 }
 
 .documentTitle {
+  display: -webkit-box;
   max-width: 96%;
+  max-height: 2.8em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 
   margin:
     0 0 11px;
@@ -823,6 +832,7 @@
     left: 17px;
 
     min-height: 132px;
+    max-height: 138px;
 
     padding:
       14px 14px 37px 21px;
