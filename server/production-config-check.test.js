@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+import test from 'node:test'
+
+const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'production-config-check.js')
+const secret = 'T'.repeat(56)
+const base = {
+  HOST: '0.0.0.0',
+  C_POCKET_BRIDGE_TOKEN: 'B'.repeat(40),
+  C_POCKET_DRAWER_SECRET: 'D'.repeat(40),
+  C_POCKET_DROP_SECRET: secret,
+  C_POCKET_MCP_PATH: '/mcp/' + 'R'.repeat(43),
+  C_POCKET_MCP_CAPTURE_PATH: '',
+  C_POCKET_ENABLE_MCP_CAPTURE: 'false',
+  C_POCKET_ENABLE_UNIFIED_OWNER: 'false',
+  C_POCKET_ENABLE_MCP_FILE_HOST_PROBE: 'false',
+  C_POCKET_ENABLE_MCP_FILE_INTAKE: 'false',
+  C_POCKET_ENABLE_LEGACY_MCP: 'true',
+  C_POCKET_MCP_FILE_HOSTS: '',
+}
+
+function check(overrides = {}) {
+  return spawnSync(process.execPath, [script], {
+    encoding: 'utf8',
+    timeout: 5000,
+    env: { ...process.env, ...base, ...overrides },
+  })
+}
+const enabledOwner = {
+  C_POCKET_ENABLE_MCP_CAPTURE: 'true',
+  C_POCKET_ENABLE_UNIFIED_OWNER: 'true',
+  C_POCKET_MCP_CAPTURE_PATH: '/mcp/' + 'W'.repeat(43),
+}
+
+test('legacy defaults and prepared dormant private path pass without enabling an Owner', () => {
+  assert.equal(check().status, 0)
+  assert.equal(check({ C_POCKET_MCP_CAPTURE_PATH: '/mcp/' + 'W'.repeat(43) }).status, 0)
+})
+test('invalid Owner, probe, intake and legacy retirement switch combinations fail closed', () => {
+  for (const changes of [
+    { C_POCKET_ENABLE_UNIFIED_OWNER: 'true' },
+    { C_POCKET_ENABLE_MCP_FILE_HOST_PROBE: 'true' },
+    { C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true' },
+    { C_POCKET_ENABLE_LEGACY_MCP: 'false' },
+    { C_POCKET_ENABLE_MCP_CAPTURE: 'true' },
+    { ...enabledOwner, C_POCKET_MCP_CAPTURE_PATH: base.C_POCKET_MCP_PATH },
+    { ...enabledOwner, C_POCKET_MCP_CAPTURE_PATH: '/mcp/short' },
+    { C_POCKET_ENABLE_MCP_FILE_HOST_PROBE: 'TRUE' },
+    { ...enabledOwner, C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true' },
+  ]) {
+    const output = check(changes)
+    assert.equal(output.status, 1, JSON.stringify(changes))
+    assert.match(output.stderr, /Production configuration rejected:/)
+    assert.ok(!output.stderr.includes(secret), 'Never print secrets to production logs.')
+  }
+})
+test('read-only hostname probe can run without file downloads being enabled', () => {
+  const result = check({ ...enabledOwner, C_POCKET_ENABLE_MCP_FILE_HOST_PROBE: 'true' })
+  assert.equal(result.status, 0, result.stderr)
+  const rollback = check({ ...enabledOwner, C_POCKET_ENABLE_LEGACY_MCP: 'false' })
+  assert.equal(rollback.status, 0, rollback.stderr)
+})
+test('download allowlist rejects wildcard, raw URL, IP and empty values', () => {
+  for (const host of ['', '*.example.org', 'https://uploads.example.org/file?token=SECRET',
+    '127.0.0.1', 'uploads.example.org,', 'localhost', 'files.local']) {
+    const result = check({ ...enabledOwner, C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true',
+      C_POCKET_MCP_FILE_HOSTS: host })
+    assert.equal(result.status, 1, host)
+    assert.ok(!result.stderr.includes(secret))
+    assert.ok(!result.stderr.includes('https://uploads.example.org/file?'))
+  }
+  assert.equal(check({ ...enabledOwner, C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true',
+    C_POCKET_MCP_FILE_HOSTS: 'uploads.example.org' }).status, 0)
+})
