@@ -7,7 +7,7 @@ import test from 'node:test'
 import { PocketStore } from './store.js'
 import {
   MAX_MCP_FILE_BYTES, createMcpFileIntakeService, permittedFileHosts,
-  validateMcpFileUrl, validateMcpFileBytes,
+  validateMcpFileUrl, validateMcpFileBytes, validChatGptFileId,
 } from './mcp-file-intake.js'
 
 const pdf = Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n')
@@ -27,6 +27,46 @@ async function fixture(t, download = async () => pdf) {
   })
   return { store, intake }
 }
+
+test('fileParams accepts bounded opaque identifiers without a file_ prefix and remains idempotent', async (t) => {
+  const opaqueId = 'urn:chatgpt:asset/opaque-qa-001'
+  assert.equal(validChatGptFileId(opaqueId), true)
+  assert.equal(validChatGptFileId('7a0f19cc-29b9-4987-a81b-034b945a10d1'), true)
+  assert.equal(validateMcpFileBytes(fakeFile({ file_id: opaqueId }), pdf).mimeType, 'application/pdf')
+  const { store, intake } = await fixture(t)
+  const file = fakeFile({ file_id: opaqueId, file_name: undefined })
+  const args = { requestId: 'intake:opaque-id:0001', mode: 'new', file }
+  const receipt = await intake.save(args)
+  assert.equal(receipt.duplicate, false)
+  assert.equal(receipt.bytes, pdf.length)
+  assert.equal(receipt.sha256, createHash('sha256').update(pdf).digest('hex'))
+  assert.deepEqual((await store.readAttachment(receipt.attachmentId, MAX_MCP_FILE_BYTES)).data, pdf)
+  const retry = await intake.save({
+    ...args,
+    file: { ...file, download_url: 'https://uploads.example.org/expired' },
+  })
+  assert.equal(retry.duplicate, true)
+  assert.equal(retry.attachmentId, receipt.attachmentId)
+  assert.equal((await store.list()).length, 1)
+})
+
+test('invalid opaque identifiers fail closed before network requests or Store writes', async (t) => {
+  let downloads = 0
+  const { store, intake } = await fixture(t, async () => { downloads += 1; return pdf })
+  const invalid = [undefined, null, '', '  ', '\\n', 'bad\\u0000id', 'bad\\u007fid', 'x'.repeat(513), 123]
+  for (const fileId of invalid) {
+    assert.equal(validChatGptFileId(fileId), false)
+    assert.throws(() => validateMcpFileBytes(fakeFile({ file_id: fileId }), pdf), /valid ChatGPT file_id/)
+    await assert.rejects(() => intake.save({
+      requestId: 'intake:invalid-id:0001',
+      mode: 'new',
+      file: fakeFile({ file_id: fileId }),
+    }), /valid ChatGPT file_id/)
+  }
+  assert.equal(downloads, 0)
+  assert.equal((await store.list()).length, 0)
+  assert.deepEqual(await readdir(store.mediaDir), [])
+})
 
 test('File URL SSRF protections are host-exact and block arbitrary URLs', () => {
   assert.deepEqual(permittedFileHosts('uploads.example.org, uploads.example.org,127.0.0.1,localhost'),
