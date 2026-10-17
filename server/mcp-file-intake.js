@@ -258,17 +258,17 @@ export function createMcpFileIntakeService({ store, allowedHosts = [], download 
         }
         const evidence = { ...input, title, text, verifiedFile }
         const matched = await store.getMcpFileIntakeReceipt(evidence)
-        if (!matched) throw new Error('Original Intake request no longer exists. Manual review required.')
+        if (!matched) throw new Error('Original Intake request no longer exists. Manual review required.', { cause: error })
         const stored = await store.readAttachment(matched.attachmentId, MAX_MCP_FILE_BYTES)
         if (!stored || stored.data.length !== matched.bytes
           || createHash('sha256').update(stored.data).digest('hex') !== matched.sha256) {
-          throw new Error('Previously saved attachment is missing or corrupted. Manual review required.')
+          throw new Error('Previously saved attachment is missing or corrupted. Manual review required.', { cause: error })
         }
         // Re-check the attachment is still bound to this request after reading
         // its bytes, without writing a new Store item or media object.
         const current = await store.getMcpFileIntakeReceipt(evidence)
         if (!current || current.attachmentId !== matched.attachmentId) {
-          throw new Error('Original Intake attachment changed during retry. Manual review required.')
+          throw new Error('Original Intake attachment changed during retry. Manual review required.', { cause: error })
         }
         return { ...current, duplicate: true }
       }
