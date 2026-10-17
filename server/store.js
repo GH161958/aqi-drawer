@@ -730,6 +730,70 @@ export class PocketStore {
 
   /* TRASH LIFECYCLE V1 END */
 
+  // MCP file Intake uses the existing PocketStore + Media, never a second DB.
+  // Signed download URLs are intentionally absent from canonical state.
+  async getMcpFileIntakeReceipt({ requestId, requestHash, mode, itemId = '' }) {
+    const state = await this.#read()
+    return lookupMcpFileReceipt(state, { requestId, requestHash, mode, itemId })
+  }
+
+  async saveMcpFileIntake({
+    requestId, requestHash, mode, itemId = '', title = '', text = '',
+    fileId, attachment,
+  }) {
+    if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(requestId)
+      || !/^[a-f0-9]{64}$/u.test(requestHash)
+      || !['new', 'append'].includes(mode)
+      || !attachment?.sha256 || !attachment?.storageName || !attachment?.size) {
+      throw httpError(422, 'Invalid MCP File Intake data.')
+    }
+    return this.#mutate((state) => {
+      const previous = lookupMcpFileReceipt(state, { requestId, requestHash, mode, itemId })
+      if (previous) return { ...previous, duplicate: true }
+      const now = new Date().toISOString()
+      const normalized = normalizeAttachment(attachment)
+      const payload = {
+        itemId: '', attachmentId: normalized.id,
+        fileName: normalized.name, mimeType: normalized.mimeType,
+        bytes: normalized.size, sha256: normalized.sha256,
+        requestId, duplicate: false,
+      }
+      if (mode === 'new') {
+        const item = normalizeItem({
+          title: clean(title), text: clean(text), attachments: [normalized],
+          sourceApp: 'ChatGPT / Aqi', status: 'inbox', tags: [], collection: null,
+          sourceIdentity: { provider: 'aqi-mcp-file-intake', externalId: requestId },
+          sourceData: {
+            provider: 'chatgpt', fileIntakeVersion: 1,
+            fileIntakeRequestHash: requestHash, openaiFileId: fileId,
+          },
+        }, now)
+        appendActivity(item, 'received', 'Aqi', { count: 1 }, now)
+        appendActivity(item, 'attachment_added', 'Aqi', {
+          attachmentId: normalized.id, name: normalized.name,
+          mimeType: normalized.mimeType, size: normalized.size,
+          requestId, fileIntakeRequestHash: requestHash,
+        }, now)
+        state.items.push(item)
+        return { ...payload, itemId: item.id }
+      }
+      const item = state.items.find((entry) => entry.id === itemId && !entry.deletedAt)
+      if (!item) throw httpError(404, 'Existing target Drawer item not found.')
+      if (item.attachments.some((existing) => existing.id === normalized.id)) {
+        throw httpError(409, 'Attachment ID was already used.')
+      }
+      item.attachments.push(normalized)
+      item.updatedAt = now
+      item.syncState = 'synced'
+      appendActivity(item, 'attachment_added', 'Aqi', {
+        attachmentId: normalized.id, name: normalized.name,
+        mimeType: normalized.mimeType, size: normalized.size,
+        requestId, fileIntakeRequestHash: requestHash,
+      }, now)
+      return { ...payload, itemId: item.id }
+    })
+  }
+
   async getForContentRead(id) {
     const state = await this.#read()
     const item = state.items.find((entry) => entry.id === id && !entry.deletedAt)
@@ -2071,6 +2135,38 @@ function hydrateStoredItem(item) {
   }
 }
 
+function lookupMcpFileReceipt(state, { requestId, requestHash, mode, itemId }) {
+  for (const item of state.items) {
+    const matchNew = item.sourceIdentity?.provider === 'aqi-mcp-file-intake'
+      && item.sourceIdentity.externalId === requestId
+    const matchAppend = item.activity.find((entry) => entry.type === 'attachment_added'
+      && entry.detail?.requestId === requestId
+      && entry.detail?.fileIntakeRequestHash)
+    if (!matchNew && !matchAppend) continue
+    const existingMode = matchNew ? 'new' : 'append'
+    const existingHash = matchNew ? item.sourceData?.fileIntakeRequestHash
+      : matchAppend.detail.fileIntakeRequestHash
+    if (item.deletedAt || existingMode !== mode || (mode === 'append' && item.id !== itemId)
+      || existingHash !== requestHash) {
+      throw httpError(409, 'File Intake requestId was already used for a different item or file.')
+    }
+    const trackedId = matchNew
+      ? item.activity.find((entry) => entry.type === 'attachment_added'
+        && entry.detail?.requestId === requestId
+        && entry.detail?.fileIntakeRequestHash)?.detail.attachmentId
+      : matchAppend.detail.attachmentId
+    const attachment = item.attachments.find((entry) => entry.id === trackedId)
+    if (!attachment) throw httpError(409, 'Previously stored file is no longer attached. Manual review required.')
+    return {
+      itemId: item.id, attachmentId: attachment.id,
+      fileName: attachment.name, mimeType: attachment.mimeType,
+      bytes: attachment.size, sha256: attachment.sha256,
+      requestId, duplicate: true,
+    }
+  }
+  return null
+}
+
 function normalizeCollection(value) {
   const normalized = clean(value).replace(/\s+/g, ' ').slice(0, 80)
   return normalized || null
@@ -2169,6 +2265,7 @@ function normalizeActivityDetail(type, detail = {}) {
     mimeType: clean(detail.mimeType).slice(0, 160),
     size: Math.max(0, Number(detail.size) || 0),
     requestId: clean(detail.requestId).slice(0, 160),
+    ...(detail.fileIntakeRequestHash ? { fileIntakeRequestHash: clean(detail.fileIntakeRequestHash).slice(0, 64) } : {}),
   }
   return {}
 }

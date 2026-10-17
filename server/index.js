@@ -13,6 +13,7 @@ import { CMemoryClient } from './cmemory-client.js'
 import { GitHubVaultClient } from './vault-client.js'
 import { PocketContentReader } from './content-reader.js'
 import { createPocketMcpServer } from './mcp-server.js'
+import { createMcpFileIntakeService, permittedFileHosts } from './mcp-file-intake.js'
 import { normalizeIncomingShare } from './share-normalizer.js'
 import { extractXhsNoteId, XhsAdapter } from './adapters/xhs.js'
 
@@ -47,9 +48,14 @@ export async function createBridgeApp(config = {}) {
     temporaryPublicMcp: config.temporaryPublicMcp ?? process.argv.includes('--temporary-public-mcp'),
     enableMcpCapture: config.enableMcpCapture ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_CAPTURE) === 'true'),
     enableUnifiedOwner: config.enableUnifiedOwner ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_UNIFIED_OWNER) === 'true'),
+    enableMcpFileIntake: config.enableMcpFileIntake ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_INTAKE) === 'true'),
+    mcpFileHosts: permittedFileHosts(config.mcpFileHosts ?? process.env.C_POCKET_MCP_FILE_HOSTS),
     enableLegacyMcp: config.enableLegacyMcp ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_LEGACY_MCP) !== 'false'),
     captureMcpPath: cleanEnvironmentValue(config.captureMcpPath ?? process.env.C_POCKET_MCP_CAPTURE_PATH),
     dropSecret: config.dropSecret ?? (cleanEnvironmentValue(process.env.C_POCKET_DROP_SECRET) || `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`),
+  }
+  if (settings.enableMcpFileIntake && (!settings.enableUnifiedOwner || !settings.enableMcpCapture || !settings.mcpFileHosts.length)) {
+    throw new Error('MCP File Intake requires the unified Owner with Capture and explicit file host allowlist.')
   }
   // Two-stage cutover: the old client URL retains its existing privileges and
   // NEVER gains Capture. The future owner client uses a separate capability URL.
@@ -79,6 +85,11 @@ export async function createBridgeApp(config = {}) {
 
   const store = new PocketStore(settings.dataDir)
   await store.init()
+  const fileIntake = settings.enableMcpFileIntake
+    ? createMcpFileIntakeService({
+      store, allowedHosts: settings.mcpFileHosts,
+      ...(config.mcpFileDownloader ? { download: config.mcpFileDownloader } : {}),
+    }) : null
   const cmemory = new CMemoryClient({ baseUrl: settings.cmemoryBaseUrl, token: settings.cmemoryToken })
   const vault = config.vault ?? new GitHubVaultClient({
     token: settings.vaultToken,
@@ -864,6 +875,7 @@ export async function createBridgeApp(config = {}) {
           const server = createPocketMcpServer({
             store, cmemory, contentReader, vault,
             enableMcpCapture: lane !== 'standard' && settings.enableMcpCapture,
+            fileIntake: lane === 'owner' ? fileIntake : null,
             lane,
           })
           await server.connect(transport)
