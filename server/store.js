@@ -2150,8 +2150,12 @@ function lookupMcpFileReceipt(state, { requestId, requestHash, mode, itemId }) {
       || existingHash !== requestHash) {
       throw httpError(409, 'File Intake requestId was already used for a different item or file.')
     }
-    const attachment = matchNew ? item.attachments[0]
-      : item.attachments.find((entry) => entry.id === matchAppend.detail.attachmentId)
+    const trackedId = matchNew
+      ? item.activity.find((entry) => entry.type === 'attachment_added'
+        && entry.detail?.requestId === requestId
+        && entry.detail?.fileIntakeRequestHash)?.detail.attachmentId
+      : matchAppend.detail.attachmentId
+    const attachment = item.attachments.find((entry) => entry.id === trackedId)
     if (!attachment) throw httpError(409, 'Previously stored file is no longer attached. Manual review required.')
     return {
       itemId: item.id, attachmentId: attachment.id,
