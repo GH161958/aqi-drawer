@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -88,7 +88,7 @@ test('new file Intake persists original bytes, SHA-256, one item and durable rec
   assert.equal(retry.attachmentId, saved.attachmentId)
   assert.equal(downloads, 1)
   assert.equal((await store.list()).length, 1)
-  assert.deepEqual(await readdir(store.mediaDir), [stored.attachment.url ? (await readdir(store.mediaDir))[0] : 'ignored'])
+  assert.equal((await readdir(store.mediaDir)).length, 1)
   const disk = await stat(path.join(store.mediaDir, (await readdir(store.mediaDir))[0]))
   assert.equal(disk.size, pdf.length)
 })
@@ -152,4 +152,17 @@ test('disallowed file formats do not leave a temporary file or Store object', as
   }), /not supported/)
   assert.deepEqual(await readdir(store.mediaDir), [])
   assert.equal((await store.list()).length, 0)
+})
+
+test('idempotent retry never binds a different attachment after the original was removed', async (t) => {
+  const { store, intake } = await fixture(t)
+  const args = { requestId: 'intake:detached:0001', mode: 'new', file: fakeFile() }
+  const saved = await intake.save(args)
+  await store.removeAttachment(saved.itemId, saved.attachmentId)
+  await store.appendAttachments(saved.itemId, [{
+    id: randomUUID(), name: 'later.pdf', mimeType: 'application/pdf',
+    size: pdf.length, sha256: createHash('sha256').update(pdf).digest('hex'),
+  }], { requestId: 'unrelated:later:0001', actor: 'EE' })
+  await assert.rejects(() => intake.save(args), /no longer attached/)
+  assert.equal((await store.get(saved.itemId)).attachments.length, 1)
 })
