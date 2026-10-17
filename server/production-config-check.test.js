@@ -15,6 +15,7 @@ const base = {
   C_POCKET_MCP_CAPTURE_PATH: '',
   C_POCKET_ENABLE_MCP_CAPTURE: 'false',
   C_POCKET_ENABLE_UNIFIED_OWNER: 'false',
+  C_POCKET_ENABLE_OWNER_IN_PLACE: 'false',
   C_POCKET_ENABLE_MCP_FILE_HOST_PROBE: 'false',
   C_POCKET_ENABLE_MCP_FILE_INTAKE: 'false',
   C_POCKET_ENABLE_LEGACY_MCP: 'true',
@@ -56,6 +57,42 @@ test('invalid Owner, probe, intake and legacy retirement switch combinations fai
     assert.ok(!output.stderr.includes(secret), 'Never print secrets to production logs.')
   }
 })
+test('same-path Owner upgrades require three explicit flags, no new MCP path and keep old route enabled', () => {
+  const inPlace = {
+    C_POCKET_ENABLE_OWNER_IN_PLACE: 'true',
+    C_POCKET_ENABLE_MCP_CAPTURE: 'true',
+    C_POCKET_ENABLE_UNIFIED_OWNER: 'true',
+  }
+  const enabled = check(inPlace)
+  assert.equal(enabled.status, 0, enabled.stderr)
+  assert.ok(!enabled.stdout.includes(base.C_POCKET_MCP_PATH))
+
+  // The old production path is valid with 32 random URL-safe characters, no rotation.
+  const smallest = check({ ...inPlace, C_POCKET_MCP_PATH: '/mcp/' + 'Q'.repeat(32) })
+  assert.equal(smallest.status, 0, smallest.stderr)
+
+  for (const changes of [
+    { C_POCKET_ENABLE_OWNER_IN_PLACE: 'true' },
+    { ...inPlace, C_POCKET_ENABLE_MCP_CAPTURE: 'false' },
+    { ...inPlace, C_POCKET_ENABLE_UNIFIED_OWNER: 'false' },
+    { ...inPlace, C_POCKET_ENABLE_LEGACY_MCP: 'false' },
+    { ...inPlace, C_POCKET_MCP_CAPTURE_PATH: '/mcp/' + 'W'.repeat(43) },
+    { ...inPlace, C_POCKET_MCP_PATH: '/mcp/unsafe' },
+    { ...inPlace, C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true' },
+  ]) {
+    const result = check(changes)
+    assert.equal(result.status, 1, JSON.stringify(changes))
+    assert.ok(!result.stderr.includes(base.C_POCKET_MCP_PATH))
+    assert.ok(!result.stderr.includes(secret))
+  }
+  assert.equal(check({ ...inPlace, C_POCKET_ENABLE_MCP_FILE_HOST_PROBE: 'true' }).status, 0)
+  assert.equal(check({
+    ...inPlace, C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true',
+    C_POCKET_MCP_FILE_HOSTS: 'uploads.example.org',
+  }).status, 0)
+  assert.equal(check({ C_POCKET_ENABLE_OWNER_IN_PLACE: 'false' }).status, 0)
+})
+
 test('read-only hostname probe can run without file downloads being enabled', () => {
   const result = check({ ...enabledOwner, C_POCKET_ENABLE_MCP_FILE_HOST_PROBE: 'true' })
   assert.equal(result.status, 0, result.stderr)
