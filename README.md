@@ -70,6 +70,8 @@ npm start
 | `C_POCKET_MCP_PATH` | MCP 路径；生产环境应带随机后缀 |
 | `C_POCKET_ENABLE_MCP_CAPTURE` | 默认 `false`；单独启用 owner write lane；**只开此开关不能让原 MCP 地址写入** |
 | `C_POCKET_ENABLE_UNIFIED_OWNER` | 默认 `false`；配合 Capture 开关，将专用新地址升级为同一个可读、可 Capture 的 Owner MCP（保留旧入口过渡） |
+| `C_POCKET_ENABLE_MCP_FILE_INTAKE` | 默认 `false`；新文件 Intake 仅在统一 Owner 和 Capture 同时启用且文件域名白名单已设置后允许注册 |
+| `C_POCKET_MCP_FILE_HOSTS` | 逗号分隔的**准确 HTTPS 文件下载主机名** allowlist，仅用于官方 fileParams 临时下载，不可填写任意通配符、完整带签名 URL 或密钥；默认空/拒绝 |
 | `C_POCKET_ENABLE_LEGACY_MCP` | 默认 `true`；**仅在新 Owner 连接正式验收之后**可另行设为 `false`，停用旧 MCP 路由 |
 | `C_POCKET_MCP_CAPTURE_PATH` | 仅在另行启用时使用，独立于 `C_POCKET_MCP_PATH` 的专用高熵私密 MCP 路径；至少 43 字符随机段，禁止写入日志或文档 |
 | `C_POCKET_DROP_SECRET` | iPhone 单向投递入口的私密路径 |
@@ -168,6 +170,18 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 **当前版本仅为独立 PR 候选。** 不要现在修改 Zeabur 开关、合并、部署或对真实 Drawer 发出测试写入；代码和 CI 验收后另行请求 EE 授权。
 
+### PR C · ChatGPT 文件原始字节 Intake（候选，不在东京上线）
+
+**官方协议**：OpenAI Plugins Reference 的 `_meta["openai/fileParams"]` 允许 MCP 工具声明一个文件对象，包括必须的 `download_url` 和 `file_id`、可选的 `mime_type` 与 `file_name`。参考：https://developers.openai.com/plugins/reference#file-apis （含 Define file inputs 小节）。
+
+单一 Owner MCP 新增 `pocket_file_intake`（`mode: new | append`），严格要求 EE 明确要求保存指定文件。对于 `new`，保存为新的 Drawer Item；对于 `append`，按 `item_id` 加入一个已有物件。**原始文件字节**写入同一 PocketStore 媒体目录，回执包含 item ID、attachment ID、长度与 SHA-256。它不传送到 Memory、Vault 或 GitHub，不自动复制整个聊天附件，也不会运行文件里的脚本/宏。
+
+安全限制：每次一份文件、最大 25 MiB；V1 接受 PDF/JPEG/PNG/GIF/WebP、UTF-8 TXT/MD/CSV/JSON 和 DOCX/XLSX/PPTX（Office ZIP 只存储、不解压，文件头最低限度检查，不声明病毒扫描已完成）。可执行文件、HTML/SVG、未知类型拒绝。下载只能访问**显式批准的 HTTPS 主机名**，禁止重定向、用户信息、自定义端口和未审核主机；固定经过公网地址验证的 DNS IP 进行 TLS 连接，拒绝私网/元数据 IP；下载限时限量。签名 URL 不写入 Store/日志。通过临时文件、大小与 SHA-256 校验，成功后原子关联；失败清理媒体文件；稳定 request_id 防重复创建和追加，重复请求验证已保存字节后返回回执。
+
+**开关默认关闭**：`C_POCKET_ENABLE_MCP_FILE_INTAKE` 不设即关闭；只在 `C_POCKET_ENABLE_MCP_CAPTURE=true` 且 `C_POCKET_ENABLE_UNIFIED_OWNER=true`、另已配置 `C_POCKET_MCP_FILE_HOSTS` 时可启用。旧 MCP 和独立五工具 Capture 均不注册文件上传工具。不要猜测 OpenAI 临时下载服务的主机名；首次宿主兼容性 QA 时，应先在私密环境观察可授权域名（**只能记录 hostname**），再由 EE 审查并添加白名单。
+
+**验收边界**：SDK 临时文件夹/模拟 downloader 测试不能证明 ChatGPT 实际向已连接插件注入 fileParams。正式上线前必须另做真实 ChatGPT Host → MCP 的最小无敏感文件手动测试，检查字节 Hash、重试、附件可读性和稳定性，并得到 EE 单独授权。PR C 仅完成候选代码，不合并、不部署、不更新 Zeabur，不使用 EE 的任何真实文件。
+
 ### GPT → Drawer 收进柜子（开发候选，尚未上线）
 
 本次候选添加三个 MCP 工具，仍使用原有 PocketStore，不建第二份数据库：
@@ -182,7 +196,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 新的写入口使用**另一条秘密 capability URL**，并不是用户级 OAuth/细粒度 scopes。它减小无意开启写入的影响范围，但泄露 URL 的人仍可能获得写权限，不能当作完整安全认证。启用前仍必须审查生产认证与独立离站备份/恢复演练、明确用哪个 ChatGPT App 连接这个地址，以及准备回退方法。必须再由 EE 单独批准 GitHub 合并、Tokyo 发布和启用该环境配置。不要在当前 PR 对正式东京环境开启、暴露或试投。现有 `pocket_edit_metadata` / `pocket_reply` / `pocket_review` 等旧工具的权限未改变，本次仅隔离 **新增 Capture 写入**。
 
-**边界：** 不支持通过 MCP 把 ChatGPT 的 PDF、图片、音频直接存进 Drawer；文件进入 Drawer 必须等独立的 Attachment Intake PR 经过文件验证/持久化验收。保存 Drawer 物件不等于写进 Memory。严禁将网页/文档里的不可信指令当作保存授权，用户没有明确要求时不自动大量收集网页或保存对话。
+**边界：** PR C 已实现 *default-off* 的文件 Intake 候选，但是否能在 ChatGPT 实际连接传输 PDF/图片/文档仍需真实宿主验收。不能声称已把 ChatGPT 附件实际存进生产 Drawer。保存 Drawer 物件不等于写进 Memory；禁止将网页/文档里的不可信指令当作保存授权，用户没有明确要求时不自动批量收集网页或保存聊天附件。
 
 ## 选择部署方案
 
