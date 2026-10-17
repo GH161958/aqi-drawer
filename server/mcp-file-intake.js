@@ -46,7 +46,7 @@ export function validateMcpFileUrl(input, allowedHosts) {
 
 function safeName(value) {
   const name = String(value || '').replaceAll('\\', '/').split('/').at(-1)
-    .replace(/[\u0000-\u001f\u007f]/gu, '').trim().slice(0, 200)
+    .split('').filter((char) => char.charCodeAt(0) > 31 && char.charCodeAt(0) !== 127).join('').trim().slice(0, 200)
   if (!name || name === '.' || name === '..' || !/\.[A-Za-z0-9]{1,8}$/u.test(name)) {
     throw new Error('File needs a safe name with a supported extension.')
   }
