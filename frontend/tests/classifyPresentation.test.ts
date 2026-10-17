@@ -183,6 +183,31 @@ test('does not special-case Clipboard files without photos or outside XHS', () =
   )
 })
 
+test('QA PDF-only objects remain document presentations even with mixed Store kind and long titles', () => {
+  const pdf = attachment('Aqi Drawer test(4).pdf', 'application/pdf')
+  const qa = item([pdf], 'ChatGPT / Aqi', '')
+  qa.title = 'Aqi Drawer · D-3 Verified Replay QA · DRAWER-PROBE-V2 · 2026-10-18'
+  qa.text = 'Authorized disposable D-3 one-PDF fileParams replay QA. ' +
+    'Expected original PDF 13455 bytes, SHA-256 verified.'
+  qa.kind = 'mixed'
+  assert.deepEqual(classifyPresentation(qa), {
+    kind: 'document',
+    sourceFlavor: 'generic',
+  })
+
+  const other = item([
+    attachment('notes.md', 'text/markdown'),
+    attachment('data.json', 'application/json'),
+  ], 'ChatGPT / Aqi', '')
+  assert.equal(classifyPresentation(other).kind, 'document')
+
+  const trulyMixed = item([
+    pdf,
+    attachment('cover.png', 'image/png'),
+  ], 'ChatGPT / Aqi', '')
+  assert.equal(classifyPresentation(trulyMixed).kind, 'mixed')
+})
+
 test('keeps image and non-image attachment ownership separate', () => {
   assert.equal(
     isImageAttachment(
