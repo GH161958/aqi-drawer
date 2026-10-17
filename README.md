@@ -69,12 +69,13 @@ npm start
 | `C_POCKET_DRAWER_SECRET` | 独立的网页 Drawer 登录秘密；只用于换取 HttpOnly session cookie |
 | `C_POCKET_MCP_PATH` | MCP 路径；生产环境应带随机后缀 |
 | `C_POCKET_ENABLE_MCP_CAPTURE` | 默认 `false`；单独启用 owner write lane；**只开此开关不能让原 MCP 地址写入** |
-| `C_POCKET_ENABLE_UNIFIED_OWNER` | 默认 `false`；配合 Capture 开关，将专用新地址升级为同一个可读、可 Capture 的 Owner MCP（保留旧入口过渡） |
+| `C_POCKET_ENABLE_UNIFIED_OWNER` | 默认 `false`；搭配 Capture；D-1 原地升级模式可复用现有 MCP 地址，旧分路模式仍兼容 |
+| `C_POCKET_ENABLE_OWNER_IN_PLACE` | 默认 `false`；需另有 EE 上线授权，且同时设置 Capture + Unified Owner 为 `true`、Legacy MCP 保持 `true`。只在现有私密 `C_POCKET_MCP_PATH` 注册 Owner，**不新增或修改 URL** |
 | `C_POCKET_ENABLE_MCP_FILE_INTAKE` | 默认 `false`；新文件 Intake 仅在统一 Owner 和 Capture 同时启用且文件域名白名单已设置后允许注册 |
 | `C_POCKET_ENABLE_MCP_FILE_HOST_PROBE` | 默认 `false`；仅在统一 Owner + Capture 都开启时，临时注册 **只返回 hostname、不下载或存储** 的文件参数诊断工具 |
 | `C_POCKET_MCP_FILE_HOSTS` | 逗号分隔的**准确 HTTPS 文件下载主机名** allowlist，仅用于官方 fileParams 临时下载，不可填写任意通配符、完整带签名 URL 或密钥；默认空/拒绝 |
-| `C_POCKET_ENABLE_LEGACY_MCP` | 默认 `true`；**仅在新 Owner 连接正式验收之后**可另行设为 `false`，停用旧 MCP 路由 |
-| `C_POCKET_MCP_CAPTURE_PATH` | 仅在另行启用时使用，独立于 `C_POCKET_MCP_PATH` 的专用高熵私密 MCP 路径；至少 43 字符随机段，禁止写入日志或文档 |
+| `C_POCKET_ENABLE_LEGACY_MCP` | 默认 `true`；原地升级时**必须保留 true/未设置**，直接用旧地址提供 Owner；仅历史分路模式允许独立批准后关闭旧入口 |
+| `C_POCKET_MCP_CAPTURE_PATH` | **仅历史分路模式**需要的第二路径（高熵私密，至少 43 字符随机段）；D-1 原地升级模式要求此项未设置，不新增第二个 URL |
 | `C_POCKET_DROP_SECRET` | iPhone 单向投递入口的私密路径 |
 | `C_POCKET_ALLOWED_ORIGINS` | 可选 CORS 白名单 |
 | `C_POCKET_READER_TIMEOUT_MS` | 单次远程读取超时；默认 12000 ms |
@@ -144,13 +145,19 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | `pocket_review` | 讨论、稍后、归档或暂存记忆候选 |
 | `memory_*` | 可选 C-Memory 边界代理 |
 
+### PR D-1 · 原 MCP 地址原地升级 Owner（独立施工候选）
+
+**EE 选定最终接线方式：仍然只有现有 Aqi Drawer App、现有私密 `C_POCKET_MCP_PATH`、现有 PocketStore / Media。** 不配置第二个 MCP URL，不新建 ChatGPT App。默认保持 standard；只有经 EE 独立批准、生产前检查无误后，才会在 Zeabur 设置 `C_POCKET_ENABLE_OWNER_IN_PLACE=true`、`C_POCKET_ENABLE_MCP_CAPTURE=true`、`C_POCKET_ENABLE_UNIFIED_OWNER=true`，并确保 `C_POCKET_ENABLE_LEGACY_MCP` 未设置/true，`C_POCKET_MCP_CAPTURE_PATH` **未设置**。Host Probe 和 File Intake 分别保持 false，另行独立授权后开启。旧路径的工具集合从 standard 切换成 Owner（有安全整理工具、无自由造新分类的 `pocket_edit_metadata`），**原有旧 URL 无法同时保留 standard 和 Owner 两组权限**，也不能依赖旧 MCP session 永不刷新。需要在已有 ChatGPT App 的同一连接上重新握手/刷新工具列表，不能保证平台立即热更新。
+
+**安全取舍：原 URL 持有者随升级获得 Owner 权限。** 切换前必须单独核对原 URL 是否被多个客户端使用、有无外泄或外部访问风险；不确定就暂停升级或轮换（此时不再满足完全不改 URL 的要求，须先与 EE 商量）。不能仅凭“继续施工”就授权生产扩权。回滚不需要修改 URL：独立批准后将三项升级开关全部设置 false 并重启，确认旧工具恢复、真实 Store 未被更改。原地升级模式 **禁止**将 `C_POCKET_ENABLE_LEGACY_MCP=false` 作为停旧路由方式；新旧是同一路由。完整 Gate 见 [Owner MCP release gates](docs/owner-mcp-release-gates.md)。
+
 ### 统一 Owner MCP · 分阶段迁移（PR A，代码候选）
 
 最终使用体验：**一个 Aqi Drawer MCP App，一个外部 Owner 地址，一个 PocketStore/Media**；该 App 的同一个连接可继续使用原有读取 / Memory / Vault 工具，并按边界调用创建收藏、未来文件 Intake、受限整理工具。不要为附件再创建第三套数据库或 ChatGPT 连接。
 
 本 PR 实现的是安全切换底座，不是整套最终功能：
 
-- 默认所有新开关均关闭，旧 MCP 原样正常工作；原有私密 MCP 地址**永远不会因为打开新开关而意外获得 Capture**。
+- 默认所有新开关关闭，原 MCP 保持 standard 工具集合。D-1 需 **三个独立开关均显式为 true** 才可在原有私密 URL 上原地升级 Owner；这是 EE 单独批准的切换，不是意外扩权。
 - `C_POCKET_MCP_CAPTURE_PATH` 沿用先前已经由 Owner 生成的独立高熵私密地址（未来可另取语义更清晰的配置名，但**当前不要迁移或展示 secret**）。
 - 待全部 QA 和用户**独立批准**后，设置 `C_POCKET_ENABLE_MCP_CAPTURE=true` 和 `C_POCKET_ENABLE_UNIFIED_OWNER=true`，在那个独立私密地址上挂载 **Unified Owner MCP**，包含旧 MCP 工具（含 Memory / Vault）与新建文字/链接 Capture。在切换 ChatGPT 的**同一个 Aqi Drawer App** 连接前，旧地址仍正常可用。
 - 迁移后、确认新 App 能读写并稳定运行，再另行批准 `C_POCKET_ENABLE_LEGACY_MCP=false`，旧 MCP 路由随之关闭；如果新端出现问题，先关闭 Owner 入口并恢复旧连接。关闭旧路由前必须检查没有其他仍使用旧 MCP 地址的客户端。
@@ -166,7 +173,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 在 **Unified Owner** MCP 上新增：
 - `pocket_organize_existing(id, request_id, expected_updated_at, tags_add, tags_remove, collection?, clear_collection?, reason?)`：限于已有 Tag/Collection，单物件、小批量 Tag（最多八项变更）；提交前必须先通过 `pocket_get` 读取并携带其 `updatedAt`，否则拒绝过时更新，返回修改前后、实际增删的 Tag、Collection 变化、操作 ID 和时间；要在操作后给 EE 简洁回执。若需要新词汇，建议名称但不自动创建。
 - `pocket_organize_undo(id, operation_id, request_id)`：按原回执撤回一次操作，若后续有人调整过 Tag/Collection，或原词汇已删除，则拒绝自动撤回而转由 EE 检查。重试不会重复撤回。
-- 只在 `C_POCKET_ENABLE_UNIFIED_OWNER=true` 且 Capture 已在独立私密 Owner URL 启用时注册；原有老 MCP 和单独 Capture 的工具清单均不增加整理能力。旧 `pocket_edit_metadata` 在 Owner 中继续拒绝注册。
+- 只在 `C_POCKET_ENABLE_UNIFIED_OWNER=true` 且 Capture 已启用的 Owner lane 注册；支持 D-1 原地址升级或历史分路模式，standard 与独立五工具 Capture 不增加安全整理能力。Owner lane 始终不注册旧 `pocket_edit_metadata`。
 - 操作不影响 item 原文、来源数据、附件、Memory 或 Vault；整理是对物件的低风险元数据修改，不构成订阅式后台自动任务。平台若要求用户确认写操作，仍须遵守。
 
 **当前版本仅为独立 PR 候选。** 不要现在修改 Zeabur 开关、合并、部署或对真实 Drawer 发出测试写入；代码和 CI 验收后另行请求 EE 授权。

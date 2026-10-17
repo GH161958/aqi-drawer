@@ -18,6 +18,7 @@ if (process.env.HOST !== '0.0.0.0') {
 const flags = {
   capture: flag('C_POCKET_ENABLE_MCP_CAPTURE'),
   owner: flag('C_POCKET_ENABLE_UNIFIED_OWNER'),
+  inPlace: flag('C_POCKET_ENABLE_OWNER_IN_PLACE'),
   hostProbe: flag('C_POCKET_ENABLE_MCP_FILE_HOST_PROBE'),
   fileIntake: flag('C_POCKET_ENABLE_MCP_FILE_INTAKE'),
   legacy: flag('C_POCKET_ENABLE_LEGACY_MCP', true),
@@ -31,13 +32,18 @@ if (flags.hostProbe && (!flags.owner || !flags.capture)) {
 if (flags.fileIntake && (!flags.owner || !flags.capture)) {
   errors.push('File Intake requires the unified Owner and Capture switches.')
 }
+if (flags.inPlace && (!flags.owner || !flags.capture || !flags.legacy)) {
+  errors.push('In-place Owner requires Capture, Unified Owner, and Legacy MCP enabled.')
+}
 if (!flags.legacy && !flags.owner) {
   errors.push('Legacy MCP cannot be retired without unified Owner.')
 }
 if (flags.capture) {
   const writerPath = cleanEnvironmentValue(process.env.C_POCKET_MCP_CAPTURE_PATH)
-  if (!/^\/mcp\/[A-Za-z0-9_-]{43,}$/u.test(writerPath) || writerPath === mcpPath) {
-    errors.push('Active Capture requires a distinct /mcp/<43+ random chars> private path.')
+  if (flags.inPlace) {
+    if (writerPath) errors.push('In-place Owner forbids a second C_POCKET_MCP_CAPTURE_PATH.')
+  } else if (!/^\/mcp\/[A-Za-z0-9_-]{43,}$/u.test(writerPath) || writerPath === mcpPath) {
+    errors.push('Split-path Capture requires a distinct /mcp/<43+ random chars> private path.')
   }
 }
 const hostValue = cleanEnvironmentValue(process.env.C_POCKET_MCP_FILE_HOSTS)

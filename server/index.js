@@ -48,6 +48,7 @@ export async function createBridgeApp(config = {}) {
     temporaryPublicMcp: config.temporaryPublicMcp ?? process.argv.includes('--temporary-public-mcp'),
     enableMcpCapture: config.enableMcpCapture ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_CAPTURE) === 'true'),
     enableUnifiedOwner: config.enableUnifiedOwner ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_UNIFIED_OWNER) === 'true'),
+    enableOwnerInPlace: config.enableOwnerInPlace ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_OWNER_IN_PLACE) === 'true'),
     enableMcpFileIntake: config.enableMcpFileIntake ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_INTAKE) === 'true'),
     enableMcpFileHostProbe: config.enableMcpFileHostProbe ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_HOST_PROBE) === 'true'),
     mcpFileHosts: permittedFileHosts(config.mcpFileHosts ?? process.env.C_POCKET_MCP_FILE_HOSTS),
@@ -61,29 +62,43 @@ export async function createBridgeApp(config = {}) {
   if (settings.enableMcpFileIntake && (!settings.enableUnifiedOwner || !settings.enableMcpCapture || !settings.mcpFileHosts.length)) {
     throw new Error('MCP File Intake requires the unified Owner with Capture and explicit file host allowlist.')
   }
-  // Two-stage cutover: the old client URL retains its existing privileges and
-  // NEVER gains Capture. The future owner client uses a separate capability URL.
+  // Two explicit modes: original split-path migration, or independently
+  // authorized in-place Owner upgrade of the *existing* private MCP URL.
+  // All new flags default OFF. Existing clients remain on standard by default.
   if (settings.enableUnifiedOwner && !settings.enableMcpCapture) {
     throw new Error('Unified owner MCP requires Capture to be explicitly enabled.')
   }
   if (!settings.enableLegacyMcp && !settings.enableUnifiedOwner) {
     throw new Error('Cannot disable legacy MCP before the unified owner endpoint is enabled.')
   }
-  // The existing MCP URL never gains Capture from a global feature flag.
-  // An owner-issued second capability path is required for the writer lane.
+  if (settings.enableOwnerInPlace) {
+    if (!settings.enableMcpCapture || !settings.enableUnifiedOwner || !settings.enableLegacyMcp) {
+      throw new Error('In-place Owner requires Capture, Unified Owner, and Legacy MCP enabled explicitly.')
+    }
+    if (settings.captureMcpPath) {
+      throw new Error('In-place Owner cannot mount a second Capture MCP path.')
+    }
+    // Production's existing MCP capability path standard is >=32 random
+    // URL-safe chars; do not rotate or expand it behind EE's back.
+    if (!/^\/mcp\/[A-Za-z0-9_-]{32,}$/u.test(settings.mcpPath)) {
+      throw new Error('In-place Owner requires the existing private /mcp/<32+ character> route.')
+    }
+  }
   if (settings.enableMcpCapture) {
     if (settings.temporaryPublicMcp) {
       throw new Error('MCP Capture cannot be enabled in temporary-public-MCP mode.')
     }
-    if (!settings.captureMcpPath) {
-      throw new Error('C_POCKET_MCP_CAPTURE_PATH is required when MCP Capture is enabled.')
-    }
-    settings.captureMcpPath = normalizeMcpPath(settings.captureMcpPath)
-    if (
-      !/^\/mcp\/[A-Za-z0-9_-]{43,}$/u.test(settings.captureMcpPath)
-      || settings.captureMcpPath === settings.mcpPath
-    ) {
-      throw new Error('MCP Capture requires a distinct /mcp/<43+ character secret> path.')
+    if (!settings.enableOwnerInPlace) {
+      if (!settings.captureMcpPath) {
+        throw new Error('C_POCKET_MCP_CAPTURE_PATH is required when MCP Capture is enabled.')
+      }
+      settings.captureMcpPath = normalizeMcpPath(settings.captureMcpPath)
+      if (
+        !/^\/mcp\/[A-Za-z0-9_-]{43,}$/u.test(settings.captureMcpPath)
+        || settings.captureMcpPath === settings.mcpPath
+      ) {
+        throw new Error('MCP Capture requires a distinct /mcp/<43+ character secret> path.')
+      }
     }
   }
 
@@ -902,12 +917,16 @@ export async function createBridgeApp(config = {}) {
     })
   }
 
-  if (settings.enableLegacyMcp) registerMcpLane(settings.mcpPath, 'standard')
-  if (settings.enableMcpCapture) {
-    // Same private capability URL as the pre-existing capture candidate.
-    // During migration the old read endpoint remains available. After the
-    // owner ChatGPT connection is verified, it can be retired separately.
-    registerMcpLane(settings.captureMcpPath, settings.enableUnifiedOwner ? 'owner' : 'capture')
+  if (settings.enableOwnerInPlace) {
+    // Register exactly ONCE on the existing secret URL; NEVER register a
+    // standard handler alongside Owner on the same path.
+    registerMcpLane(settings.mcpPath, 'owner')
+  } else {
+    if (settings.enableLegacyMcp) registerMcpLane(settings.mcpPath, 'standard')
+    if (settings.enableMcpCapture) {
+      // Preserve existing split-path compatibility when explicitly chosen.
+      registerMcpLane(settings.captureMcpPath, settings.enableUnifiedOwner ? 'owner' : 'capture')
+    }
   }
 
   app.use((error, _req, res, _next) => {
