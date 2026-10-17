@@ -53,6 +53,29 @@ function safeName(value) {
   return name
 }
 
+const EXT_BY_MIME = {
+  'application/pdf': '.pdf', 'image/png': '.png', 'image/jpeg': '.jpg',
+  'image/gif': '.gif', 'image/webp': '.webp', 'text/plain': '.txt',
+  'text/markdown': '.md', 'text/csv': '.csv', 'application/json': '.json',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+}
+
+function resolveFileName(file, bytes) {
+  if (file.file_name) return safeName(file.file_name)
+  const mime = String(file.mime_type || '').split(';')[0].toLowerCase()
+  const first = bytes.subarray(0, 16)
+  const extension = EXT_BY_MIME[mime]
+    || (first.subarray(0, 5).toString() === '%PDF-' ? '.pdf' : '')
+    || (first.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) ? '.png' : '')
+    || (first.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex')) ? '.jpg' : '')
+    || (['GIF87a', 'GIF89a'].includes(first.subarray(0, 6).toString()) ? '.gif' : '')
+    || (first.subarray(0, 4).toString() === 'RIFF' && first.subarray(8, 12).toString() === 'WEBP' ? '.webp' : '')
+  if (!extension) throw new Error('The file host omitted its name and type. Provide a supported file name or MIME type.')
+  return safeName(file.file_id + extension)
+}
+
 function classifyFile(name, bytes, declaredMime = '') {
   if (!Buffer.isBuffer(bytes) || bytes.length < 1 || bytes.length > MAX_MCP_FILE_BYTES) {
     throw new Error('File must contain 1 to 25 MiB of data.')
@@ -96,7 +119,7 @@ export function validateMcpFileBytes(file, bytes) {
   if (!file || typeof file !== 'object' || !/^file[_-][\w-]{1,200}$/u.test(String(file.file_id || ''))) {
     throw new Error('A valid ChatGPT file_id is required.')
   }
-  const filename = safeName(file.file_name || file.file_id + '.bin')
+  const filename = resolveFileName(file, bytes)
   return { filename, mimeType: classifyFile(filename, bytes, file.mime_type) }
 }
 
@@ -168,18 +191,25 @@ export function createMcpFileIntakeService({ store, allowedHosts = [], download 
       if (mode === 'append' && (!itemId || title || text)) throw new Error('Append requires existing item_id, without title or text replacement.')
       if (String(title).length > 160 || String(text).length > 20000) throw new Error('File item title/text is too long.')
       const fileId = String(file?.file_id || '')
-      const filename = safeName(file?.file_name || '')
+      const filename = file?.file_name ? safeName(file.file_name) : ''
       if (!/^file[_-][\w-]{1,200}$/u.test(fileId)) throw new Error('A valid ChatGPT file_id is required.')
       const requestHash = createHash('sha256').update(JSON.stringify([
         mode, itemId || '', title, text, fileId, filename, file.mime_type || '',
       ])).digest('hex')
       const input = { requestId, requestHash, mode, itemId: itemId || '', title, text }
       const previous = await store.getMcpFileIntakeReceipt(input)
-      if (previous) return { ...previous, duplicate: true }
+      if (previous) {
+        const stored = await store.readAttachment(previous.attachmentId, MAX_MCP_FILE_BYTES)
+        if (!stored || stored.data.length !== previous.bytes
+          || createHash('sha256').update(stored.data).digest('hex') !== previous.sha256) {
+          throw new Error('Previously saved attachment is missing or corrupted. Manual review required.')
+        }
+        return { ...previous, duplicate: true }
+      }
       // Validate BEFORE making an outbound request.
       validateMcpFileUrl(file.download_url, allowedHosts)
       const bytes = await download(file, { allowedHosts })
-      const { mimeType } = validateMcpFileBytes(file, bytes)
+      const { filename: verifiedName, mimeType } = validateMcpFileBytes(file, bytes)
       const sha256 = createHash('sha256').update(bytes).digest('hex')
       const storageName = randomUUID()
       const finalPath = path.join(store.mediaDir, storageName)
@@ -191,7 +221,7 @@ export function createMcpFileIntakeService({ store, allowedHosts = [], download 
         const written = await stat(pendingPath)
         if (!written.isFile() || written.size !== bytes.length) throw new Error('File was not persisted completely.')
         await rename(pendingPath, finalPath)
-        const attachment = { id: randomUUID(), name: filename, mimeType, size: bytes.length, sha256, storageName }
+        const attachment = { id: randomUUID(), name: verifiedName, mimeType, size: bytes.length, sha256, storageName }
         const receipt = await store.saveMcpFileIntake({
           ...input, fileId, attachment,
         })
