@@ -379,6 +379,103 @@ test('legacy MCP can be retired after owner cutover without disabling owner tool
   assert.ok(names.includes('vault_read'))
 })
 
+test('MCP File Intake requires explicit Owner flags and egress allowlist', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-file-flags-'))
+  t.after(async () => rm(dataDir, { recursive: true, force: true }))
+  await assert.rejects(createBridgeApp({
+    dataDir, enableMcpFileIntake: true,
+  }), /requires the unified Owner/)
+  await assert.rejects(createBridgeApp({
+    dataDir, enableMcpFileIntake: true,
+    enableUnifiedOwner: true, enableMcpCapture: true,
+    captureMcpPath: privatePath(),
+  }), /explicit file host allowlist/)
+})
+
+test('one Owner MCP advertises fileParams, persists original bytes, appends and stays lane-isolated', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-file-mcp-'))
+  const captureMcpPath = privatePath()
+  const fakePdf = Buffer.from('%PDF-1.4\\n1 0 obj\\n<< /Type /Catalog >>\\nendobj\\n%%EOF\\n')
+  let downloads = 0
+  const bridge = await startBridge({
+    dataDir, port: 0, host: '127.0.0.1', mcpPath: '/mcp',
+    enableMcpCapture: true, enableUnifiedOwner: true,
+    enableMcpFileIntake: true,
+    mcpFileHosts: ['uploads.example.org'],
+    mcpFileDownloader: async () => { downloads++; return fakePdf },
+    captureMcpPath,
+  })
+  const url = 'http://127.0.0.1:' + bridge.address.port
+  const legacy = new Client({ name: 'old-reader-no-upload', version: '1' })
+  const owner = new Client({ name: 'unified-file-owner', version: '1' })
+  t.after(async () => {
+    await Promise.allSettled([legacy.close(), owner.close()])
+    await bridge.stop()
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  await legacy.connect(new StreamableHTTPClientTransport(new URL(url + '/mcp')))
+  await owner.connect(new StreamableHTTPClientTransport(new URL(url + captureMcpPath)))
+  const oldTools = (await legacy.listTools()).tools.map(x => x.name)
+  assert.equal(oldTools.includes('pocket_file_intake'), false)
+  const ownerTools = (await owner.listTools()).tools
+  const fileTool = ownerTools.find((entry) => entry.name === 'pocket_file_intake')
+  assert.ok(fileTool, 'Owner must expose exactly one real-file Intake tool')
+  assert.deepEqual(fileTool._meta?.['openai/fileParams'], ['file'])
+  const fileSchema = fileTool.inputSchema.properties.file
+  const schema = fileSchema.$ref
+    ? fileTool.inputSchema.$defs[fileSchema.$ref.split('/').at(-1)]
+    : fileSchema
+  assert.deepEqual(Object.keys(schema.properties).sort(),
+    ['download_url', 'file_id', 'file_name', 'mime_type'].sort())
+  assert.deepEqual([...schema.required].sort(), ['download_url', 'file_id'])
+  assert.equal(ownerTools.filter((entry) => entry.name === 'pocket_file_intake').length, 1)
+
+  const file = {
+    file_id: 'file_fixture_sdk1', file_name: 'report.pdf', mime_type: 'application/pdf',
+    download_url: 'https://uploads.example.org/temporary?secret=redacted',
+  }
+  const request = {
+    request_id: 'file:mcp:new:001', mode: 'new',
+    title: 'Article copy', file,
+  }
+  const saved = await owner.callTool({ name: 'pocket_file_intake', arguments: request })
+  assert.equal(saved.isError, undefined)
+  assert.equal(saved.structuredContent.duplicate, false)
+  const first = saved.structuredContent
+  assert.equal(first.bytes, fakePdf.length)
+  assert.equal((await bridge.store.get(first.itemId)).attachments.length, 1)
+  const actual = await bridge.store.readAttachment(first.attachmentId, fakePdf.length)
+  assert.deepEqual(actual.data, fakePdf)
+  const repeated = await owner.callTool({
+    name: 'pocket_file_intake',
+    arguments: { ...request, file: { ...file, download_url: 'https://uploads.example.org/expired' } },
+  })
+  assert.equal(repeated.structuredContent.duplicate, true)
+  assert.equal(downloads, 1)
+
+  const append = await owner.callTool({
+    name: 'pocket_file_intake',
+    arguments: {
+      request_id: 'file:mcp:append:002', mode: 'append', item_id: first.itemId,
+      file: { ...file, file_id: 'file_fixture_sdk2' },
+    },
+  })
+  assert.equal(append.isError, undefined)
+  assert.equal(append.structuredContent.itemId, first.itemId)
+  assert.equal((await bridge.store.get(first.itemId)).attachments.length, 2)
+  assert.equal(downloads, 2)
+  const invalidHost = await owner.callTool({
+    name: 'pocket_file_intake', arguments: {
+      request_id: 'file:mcp:unsafe:003', mode: 'new', file: {
+        ...file, download_url: 'http://localhost:9999/nope',
+      },
+    },
+  })
+  assert.equal(invalidHost.isError, true)
+  assert.equal((await bridge.store.list()).length, 1)
+  assert.equal(downloads, 2)
+})
+
 test('capture endpoint absent when feature remains disabled', async (t) => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-lane-disabled-'))
   const captureMcpPath = privatePath()
