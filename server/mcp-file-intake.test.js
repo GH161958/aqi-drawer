@@ -53,7 +53,7 @@ test('fileParams accepts bounded opaque identifiers without a file_ prefix and r
 test('invalid opaque identifiers fail closed before network requests or Store writes', async (t) => {
   let downloads = 0
   const { store, intake } = await fixture(t, async () => { downloads += 1; return pdf })
-  const invalid = [undefined, null, '', '  ', '\\n', 'bad\\u0000id', 'bad\\u007fid', 'x'.repeat(513), 123]
+  const invalid = [undefined, null, '', '  ', '\n', 'bad\u0000id', 'bad\u007fid', 'x'.repeat(513), 123]
   for (const fileId of invalid) {
     assert.equal(validChatGptFileId(fileId), false)
     assert.throws(() => validateMcpFileBytes(fakeFile({ file_id: fileId }), pdf), /valid ChatGPT file_id/)
