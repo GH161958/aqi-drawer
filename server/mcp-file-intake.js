@@ -152,7 +152,7 @@ export function validChatGptFileId(value) {
   return typeof value === 'string'
     && value.length <= 512
     && value.trim().length > 0
-    && !/[\u0000-\u001f\u007f]/u.test(value)
+    && [...value].every((char) => char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127)
 }
 
 export function validateMcpFileBytes(file, bytes) {
