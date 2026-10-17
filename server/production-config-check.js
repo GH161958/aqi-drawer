@@ -36,14 +36,14 @@ if (!flags.legacy && !flags.owner) {
 }
 if (flags.capture) {
   const writerPath = cleanEnvironmentValue(process.env.C_POCKET_MCP_CAPTURE_PATH)
-  if (!/^\\/mcp\\/[A-Za-z0-9_-]{43,}$/u.test(writerPath) || writerPath === mcpPath) {
+  if (!/^\/mcp\/[A-Za-z0-9_-]{43,}$/u.test(writerPath) || writerPath === mcpPath) {
     errors.push('Active Capture requires a distinct /mcp/<43+ random chars> private path.')
   }
 }
 const hostValue = cleanEnvironmentValue(process.env.C_POCKET_MCP_FILE_HOSTS)
 const hostEntries = hostValue ? hostValue.split(',').map((part) => part.trim().toLowerCase()) : []
 const hostsValid = hostEntries.length > 0 && hostEntries.every((host) =>
-  /^(?:[a-z0-9-]+\\.)+[a-z]{2,}$/u.test(host)
+  /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/u.test(host)
   && !host.startsWith('-') && !host.includes('..')
   && !host.endsWith('.local') && !host.endsWith('.internal')
 )
