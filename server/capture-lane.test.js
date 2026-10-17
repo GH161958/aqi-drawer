@@ -379,6 +379,96 @@ test('legacy MCP can be retired after owner cutover without disabling owner tool
   assert.ok(names.includes('vault_read'))
 })
 
+test('Owner fileParams host probe registers only when opted in, and never writes or downloads', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-owner-file-host-probe-'))
+  const captureMcpPath = privatePath()
+  let downloads = 0
+  const bridge = await startBridge({
+    dataDir, port: 0, host: '127.0.0.1',
+    mcpPath: '/mcp', captureMcpPath,
+    enableMcpCapture: true, enableUnifiedOwner: true,
+    enableMcpFileHostProbe: true, enableMcpFileIntake: false,
+    mcpFileDownloader: async () => { downloads++; throw new Error('Must never download.') },
+  })
+  const base = 'http://127.0.0.1:' + bridge.address.port
+  const old = new Client({ name: 'legacy-no-host-probe', version: '1' })
+  const owner = new Client({ name: 'owner-host-probe', version: '1' })
+  t.after(async () => {
+    await Promise.allSettled([old.close(), owner.close()])
+    await bridge.stop()
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  await old.connect(new StreamableHTTPClientTransport(new URL(base + '/mcp')))
+  await owner.connect(new StreamableHTTPClientTransport(new URL(base + captureMcpPath)))
+  const legacyTools = (await old.listTools()).tools.map(x => x.name)
+  assert.ok(!legacyTools.includes('pocket_file_host_probe'))
+  const tools = (await owner.listTools()).tools
+  const probe = tools.find(x => x.name === 'pocket_file_host_probe')
+  assert.ok(probe, 'Owner must have opted-in probe')
+  assert.equal(tools.some(x => x.name === 'pocket_file_intake'), false,
+    'File Intake remains absent while its own flag is off')
+  assert.deepEqual(probe._meta?.['openai/fileParams'], ['file'])
+  assert.equal(probe.annotations?.readOnlyHint, true)
+  const f = probe.inputSchema.properties.file
+  const schema = f.$ref ? probe.inputSchema.$defs[f.$ref.split('/').at(-1)] : f
+  assert.deepEqual(Object.keys(schema.properties).sort(),
+    ['download_url', 'file_id', 'mime_type', 'file_name'].sort())
+  assert.deepEqual([...schema.required].sort(), ['download_url', 'file_id'])
+  const signedSecret = 'SIGNED_TOP_SECRET_TOKEN'
+  const file = {
+    file_id: 'file_disposable_probe_01', file_name: 'private-name.pdf',
+    download_url: 'https://Uploads.Example.Org/x?token=' + signedSecret,
+  }
+  const beforeItems = await bridge.store.list({ limit: 20 })
+  const response = await owner.callTool({
+    name: 'pocket_file_host_probe', arguments: { file },
+  })
+  assert.equal(response.isError, undefined)
+  assert.deepEqual(response.structuredContent, {
+    hostname: 'uploads.example.org',
+    noDownload: true,
+    noStorageWrite: true,
+    approvedForDownloads: false,
+    nextStep: 'Ask EE to independently review the hostname before allowing any file download.',
+  })
+  assert.ok(!JSON.stringify(response).includes(signedSecret))
+  assert.ok(!JSON.stringify(response).includes(file.file_id))
+  assert.ok(!JSON.stringify(response).includes(file.file_name))
+  assert.equal(downloads, 0)
+  assert.deepEqual(await bridge.store.list({ limit: 20 }), beforeItems)
+  await assertToolUnavailable(old, 'pocket_file_host_probe', { file })
+  const unsafe = await owner.callTool({
+    name: 'pocket_file_host_probe', arguments: { file: {
+      ...file, download_url: 'https://127.0.0.1/private?token=' + signedSecret,
+    } },
+  })
+  assert.equal(unsafe.isError, true)
+  assert.ok(!JSON.stringify(unsafe).includes(signedSecret))
+  assert.equal(downloads, 0)
+})
+
+test('Owner file host probe is absent by default even when Owner is enabled', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-owner-probe-disabled-'))
+  const captureMcpPath = privatePath()
+  const bridge = await startBridge({
+    dataDir, port: 0, host: '127.0.0.1',
+    mcpPath: '/mcp', captureMcpPath,
+    enableMcpCapture: true, enableUnifiedOwner: true,
+  })
+  t.after(async () => {
+    await bridge.stop()
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  const client = new Client({ name: 'owner-without-probe', version: '1' })
+  t.after(async () => client.close())
+  await client.connect(new StreamableHTTPClientTransport(new URL(
+    'http://127.0.0.1:' + bridge.address.port + captureMcpPath,
+  )))
+  const names = (await client.listTools()).tools.map(x => x.name)
+  assert.ok(!names.includes('pocket_file_host_probe'))
+  assert.ok(!names.includes('pocket_file_intake'))
+})
+
 test('MCP File Intake requires explicit Owner flags and egress allowlist', async (t) => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-file-flags-'))
   t.after(async () => rm(dataDir, { recursive: true, force: true }))
