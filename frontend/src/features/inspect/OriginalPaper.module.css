@@ -148,6 +148,22 @@
   word-break: normal;
 }
 
+.documentDescription {
+  margin: 20px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--drawer-rule);
+}
+
+.documentDescriptionTitle {
+  margin: 0 0 12px;
+  color: var(--drawer-quiet-ink);
+  font-family: var(--font-meta);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: .055em;
+}
+
 .body p {
   margin:
     0 0 1.08em;
