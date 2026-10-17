@@ -67,6 +67,9 @@ export function InspectOriginalPaper({
   const presentation =
     classifyPresentation(item)
 
+  const isDocument =
+    presentation.kind === 'document'
+
   return (
     <article
       className={styles.paper}
@@ -83,8 +86,27 @@ export function InspectOriginalPaper({
         </h1>
       </header>
 
+      {isDocument && (
+        <InspectAttachments
+          key={item.id}
+          item={item}
+          primary
+        />
+      )}
+
       {item.text.trim() && (
-        <div className={styles.body}>
+        <div
+          className={
+            isDocument
+              ? `${styles.body} ${styles.documentDescription}`
+              : styles.body
+          }
+        >
+          {isDocument && (
+            <h2 className={styles.documentDescriptionTitle}>
+              补充说明
+            </h2>
+          )}
           {item.text
             .split(/\n+/u)
             .filter(Boolean)
@@ -123,10 +145,12 @@ export function InspectOriginalPaper({
         </p>
       )}
 
-      <InspectAttachments
-        key={item.id}
-        item={item}
-      />
+      {!isDocument && (
+        <InspectAttachments
+          key={item.id}
+          item={item}
+        />
+      )}
 
       {item.sourceUrl && (
         <SourceReadPanel
