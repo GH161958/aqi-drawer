@@ -145,8 +145,18 @@ function classifyFile(name, bytes, declaredMime = '') {
   return mime
 }
 
+// file_id is an opaque host-issued identifier. The MCP fileParams contract
+// does not mandate a "file_" prefix. Reject blank, control-containing and
+// unreasonably large values without logging or otherwise exposing the ID.
+export function validChatGptFileId(value) {
+  return typeof value === 'string'
+    && value.length <= 512
+    && value.trim().length > 0
+    && [...value].every((char) => char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127)
+}
+
 export function validateMcpFileBytes(file, bytes) {
-  if (!file || typeof file !== 'object' || !/^file[_-][\w-]{1,200}$/u.test(String(file.file_id || ''))) {
+  if (!file || typeof file !== 'object' || !validChatGptFileId(file.file_id)) {
     throw new Error('A valid ChatGPT file_id is required.')
   }
   const filename = resolveFileName(file, bytes)
@@ -220,9 +230,9 @@ export function createMcpFileIntakeService({ store, allowedHosts = [], download 
       if (mode === 'new' && itemId) throw new Error('New file Intake must not supply an item ID.')
       if (mode === 'append' && (!itemId || title || text)) throw new Error('Append requires existing item_id, without title or text replacement.')
       if (String(title).length > 160 || String(text).length > 20000) throw new Error('File item title/text is too long.')
-      const fileId = String(file?.file_id || '')
+      const fileId = file?.file_id
       const filename = file?.file_name ? safeName(file.file_name) : ''
-      if (!/^file[_-][\w-]{1,200}$/u.test(fileId)) throw new Error('A valid ChatGPT file_id is required.')
+      if (!validChatGptFileId(fileId)) throw new Error('A valid ChatGPT file_id is required.')
       const requestHash = createHash('sha256').update(JSON.stringify([
         mode, itemId || '', title, text, fileId, filename, file.mime_type || '',
       ])).digest('hex')
