@@ -157,6 +157,130 @@ test('append reuses same PocketStore and leaves title, text, tags, collection un
   assert.equal((await store.get(existing.id)).attachments.length, 1)
 })
 
+test('refreshed ChatGPT file_id is a verified duplicate only for identical original PDF bytes', async (t) => {
+  let downloads = 0
+  const { store, intake } = await fixture(t, async () => { downloads++; return pdf })
+  const args = {
+    requestId: 'intake:refreshed-id:0001', mode: 'new',
+    title: 'Original title', text: 'Original notes', file: fakeFile(),
+  }
+  const saved = await intake.save(args)
+  const duplicate = await intake.save({
+    ...args,
+    file: fakeFile({
+      file_id: 'opaque-refreshed-asset-999',
+      file_name: 'another-host-name.pdf',
+      download_url: 'https://uploads.example.org/new-signed-url',
+    }),
+  })
+  assert.equal(duplicate.duplicate, true)
+  assert.equal(duplicate.itemId, saved.itemId)
+  assert.equal(duplicate.attachmentId, saved.attachmentId)
+  assert.equal(duplicate.sha256, saved.sha256)
+  assert.equal(downloads, 2)
+  const item = await store.get(saved.itemId)
+  assert.equal(item.title, 'Original title')
+  assert.equal(item.text, 'Original notes')
+  assert.equal(item.sourceData.openaiFileId, args.file.file_id)
+  assert.equal(item.attachments.length, 1)
+  assert.equal(item.activity.filter((a) => a.type === 'attachment_added').length, 1)
+  assert.equal((await store.list()).length, 1)
+  assert.equal((await readdir(store.mediaDir)).length, 1)
+  assert.deepEqual((await store.readAttachment(saved.attachmentId, MAX_MCP_FILE_BYTES)).data, pdf)
+})
+
+test('refreshed file_id append retry verifies bytes without replacing item metadata', async (t) => {
+  const { store, intake } = await fixture(t)
+  const original = await store.upsert({
+    title: 'Keep original', text: 'Unchanged notes', tags: ['Research'], collection: 'Academic',
+  })
+  const args = {
+    requestId: 'intake:refreshed-append:0001', mode: 'append',
+    itemId: original.id, file: fakeFile(),
+  }
+  const saved = await intake.save(args)
+  const duplicate = await intake.save({
+    ...args,
+    file: fakeFile({ file_id: 'opaque-new-append-asset' }),
+  })
+  assert.equal(duplicate.duplicate, true)
+  assert.equal(duplicate.attachmentId, saved.attachmentId)
+  const item = await store.get(original.id)
+  assert.equal(item.title, original.title)
+  assert.equal(item.text, original.text)
+  assert.deepEqual(item.tags, original.tags)
+  assert.equal(item.collection, original.collection)
+  assert.equal(item.attachments.length, 1)
+  assert.equal((await readdir(store.mediaDir)).length, 1)
+})
+
+test('changed file_id with different bytes or original intent stays a conflict with no extra media', async (t) => {
+  let downloaded = pdf
+  let downloads = 0
+  const { store, intake } = await fixture(t, async () => { downloads++; return downloaded })
+  const args = {
+    requestId: 'intake:refreshed-conflict:0001', mode: 'new',
+    title: 'Original title', text: 'Original notes', file: fakeFile(),
+  }
+  const saved = await intake.save(args)
+  const freshFile = fakeFile({ file_id: 'opaque-other-file' })
+  downloaded = Buffer.concat([pdf, Buffer.from('different bytes')])
+  await assert.rejects(() => intake.save({ ...args, file: freshFile }), /already used/)
+  downloaded = pdf
+  await assert.rejects(() => intake.save({
+    ...args, title: 'Changed title', file: freshFile,
+  }), /already used/)
+  await assert.rejects(() => intake.save({
+    ...args, text: 'Changed notes', file: freshFile,
+  }), /already used/)
+  await assert.rejects(() => intake.save({
+    ...args, mode: 'append', itemId: saved.itemId, title: '', text: '', file: freshFile,
+  }), /already used/)
+  assert.equal(downloads, 5)
+  assert.equal((await store.list()).length, 1)
+  assert.equal((await readdir(store.mediaDir)).length, 1)
+  const item = await store.get(saved.itemId)
+  assert.equal(item.attachments.length, 1)
+  assert.equal(item.attachments[0].sha256, saved.sha256)
+  assert.deepEqual((await store.readAttachment(saved.attachmentId, MAX_MCP_FILE_BYTES)).data, pdf)
+})
+
+test('refreshed retry still rejects unapproved hosts before bytes leave the server', async (t) => {
+  let downloads = 0
+  const { store, intake } = await fixture(t, async () => { downloads++; return pdf })
+  const args = { requestId: 'intake:refreshed-host:0001', mode: 'new', file: fakeFile() }
+  const saved = await intake.save(args)
+  await assert.rejects(() => intake.save({
+    ...args,
+    file: fakeFile({
+      file_id: 'fresh-new-id',
+      download_url: 'https://another.example.org/signed',
+    }),
+  }), /not explicitly allowlisted/)
+  assert.equal(downloads, 1)
+  assert.equal((await readdir(store.mediaDir)).length, 1)
+  assert.equal((await store.get(saved.itemId)).attachments.length, 1)
+})
+
+test('refreshed retry refuses missing or replaced original attachment', async (t) => {
+  const { store, intake } = await fixture(t)
+  const args = { requestId: 'intake:refreshed-detached:0001', mode: 'new', file: fakeFile() }
+  const saved = await intake.save(args)
+  await store.removeAttachment(saved.itemId, saved.attachmentId)
+  await store.appendAttachments(saved.itemId, [{
+    id: randomUUID(), name: 'replacement.pdf', mimeType: 'application/pdf',
+    size: pdf.length, sha256: createHash('sha256').update(pdf).digest('hex'),
+  }], { requestId: 'later-unrelated:0001', actor: 'EE' })
+  await assert.rejects(() => intake.save({
+    ...args,
+    file: fakeFile({ file_id: 'fresh-after-removal' }),
+  }), /no longer attached/)
+  const item = await store.get(saved.itemId)
+  assert.equal(item.attachments.length, 1)
+  assert.notEqual(item.attachments[0].id, saved.attachmentId)
+  assert.deepEqual(await readdir(store.mediaDir), [])
+})
+
 test('colliding request IDs, unsafe target and invalid file clean staged media', async (t) => {
   const { store, intake } = await fixture(t)
   const saved = await intake.save({

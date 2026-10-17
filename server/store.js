@@ -732,9 +732,13 @@ export class PocketStore {
 
   // MCP file Intake uses the existing PocketStore + Media, never a second DB.
   // Signed download URLs are intentionally absent from canonical state.
-  async getMcpFileIntakeReceipt({ requestId, requestHash, mode, itemId = '' }) {
+  async getMcpFileIntakeReceipt({
+    requestId, requestHash, mode, itemId = '', title = '', text = '', verifiedFile,
+  }) {
     const state = await this.#read()
-    return lookupMcpFileReceipt(state, { requestId, requestHash, mode, itemId })
+    return lookupMcpFileReceipt(state, {
+      requestId, requestHash, mode, itemId, title, text, verifiedFile,
+    })
   }
 
   async saveMcpFileIntake({
@@ -2135,7 +2139,9 @@ function hydrateStoredItem(item) {
   }
 }
 
-function lookupMcpFileReceipt(state, { requestId, requestHash, mode, itemId }) {
+function lookupMcpFileReceipt(state, {
+  requestId, requestHash, mode, itemId, title = '', text = '', verifiedFile,
+}) {
   for (const item of state.items) {
     const matchNew = item.sourceIdentity?.provider === 'aqi-mcp-file-intake'
       && item.sourceIdentity.externalId === requestId
@@ -2146,8 +2152,7 @@ function lookupMcpFileReceipt(state, { requestId, requestHash, mode, itemId }) {
     const existingMode = matchNew ? 'new' : 'append'
     const existingHash = matchNew ? item.sourceData?.fileIntakeRequestHash
       : matchAppend.detail.fileIntakeRequestHash
-    if (item.deletedAt || existingMode !== mode || (mode === 'append' && item.id !== itemId)
-      || existingHash !== requestHash) {
+    if (item.deletedAt || existingMode !== mode || (mode === 'append' && item.id !== itemId)) {
       throw httpError(409, 'File Intake requestId was already used for a different item or file.')
     }
     const trackedId = matchNew
@@ -2157,6 +2162,25 @@ function lookupMcpFileReceipt(state, { requestId, requestHash, mode, itemId }) {
       : matchAppend.detail.attachmentId
     const attachment = item.attachments.find((entry) => entry.id === trackedId)
     if (!attachment) throw httpError(409, 'Previously stored file is no longer attached. Manual review required.')
+
+    // A fresh ChatGPT fileParams call may mint a different opaque file_id.
+    // A changed request hash is accepted ONLY after a separately downloaded
+    // and type-checked file matches the durable attachment byte identity and
+    // the original intended item content. The canonical request hash remains
+    // unchanged, so this cannot silently replace an existing attachment.
+    if (existingHash !== requestHash) {
+      const originalTitle = clean(title) || deriveTitle(clean(text), '')
+      const sameIntent = mode === 'append'
+        || (item.title === originalTitle && item.text === clean(text))
+      const sameFile = verifiedFile
+        && verifiedFile.sha256 === attachment.sha256
+        && verifiedFile.bytes === attachment.size
+        && verifiedFile.mimeType === attachment.mimeType
+      if (!sameIntent || !sameFile) {
+        throw httpError(409, 'File Intake requestId was already used for a different item or file.')
+      }
+    }
+
     return {
       itemId: item.id, attachmentId: attachment.id,
       fileName: attachment.name, mimeType: attachment.mimeType,
