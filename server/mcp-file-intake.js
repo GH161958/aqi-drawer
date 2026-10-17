@@ -44,6 +44,36 @@ export function validateMcpFileUrl(input, allowedHosts) {
   return url
 }
 
+// Probe is a metadata-only inspection of a ChatGPT-provided fileParams value.
+// Never perform DNS resolution, fetch the URL, access Store, or echo a signed
+// URL, token, path, query, file_id, file name, or MIME in the result.
+export function describeMcpFileHost(file) {
+  if (!file || typeof file !== 'object'
+    || typeof file.file_id !== 'string' || !file.file_id.trim()
+    || typeof file.download_url !== 'string' || !file.download_url) {
+    throw new Error('A ChatGPT file parameter is required for a hostname-only probe.')
+  }
+  let url
+  try { url = new URL(file.download_url) } catch {
+    throw new Error('Temporary file URL is invalid.')
+  }
+  if (url.protocol !== 'https:' || url.username || url.password
+    || url.port || url.hash || isIP(url.hostname)) {
+    throw new Error('Temporary file host must be a plain HTTPS DNS hostname.')
+  }
+  const candidate = url.hostname.toLowerCase()
+  if (!permittedFileHosts([candidate]).includes(candidate)) {
+    throw new Error('Temporary file hostname is not suitable for allowlist review.')
+  }
+  return {
+    hostname: candidate,
+    noDownload: true,
+    noStorageWrite: true,
+    approvedForDownloads: false,
+    nextStep: 'Ask EE to independently review the hostname before allowing any file download.',
+  }
+}
+
 function safeName(value) {
   const name = String(value || '').replaceAll('\\', '/').split('/').at(-1)
     .split('').filter((char) => char.charCodeAt(0) > 31 && char.charCodeAt(0) !== 127).join('').trim().slice(0, 200)

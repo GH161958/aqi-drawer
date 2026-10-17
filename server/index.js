@@ -49,10 +49,14 @@ export async function createBridgeApp(config = {}) {
     enableMcpCapture: config.enableMcpCapture ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_CAPTURE) === 'true'),
     enableUnifiedOwner: config.enableUnifiedOwner ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_UNIFIED_OWNER) === 'true'),
     enableMcpFileIntake: config.enableMcpFileIntake ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_INTAKE) === 'true'),
+    enableMcpFileHostProbe: config.enableMcpFileHostProbe ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_HOST_PROBE) === 'true'),
     mcpFileHosts: permittedFileHosts(config.mcpFileHosts ?? process.env.C_POCKET_MCP_FILE_HOSTS),
     enableLegacyMcp: config.enableLegacyMcp ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_LEGACY_MCP) !== 'false'),
     captureMcpPath: cleanEnvironmentValue(config.captureMcpPath ?? process.env.C_POCKET_MCP_CAPTURE_PATH),
     dropSecret: config.dropSecret ?? (cleanEnvironmentValue(process.env.C_POCKET_DROP_SECRET) || `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`),
+  }
+  if (settings.enableMcpFileHostProbe && (!settings.enableUnifiedOwner || !settings.enableMcpCapture)) {
+    throw new Error('MCP File Host Probe requires unified Owner and Capture to be enabled.')
   }
   if (settings.enableMcpFileIntake && (!settings.enableUnifiedOwner || !settings.enableMcpCapture || !settings.mcpFileHosts.length)) {
     throw new Error('MCP File Intake requires the unified Owner with Capture and explicit file host allowlist.')
@@ -876,6 +880,7 @@ export async function createBridgeApp(config = {}) {
             store, cmemory, contentReader, vault,
             enableMcpCapture: lane !== 'standard' && settings.enableMcpCapture,
             fileIntake: lane === 'owner' ? fileIntake : null,
+            enableMcpFileHostProbe: lane === 'owner' && settings.enableMcpFileHostProbe,
             lane,
           })
           await server.connect(transport)

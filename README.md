@@ -71,6 +71,7 @@ npm start
 | `C_POCKET_ENABLE_MCP_CAPTURE` | 默认 `false`；单独启用 owner write lane；**只开此开关不能让原 MCP 地址写入** |
 | `C_POCKET_ENABLE_UNIFIED_OWNER` | 默认 `false`；配合 Capture 开关，将专用新地址升级为同一个可读、可 Capture 的 Owner MCP（保留旧入口过渡） |
 | `C_POCKET_ENABLE_MCP_FILE_INTAKE` | 默认 `false`；新文件 Intake 仅在统一 Owner 和 Capture 同时启用且文件域名白名单已设置后允许注册 |
+| `C_POCKET_ENABLE_MCP_FILE_HOST_PROBE` | 默认 `false`；仅在统一 Owner + Capture 都开启时，临时注册 **只返回 hostname、不下载或存储** 的文件参数诊断工具 |
 | `C_POCKET_MCP_FILE_HOSTS` | 逗号分隔的**准确 HTTPS 文件下载主机名** allowlist，仅用于官方 fileParams 临时下载，不可填写任意通配符、完整带签名 URL 或密钥；默认空/拒绝 |
 | `C_POCKET_ENABLE_LEGACY_MCP` | 默认 `true`；**仅在新 Owner 连接正式验收之后**可另行设为 `false`，停用旧 MCP 路由 |
 | `C_POCKET_MCP_CAPTURE_PATH` | 仅在另行启用时使用，独立于 `C_POCKET_MCP_PATH` 的专用高熵私密 MCP 路径；至少 43 字符随机段，禁止写入日志或文档 |
@@ -169,6 +170,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 - 操作不影响 item 原文、来源数据、附件、Memory 或 Vault；整理是对物件的低风险元数据修改，不构成订阅式后台自动任务。平台若要求用户确认写操作，仍须遵守。
 
 **当前版本仅为独立 PR 候选。** 不要现在修改 Zeabur 开关、合并、部署或对真实 Drawer 发出测试写入；代码和 CI 验收后另行请求 EE 授权。
+
+### PR D-0 · 上线前只读域名诊断与回滚 Gate
+
+**只读兼容性工具：** `pocket_file_host_probe` 仅出现在明确开启 `C_POCKET_ENABLE_MCP_FILE_HOST_PROBE=true` 的统一 Owner 上；使用与文件 Intake 相同的 `_meta["openai/fileParams"]`，只从 ChatGPT 提供的临时链接提取并返回小写 HTTPS **hostname**。不会请求 URL、DNS、下载、读取 Drawer、写入 Store、登记白名单或回显签名地址/文件 ID/文件名。返回的域名只是 **待审核候选**，绝不自动获准下载。默认 OFF。
+
+**重要：** 真实 ChatGPT host fileParams 验证只能在独立授权的已连 Owner、一次性非敏感文件上进行；只读探针通过并不代表实际文件上传已成功。生产预检 `npm run production:check` 已增加开关组合、路径和白名单检查，错误消息不含秘密值。发布/回退按 [Owner MCP 分阶段上线 Gate](docs/owner-mcp-release-gates.md) 执行，每阶段重新批准。
 
 ### PR C · ChatGPT 文件原始字节 Intake（候选，不在东京上线）
 
