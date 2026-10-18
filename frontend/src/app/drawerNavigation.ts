@@ -155,6 +155,86 @@ export function withDrawerHistoryEntry(
   }
 }
 
+// A shareable address selects one item, without putting credentials or
+// original-file URLs in the link. Item IDs are identifiers, not auth tokens.
+const itemQueryKey = 'item'
+const itemIdPattern =
+  /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/iu
+
+export function readDrawerItemDeepLink(
+  search: string,
+): string | null {
+  const candidates =
+    new URLSearchParams(search).getAll(
+      itemQueryKey,
+    )
+
+  if (
+    candidates.length !== 1
+    || !itemIdPattern.test(candidates[0])
+  ) {
+    return null
+  }
+
+  return candidates[0]
+}
+
+export function resolveInitialDrawerHistoryEntry(
+  state: unknown,
+  search: string,
+): DrawerHistoryEntry | null {
+  const saved = readDrawerHistoryEntry(state)
+  const parameters = new URLSearchParams(search)
+  if (!parameters.has(itemQueryKey)) {
+    return saved
+  }
+
+  const itemId = readDrawerItemDeepLink(search)
+  if (!itemId) {
+    // Malformed / duplicate link parameters should not open stale papers.
+    return { version: 1, view: 'cabinet' }
+  }
+
+  if (
+    saved?.view === 'inspect'
+    && saved.itemId === itemId
+  ) {
+    return saved
+  }
+
+  return {
+    version: 1,
+    view: 'inspect',
+    itemId,
+    slot: 'all',
+    collection: '',
+    source: '',
+    tag: '',
+    scrollY: 0,
+  }
+}
+
+export function drawerHistoryUrl(
+  pathname: string,
+  search: string,
+  hash: string,
+  entry: DrawerHistoryEntry,
+): string {
+  const parameters =
+    new URLSearchParams(search)
+
+  if (entry.view === 'inspect') {
+    parameters.set(itemQueryKey, entry.itemId)
+  } else {
+    parameters.delete(itemQueryKey)
+  }
+
+  const query = parameters.toString()
+  return pathname
+    + (query ? '?' + query : '')
+    + hash
+}
+
 export interface OutsideTapSample {
   startX: number
   startY: number
