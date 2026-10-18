@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -122,4 +123,34 @@ test('stale request results cannot target a newer active paper', () => {
     ),
     true,
   )
+})
+
+test('Inspect paper media and attachment siblings have distinct stable keys', () => {
+  // Guard against duplicate sibling keys that can leave stale DOM nodes.
+  const source = readFileSync(
+    new URL('../src/features/inspect/InspectOriginalPaper.tsx', import.meta.url),
+    'utf8',
+  )
+  const componentKeys = [...source.matchAll(
+    /<(InspectMedia|InspectAttachments)\s+key=\{`([^`]+)`\}/gu,
+  )].map((match) => ({
+    component: match[1],
+    key: match[2],
+  }))
+
+  assert.deepEqual(componentKeys, [
+    {
+      component: 'InspectAttachments',
+      key: 'inspect-attachments-primary:${item.id}',
+    },
+    {
+      component: 'InspectMedia',
+      key: 'inspect-media:${item.id}',
+    },
+    {
+      component: 'InspectAttachments',
+      key: 'inspect-attachments-secondary:${item.id}',
+    },
+  ])
+  assert.equal(new Set(componentKeys.map((value) => value.key)).size, 3)
 })

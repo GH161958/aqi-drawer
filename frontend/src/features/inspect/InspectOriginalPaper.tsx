@@ -88,7 +88,7 @@ export function InspectOriginalPaper({
 
       {isDocument && (
         <InspectAttachments
-          key={item.id}
+          key={`inspect-attachments-primary:${item.id}`}
           item={item}
           primary
         />
@@ -124,7 +124,7 @@ export function InspectOriginalPaper({
       )}
 
       <InspectMedia
-        key={item.id}
+        key={`inspect-media:${item.id}`}
         itemId={item.id}
         attachments={item.attachments}
         title={item.title}
@@ -147,7 +147,7 @@ export function InspectOriginalPaper({
 
       {!isDocument && (
         <InspectAttachments
-          key={item.id}
+          key={`inspect-attachments-secondary:${item.id}`}
           item={item}
         />
       )}
