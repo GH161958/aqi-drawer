@@ -187,6 +187,10 @@
 
   display: grid;
 
+  /* Bound the sole track to the bundle width: long document content must
+     not expand the implicit auto column and shift the original paper. */
+  grid-template-columns: minmax(0, 1fr);
+
   grid-template-rows:
     var(--p3-top)
     minmax(var(--p3-height), auto)
