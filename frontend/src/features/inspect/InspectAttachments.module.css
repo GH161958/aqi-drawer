@@ -6,24 +6,118 @@
   font-family: var(--font-ui);
 }
 
+/* The primary attachment sheet is present only for classified Documents.
+ * Keep the actual attachment list, auth links, mutation handlers, and QA.
+ * No extra fake viewer or backend-owned state is introduced here.
+ */
 .primary {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
+  position: relative;
+  margin: 8px 0 28px;
+  padding: 32px clamp(14px, 3vw, 24px) 24px;
+  border: 1px solid rgba(125, 99, 63, .22);
+  background: #eee4d3;
+  box-shadow: 5px 6px 0 rgba(134, 110, 78, .11);
 }
 
-.primary > ul > li {
-  align-items: center;
-  padding: 12px 0;
+.primary::before {
+  content: 'ORIGINAL / DOCUMENT';
+  position: absolute;
+  top: -10px;
+  left: 18px;
+  padding: 3px 10px;
+  background: #ded0b9;
+  color: var(--drawer-walnut);
+  font-family: var(--font-meta);
+  font-size: 9px;
+  line-height: 1.4;
+  letter-spacing: .12em;
+}
+
+.primary .sectionHead {
+  align-items: flex-start;
+  min-height: 27px;
+  gap: 8px;
+}
+
+.primary .sectionHead h2 {
+  color: rgba(90, 76, 60, .78);
+  font-family: var(--font-meta);
+  font-size: 10px;
+  letter-spacing: .035em;
+}
+
+.primary .sectionHead .addToggle {
+  min-height: 27px;
+  color: rgba(83, 96, 78, .7);
+  font-size: 10px;
+}
+
+.attachments.primary > ul > li {
+  display: block;
+  min-height: 128px;
+  margin-top: 12px;
+  padding: 22px clamp(13px, 2.2vw, 21px) 14px;
+  border: 1px solid rgba(125, 99, 63, .2);
+  border-left: 3px solid rgba(117, 123, 92, .65);
+  background: #f9f3e7;
+  box-shadow: 2px 4px 0 rgba(140, 119, 83, .09);
 }
 
 .primary .name {
+  max-width: 100%;
+  overflow: visible;
   white-space: normal;
   overflow-wrap: anywhere;
+  text-overflow: clip;
+  color: #3a332a;
+  font-family: var(--font-display);
+  font-size: clamp(16px, 2.3vw, 19px);
+  line-height: 1.43;
 }
 
 .primary .meta {
-  margin-top: 5px;
+  margin-top: 9px;
+  color: #807362;
+  font-family: var(--font-meta);
+  font-size: 10px;
+  letter-spacing: .06em;
+}
+
+.primary .actions,
+.primary .confirmation {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  width: 100%;
+  gap: 8px 14px;
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(126, 104, 81, .17);
+}
+
+.primary .actions a,
+.primary .actions button,
+.primary .confirmation button {
+  min-height: 44px;
+  padding: 0 1px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.primary .actions button:last-child {
+  margin-left: auto;
+  color: rgba(132, 70, 57, .62);
+}
+
+.primary .confirmation {
+  max-width: none;
+}
+
+.primary .confirmation span {
+  width: 100%;
+  text-align: left;
 }
 
 .attachments h2 {

@@ -34,6 +34,24 @@
   margin-bottom: 22px;
 }
 
+/* Approved 2026-10-18 document-only visual identity.
+ * Preserve normal article, photo, text, and mixed-media headers.
+ */
+.paper[data-presentation-kind='document'] > .header {
+  margin-bottom: 28px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(126, 104, 81, .14);
+}
+
+.paper[data-presentation-kind='document'] > .header .title {
+  color: rgba(52, 46, 39, .8);
+  font-size: clamp(14px, 2vw, 17px);
+  font-weight: 400;
+  line-height: 1.55;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
 .title {
   margin: 0;
 
@@ -152,6 +170,9 @@
   margin: 20px 0 8px;
   padding-top: 16px;
   border-top: 1px solid var(--drawer-rule);
+  color: rgba(52, 46, 39, .70);
+  font-size: 11px;
+  line-height: 1.8;
 }
 
 .documentDescriptionTitle {
