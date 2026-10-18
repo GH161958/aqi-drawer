@@ -66,7 +66,7 @@ test('same private URL upgrades in place to Owner, preserves reads, bounded writ
   const tools = (await client.listTools()).tools.map(x => x.name)
   for (const required of [
     'pocket_get', 'pocket_list', 'pocket_search', 'pocket_taxonomy',
-    'pocket_start_context', 'pocket_read_content', 'pocket_reply',
+    'pocket_start_context', 'pocket_read_content', 'pocket_attachment_read', 'pocket_reply',
     'pocket_review', 'memory_turn_pre', 'memory_turn_post',
     'vault_read', 'vault_update', 'pocket_capture_create',
     'pocket_organize_existing', 'pocket_organize_undo',
@@ -179,6 +179,7 @@ test('default-off rollout and rollback restore standard MCP tools on exact URL w
   assert.ok(tools.includes('pocket_edit_metadata'))
   assert.ok(!tools.includes('pocket_organize_existing'))
   assert.ok(!tools.includes('pocket_organize_undo'))
+  assert.ok(!tools.includes('pocket_attachment_read'))
   const denied = await client.callTool({
     name: 'pocket_capture_create',
     arguments: {
