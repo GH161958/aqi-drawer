@@ -73,6 +73,17 @@ test('only a matching active item + attachment can be read', async () => {
     readOriginalAttachment(trashedStore, args),
     /not found on this active Drawer item/,
   )
+  const oversizedStore = {
+    async readItemAttachment() {
+      const error = new Error('Do not echo internal storage paths.')
+      error.status = 413
+      throw error
+    },
+  }
+  await assert.rejects(
+    readOriginalAttachment(oversizedStore, args),
+    /exceeds the 25 MiB read limit/,
+  )
   await assert.rejects(
     readOriginalAttachment(store, { ...args, maxChars: 400 }),
     /Invalid page, offset/,
