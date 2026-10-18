@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import { randomBytes, createHash } from 'node:crypto'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { randomBytes, randomUUID, createHash } from 'node:crypto'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -236,3 +236,53 @@ test('in-place Owner can expose fileParams only behind independent flags', async
   assert.deepEqual(record.data, bytes)
   assert.equal(saved.structuredContent.sha256, createHash('sha256').update(bytes).digest('hex'))
 })
+
+test('Owner reads a disposable stored Markdown original without touching Pocket state', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-original-read-owner-'))
+  const mcpPath = privatePath()
+  const bridge = await startBridge({
+    dataDir, port: 0, host: '127.0.0.1', mcpPath, ...inPlaceFlags,
+  })
+  const client = await connect('http://127.0.0.1:' + bridge.address.port, mcpPath)
+  t.after(async () => {
+    await Promise.allSettled([client.close(), bridge.stop()])
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  const bytes = Buffer.from('# 真正的 Markdown 原文\n\nAqi reads 🐆\n', 'utf8')
+  const mediaName = randomUUID()
+  const attachmentId = randomUUID()
+  await writeFile(path.join(bridge.store.mediaDir, mediaName), bytes)
+  const receipt = await bridge.store.saveMcpFileIntake({
+    requestId: 'original-read:isolated:00001',
+    requestHash: 'd'.repeat(64),
+    mode: 'new',
+    title: 'Disposable source document',
+    text: 'Item description is not the source document.',
+    fileId: 'disposable-test-id',
+    attachment: {
+      id: attachmentId, name: 'notes.md', mimeType: 'text/markdown',
+      size: bytes.length,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      storageName: mediaName,
+    },
+  })
+  const before = await bridge.store.get(receipt.itemId)
+  const response = await client.callTool({
+    name: 'pocket_attachment_read',
+    arguments: { item_id: receipt.itemId, attachment_id: attachmentId },
+  })
+  assert.equal(response.isError, undefined)
+  assert.equal(response.structuredContent.text, bytes.toString('utf8'))
+  assert.equal(response.structuredContent.format, 'md')
+  assert.equal(response.structuredContent.sha256, before.attachments[0].sha256)
+  assert.match(response.content[0].text, /UNTRUSTED ORIGINAL DOCUMENT CONTENT/)
+  assert.equal(response.content[0].text.includes('Item description is not the source document.'), false)
+  assert.equal(JSON.stringify(response).includes(mediaName), false)
+  const wrong = await client.callTool({
+    name: 'pocket_attachment_read',
+    arguments: { item_id: randomUUID(), attachment_id: attachmentId },
+  })
+  assert.equal(wrong.isError, true)
+  assert.deepEqual(await bridge.store.get(receipt.itemId), before)
+})
+
