@@ -34,7 +34,10 @@ import type {
 } from '../types/pocket'
 
 import {
+  drawerHistoryUrl,
   readDrawerHistoryEntry,
+  readDrawerItemDeepLink,
+  resolveInitialDrawerHistoryEntry,
   withDrawerHistoryEntry,
   type ArchiveSnapshot,
   type DrawerHistoryEntry,
@@ -52,8 +55,9 @@ export function App() {
 
   const initialHistoryEntryRef =
     useRef(
-      readDrawerHistoryEntry(
+      resolveInitialDrawerHistoryEntry(
         window.history.state,
+        window.location.search,
       ),
     )
 
@@ -173,6 +177,12 @@ export function App() {
         entry,
       ),
       '',
+      drawerHistoryUrl(
+        window.location.pathname,
+        window.location.search,
+        window.location.hash,
+        entry,
+      ),
     )
   }
 
@@ -185,6 +195,12 @@ export function App() {
         entry,
       ),
       '',
+      drawerHistoryUrl(
+        window.location.pathname,
+        window.location.search,
+        window.location.hash,
+        entry,
+      ),
     )
   }
 
@@ -261,11 +277,53 @@ export function App() {
     applyHistoryEntry
 
   useEffect(() => {
-    if (!initialHistoryEntryRef.current) {
+    const initial =
+      initialHistoryEntryRef.current
+    const linkedItemId =
+      readDrawerItemDeepLink(
+        window.location.search,
+      )
+    const savedEntry =
+      readDrawerHistoryEntry(
+        window.history.state,
+      )
+
+    if (
+      linkedItemId
+      && initial?.view === 'inspect'
+      && (
+        savedEntry?.view !== 'inspect'
+        || savedEntry.itemId !== linkedItemId
+      )
+    ) {
+      // Place an Archive entry behind a newly opened deep link.
+      // Back should return to Drawer, not unexpectedly leave the site.
       replaceHistory({
         version: 1,
-        view: 'cabinet',
+        view: 'archive',
+        slot: 'all',
+        collection: '',
+        source: '',
+        tag: '',
+        scrollY: 0,
       })
+      pushHistory(initial)
+    } else if (
+      !initial
+      || (
+        new URLSearchParams(
+          window.location.search,
+        ).has('item')
+        && !linkedItemId
+      )
+    ) {
+      // Strip malformed query IDs without opening stale history state.
+      replaceHistory(
+        initial ?? {
+          version: 1,
+          view: 'cabinet',
+        },
+      )
     }
 
     const previousRestoration =
@@ -278,8 +336,9 @@ export function App() {
       event: PopStateEvent,
     ) => {
       const entry =
-        readDrawerHistoryEntry(
+        resolveInitialDrawerHistoryEntry(
           event.state,
+          window.location.search,
         )
 
       if (entry) {
