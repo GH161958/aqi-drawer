@@ -3,8 +3,11 @@ import test from 'node:test'
 
 import {
   drawerHistoryKey,
+  drawerHistoryUrl,
   isArchiveOutsideTap,
   readDrawerHistoryEntry,
+  readDrawerItemDeepLink,
+  resolveInitialDrawerHistoryEntry,
   withDrawerHistoryEntry,
 } from '../src/app/drawerNavigation.ts'
 
@@ -87,6 +90,112 @@ test('drawer history restores inspect snapshot safely', () => {
       scrollY: 215,
     },
   )
+})
+
+const flowerId =
+  '71b4c775-7f65-4afe-9c47-de6c2dcfce97'
+const otherId =
+  'f5cd54a8-6f33-480d-ba92-52a049153172'
+
+test('one valid item URL opens that Inspect paper from a cold start', () => {
+  const entry = resolveInitialDrawerHistoryEntry(
+    null,
+    '?item=' + flowerId,
+  )
+  assert.deepEqual(entry, {
+    version: 1,
+    view: 'inspect',
+    itemId: flowerId,
+    slot: 'all',
+    collection: '',
+    source: '',
+    tag: '',
+    scrollY: 0,
+  })
+  assert.equal(readDrawerItemDeepLink('?item=' + flowerId), flowerId)
+  assert.equal(
+    drawerHistoryUrl('/drawer-next', '?theme=warm', '#top', entry!),
+    '/drawer-next?theme=warm&item=' + flowerId + '#top',
+  )
+  // A refreshed tab keeps the exact same saved archive and Inspect entry.
+  const restored = resolveInitialDrawerHistoryEntry(
+    withDrawerHistoryEntry({}, entry!),
+    '?item=' + flowerId,
+  )
+  assert.deepEqual(restored, entry)
+})
+
+test('Back to Archive removes only the item URL parameter', () => {
+  const archive = {
+    version: 1 as const, view: 'archive' as const,
+    slot: 'all' as const,
+    collection: '', source: '', tag: '', scrollY: 0,
+  }
+  const inspect = {
+    ...archive, view: 'inspect' as const, itemId: flowerId,
+  }
+  const url = drawerHistoryUrl(
+    '/drawer-next', '?theme=warm&item=' + flowerId + '&debug=1', '#notes',
+    archive,
+  )
+  assert.equal(url, '/drawer-next?theme=warm&debug=1#notes')
+  assert.equal(
+    drawerHistoryUrl(
+      '/drawer-next', '?theme=warm', '', inspect,
+    ),
+    '/drawer-next?theme=warm&item=' + flowerId,
+  )
+  assert.equal(
+    drawerHistoryUrl('/drawer-next', '?item=' + flowerId, '', {
+      version: 1, view: 'cabinet',
+    }),
+    '/drawer-next',
+  )
+})
+
+test('URL item overrides an unrelated stale History state', () => {
+  const original = {
+    version: 1 as const, view: 'inspect' as const,
+    slot: 'inbox' as const, itemId: otherId,
+    collection: 'old', source: '', tag: '', scrollY: 500,
+  }
+  const saved = withDrawerHistoryEntry({ owner: true }, original)
+  assert.deepEqual(
+    resolveInitialDrawerHistoryEntry(saved, '?item=' + flowerId),
+    {
+      version: 1, view: 'inspect', itemId: flowerId,
+      slot: 'all', collection: '', source: '', tag: '', scrollY: 0,
+    },
+  )
+  assert.deepEqual(resolveInitialDrawerHistoryEntry(saved, ''), original)
+  assert.deepEqual(
+    resolveInitialDrawerHistoryEntry(
+      saved, '?item=' + otherId,
+    ), original,
+  )
+})
+
+test('malformed, duplicated, and suspicious IDs fail closed', () => {
+  for (const search of [
+    '?item=../api',
+    '?item=abc',
+    '?item=' + flowerId + '&item=' + otherId,
+    '?item=%2Fetc%2Fpasswd',
+    '?item=',
+  ]) {
+    assert.equal(readDrawerItemDeepLink(search), null)
+    assert.deepEqual(
+      resolveInitialDrawerHistoryEntry(
+        withDrawerHistoryEntry({}, {
+          version: 1, view: 'inspect', slot: 'all',
+          itemId: otherId, collection: '',
+          source: '', tag: '', scrollY: 0,
+        }),
+        search,
+      ),
+      { version: 1, view: 'cabinet' },
+    )
+  }
 })
 
 const boundary = {
