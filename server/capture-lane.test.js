@@ -102,7 +102,7 @@ test('existing MCP path cannot capture, distinct writer path can, sessions canno
   for (const excludedTool of [
     'pocket_edit_metadata', 'pocket_reply', 'pocket_review',
     'memory_confirm_surface', 'memory_turn_post', 'vault_update',
-    'pocket_turn_open', 'pocket_read_content',
+    'pocket_turn_open', 'pocket_read_content', 'pocket_attachment_read',
   ]) {
     assert.equal(writerNames.includes(excludedTool), false)
   }

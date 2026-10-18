@@ -21,7 +21,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-RUN apk add --no-cache su-exec ffmpeg
+RUN apk add --no-cache su-exec ffmpeg poppler-utils
 
 COPY package.json package-lock.json ./
 

@@ -114,6 +114,13 @@ jobs:
           test "$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME")" = "healthy"
           echo 'Container remains running and healthy after route smoke tests.'
 
+      - name: Verify genuine PDF text reading via isolated Owner MCP
+        run: |
+          # The test creates its own /tmp PocketStore and disposable PDF.
+          # It never accesses the running service's production data volume.
+          docker exec --env AQI_REQUIRE_ORIGINAL_PDF_E2E=1 "$CONTAINER_NAME" \
+            node --test server/original-file-e2e.test.js
+
       - name: Clean up isolated container and data
         if: always()
         run: |
