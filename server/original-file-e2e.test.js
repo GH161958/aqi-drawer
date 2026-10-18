@@ -11,7 +11,7 @@ import { startBridge } from './index.js'
 
 // Genuine 3-page PDF with xref table and independent selectable text streams.
 // All data is generated inside isolated tests. No private or remote files.
-function makeThreePagePdf() {
+function makeThreePagePdf(markers = ['FIRST_PAGE_ONLY_111', 'SECOND_PAGE_ONLY_222', 'THIRD_PAGE_ONLY_333']) {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Count 3 /Kids [3 0 R 4 0 R 5 0 R] >>',
@@ -19,8 +19,8 @@ function makeThreePagePdf() {
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 6 0 R >> >> /Contents 8 0 R >>',
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 6 0 R >> >> /Contents 9 0 R >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    ...['FIRST_PAGE_ONLY_111', 'SECOND_PAGE_ONLY_222', 'THIRD_PAGE_ONLY_333'].map((word) => {
-      const stream = 'BT /F1 16 Tf 72 720 Td (' + word + ') Tj ET\n'
+    ...markers.map((word) => {
+      const stream = word ? 'BT /F1 16 Tf 72 720 Td (' + word + ') Tj ET\n' : ''
       return '<< /Length ' + Buffer.byteLength(stream, 'ascii') + ' >>\nstream\n' + stream + 'endstream'
     }),
   ]
@@ -115,6 +115,55 @@ test('genuine 3-page PDF through isolated Owner MCP + durable Media', {
     assert.match(response.content[0].text, /UNTRUSTED ORIGINAL DOCUMENT CONTENT/)
     assert.equal(JSON.stringify(response).includes(mediaName), false)
   }
+  // A valid PDF can contain a page with no selectable text. Do not make up OCR.
+  const blankPdf = makeThreePagePdf(['HAS_VISIBLE_TEXT', '', 'OTHER_TEXT'])
+  const blankId = randomUUID()
+  const blankStorage = randomUUID()
+  await writeFile(path.join(bridge.store.mediaDir, blankStorage), blankPdf, {
+    flag: 'wx', mode: 0o600,
+  })
+  const blankReceipt = await bridge.store.saveMcpFileIntake({
+    requestId: 'disposable-original-pdf-blank-0001',
+    requestHash: 'b'.repeat(64),
+    mode: 'new', title: 'Blank-page PDF test', fileId: 'isolated-blank-fixture',
+    attachment: {
+      id: blankId, storageName: blankStorage, name: 'blank-page.pdf',
+      mimeType: 'application/pdf', size: blankPdf.length,
+      sha256: createHash('sha256').update(blankPdf).digest('hex'),
+    },
+  })
+  const noText = await client.callTool({
+    name: 'pocket_attachment_read',
+    arguments: { item_id: blankReceipt.itemId, attachment_id: blankId, page: 2 },
+  })
+  assert.equal(noText.isError, undefined)
+  assert.equal(noText.structuredContent.noExtractableText, true)
+  assert.equal(noText.structuredContent.text.trim(), '')
+  assert.match(noText.content[0].text, /OCR has not been performed/)
+  const malformedPdf = Buffer.from('%PDF-1.4\ninvalid-test-document')
+  const malformedId = randomUUID()
+  const malformedStorage = randomUUID()
+  await writeFile(path.join(bridge.store.mediaDir, malformedStorage), malformedPdf, {
+    flag: 'wx', mode: 0o600,
+  })
+  const malformedReceipt = await bridge.store.saveMcpFileIntake({
+    requestId: 'disposable-original-pdf-invalid-0001',
+    requestHash: 'a'.repeat(64),
+    mode: 'new', title: 'Malformed PDF test', fileId: 'isolated-malformed-fixture',
+    attachment: {
+      id: malformedId, storageName: malformedStorage, name: 'broken.pdf',
+      mimeType: 'application/pdf', size: malformedPdf.length,
+      sha256: createHash('sha256').update(malformedPdf).digest('hex'),
+    },
+  })
+  const invalid = await client.callTool({
+    name: 'pocket_attachment_read',
+    arguments: { item_id: malformedReceipt.itemId, attachment_id: malformedId },
+  })
+  assert.equal(invalid.isError, true)
+  assert.match(invalid.content[0].text, /PDF metadata could not be read/)
+  assert.equal(JSON.stringify(invalid).includes(malformedStorage), false)
+
   const denied = await client.callTool({
     name: 'pocket_attachment_read',
     arguments: { item_id: randomUUID(), attachment_id: attachmentId },
