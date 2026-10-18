@@ -409,8 +409,15 @@ export function App() {
     itemId: string,
     trigger: HTMLButtonElement,
   ) {
+    // The clicked archive paper is about to become aria-hidden/inert.
+    // Release its keyboard focus before React commits that transition;
+    // the Inspect toolbar will receive focus once the dialog is presented.
     inspectFocusReturnRef.current =
       trigger
+
+    if (document.activeElement === trigger) {
+      trigger.blur()
+    }
 
     inspectScrollYRef.current =
       window.scrollY
