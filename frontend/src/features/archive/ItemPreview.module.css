@@ -457,7 +457,7 @@
   height: 212px;
 
   margin:
-    26px 9px 15px auto;
+    26px auto 15px;
 
   text-align: left;
 
@@ -791,7 +791,7 @@
     height: 204px;
 
     margin:
-      25px 6px 14px auto;
+      25px auto 14px;
   }
 
   .documentBack {
