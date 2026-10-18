@@ -100,7 +100,13 @@ export async function readOriginalAttachment(
     || !Number.isSafeInteger(maxChars) || maxChars < 500 || maxChars > MAX_CHARACTERS) {
     reject('Invalid page, offset, or maximum character count.')
   }
-  const found = await store.readItemAttachment(itemId, attachmentId, MAX_ATTACHMENT_BYTES)
+  let found
+  try {
+    found = await store.readItemAttachment(itemId, attachmentId, MAX_ATTACHMENT_BYTES)
+  } catch (error) {
+    if (error?.status === 413) reject('Attachment exceeds the 25 MiB read limit.')
+    throw error
+  }
   if (!found) reject('Attachment not found on this active Drawer item.')
   const attachment = found.attachment
   const bytes = found.data
