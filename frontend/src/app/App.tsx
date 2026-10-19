@@ -409,15 +409,11 @@ export function App() {
     itemId: string,
     trigger: HTMLButtonElement,
   ) {
-    // The clicked archive paper is about to become aria-hidden/inert.
-    // Release its keyboard focus before React commits that transition;
-    // the Inspect toolbar will receive focus once the dialog is presented.
+    // Preserve the triggering paper for focus restoration on Back.
+    // Keep its focus during media loading; the archive only becomes
+    // inert when Inspect is ready to take focus.
     inspectFocusReturnRef.current =
       trigger
-
-    if (document.activeElement === trigger) {
-      trigger.blur()
-    }
 
     inspectScrollYRef.current =
       window.scrollY
@@ -659,11 +655,9 @@ export function App() {
 
       {activeSlot && (
         <div
-          aria-hidden={
-            inspectPresented
-              ? true
-              : undefined
-          }
+          // `inert` covers both keyboard and accessibility exclusion.
+          // Unlike aria-hidden, it safely handles focus left on an
+          // archive paper when browser history opens Inspect.
           inert={
             inspectPresented
               ? true
