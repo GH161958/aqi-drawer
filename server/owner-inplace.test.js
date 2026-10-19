@@ -69,7 +69,7 @@ test('same private URL upgrades in place to Owner, preserves reads, bounded writ
     'pocket_start_context', 'pocket_read_content', 'pocket_attachment_read', 'pocket_reply',
     'pocket_review', 'memory_turn_pre', 'memory_turn_post',
     'vault_read', 'vault_update', 'pocket_capture_create',
-    'pocket_organize_existing', 'pocket_organize_undo',
+    'pocket_organize_existing', 'pocket_organize_undo', 'pocket_taxonomy_create',
   ]) assert.ok(tools.includes(required), required + ' missing on same URL')
   for (const absent of ['pocket_edit_metadata', 'pocket_file_host_probe', 'pocket_file_intake']) {
     assert.ok(!tools.includes(absent), absent + ' should be excluded')
@@ -119,16 +119,54 @@ test('same private URL upgrades in place to Owner, preserves reads, bounded writ
   })
   assert.equal(denied.isError, true)
   assert.deepEqual(await bridge.store.listTags(), [])
-  await bridge.store.createTag('Research')
+  // The new global label is registered separately, with exact-label EE
+  // approval reflected in the tool arguments; no item is organized yet.
+  const registered = await client.callTool({
+    name: 'pocket_taxonomy_create',
+    arguments: {
+      request_id: 'inplace:taxonomy:tag:001', kind: 'tag',
+      name: 'Research', approved_name: 'Research',
+    },
+  })
+  assert.equal(registered.isError, undefined)
+  assert.equal(registered.structuredContent.changed, true)
+  assert.deepEqual((await bridge.store.get(itemId)).tags, [])
+  const repeatedTaxonomy = await client.callTool({
+    name: 'pocket_taxonomy_create',
+    arguments: {
+      request_id: 'inplace:taxonomy:tag:001', kind: 'tag',
+      name: 'Research', approved_name: 'Research',
+    },
+  })
+  assert.equal(repeatedTaxonomy.structuredContent.duplicate, true)
+  const wrongApproval = await client.callTool({
+    name: 'pocket_taxonomy_create',
+    arguments: {
+      request_id: 'inplace:taxonomy:tag:002', kind: 'tag',
+      name: 'Unexpected', approved_name: 'Not approved',
+    },
+  })
+  assert.equal(wrongApproval.isError, true)
+  assert.equal((await bridge.store.listTags()).includes('Unexpected'), false)
+  const registeredCollection = await client.callTool({
+    name: 'pocket_taxonomy_create',
+    arguments: {
+      request_id: 'inplace:taxonomy:col:001', kind: 'collection',
+      name: 'Reading', approved_name: 'Reading',
+    },
+  })
+  assert.equal(registeredCollection.isError, undefined)
+  assert.equal(registeredCollection.structuredContent.changed, true)
   const changed = await client.callTool({
     name: 'pocket_organize_existing',
     arguments: {
       id: itemId, request_id: 'inplace:organize:00002',
-      expected_updated_at: revision, tags_add: ['research'],
+      expected_updated_at: revision, tags_add: ['research'], collection: 'Reading',
     },
   })
   assert.equal(changed.isError, undefined)
   assert.deepEqual(changed.structuredContent.tagsAdded, ['Research'])
+  assert.equal(changed.structuredContent.after.collection, 'Reading')
   const undo = await client.callTool({
     name: 'pocket_organize_undo',
     arguments: {
@@ -179,6 +217,7 @@ test('default-off rollout and rollback restore standard MCP tools on exact URL w
   assert.ok(tools.includes('pocket_edit_metadata'))
   assert.ok(!tools.includes('pocket_organize_existing'))
   assert.ok(!tools.includes('pocket_organize_undo'))
+  assert.ok(!tools.includes('pocket_taxonomy_create'))
   assert.ok(!tools.includes('pocket_attachment_read'))
   const denied = await client.callTool({
     name: 'pocket_capture_create',
