@@ -1180,6 +1180,69 @@ export class PocketStore {
     })
   }
 
+  // Owner-only taxonomy registration. Unlike legacy createTag/createCollection,
+  // this never edits items, never aliases label approval, and retains a durable
+  // request receipt in the SAME PocketStore transaction as vocabulary creation.
+  async createOwnerTaxonomy({ requestId, kind, name, approvedName } = {}) {
+    const key = clean(requestId)
+    if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(key)) {
+      throw httpError(422, 'A stable taxonomy requestId is required.')
+    }
+    if (!['tag', 'collection'].includes(kind)) {
+      throw httpError(422, 'Taxonomy kind must be tag or collection.')
+    }
+    const maximum = kind === 'tag' ? 50 : 80
+    if (typeof name !== 'string' || !name.trim() || name.length > maximum) {
+      throw httpError(422, 'Taxonomy name is empty or too long.')
+    }
+    const requested = kind === 'tag'
+      ? normalizeTags([name])[0] : normalizeCollection(name)
+    if (!requested || requested.length > maximum || clean(name) !== requested
+      || typeof approvedName !== 'string' || clean(approvedName) !== requested) {
+      throw httpError(422, 'The exact taxonomy label needs EE approval.')
+    }
+    const requestHash = createHash('sha256')
+      .update(JSON.stringify([kind, requested])).digest('hex')
+    return this.#mutate((state) => {
+      const operations = Array.isArray(state.ownerTaxonomyOperations)
+        ? state.ownerTaxonomyOperations : []
+      const previous = operations.find((entry) => entry.requestId === key)
+      if (previous) {
+        if (previous.requestHash !== requestHash) {
+          throw httpError(409, 'Taxonomy requestId already used for another label.')
+        }
+        const vocabulary = kind === 'tag'
+          ? [...(state.tags || []), ...state.items.filter((item) => !item.deletedAt)
+            .flatMap((item) => normalizeTags(item.tags))]
+          : [...(state.collections || []), ...state.items.filter((item) => !item.deletedAt)
+            .map((item) => normalizeCollection(item.collection)).filter(Boolean)]
+        if (!vocabulary.some((label) => label.toLocaleLowerCase() === previous.name.toLocaleLowerCase())) {
+          throw httpError(409, 'Previously registered label is no longer present; review before retry.')
+        }
+        return { ...previous, duplicate: true }
+      }
+      const registry = kind === 'tag' ? 'tags' : 'collections'
+      const entries = kind === 'tag'
+        ? [...(state[registry] || []), ...state.items.filter((item) => !item.deletedAt)
+          .flatMap((item) => normalizeTags(item.tags))]
+        : [...(state[registry] || []), ...state.items.filter((item) => !item.deletedAt)
+          .map((item) => normalizeCollection(item.collection)).filter(Boolean)]
+      const existing = entries.find((label) =>
+        label.toLocaleLowerCase() === requested.toLocaleLowerCase())
+      const canonicalName = existing || requested
+      const changed = !existing
+      if (changed) {
+        state[registry] = [...new Set([...(state[registry] || []), canonicalName])]
+          .sort((a, b) => a.localeCompare(b))
+      }
+      const receipt = {
+        operationId: randomUUID(), requestId: key, requestHash,
+        kind, name: canonicalName, changed, at: new Date().toISOString(),
+      }
+      state.ownerTaxonomyOperations = [...operations, receipt]
+      return { ...receipt, duplicate: false }
+    })
+  }
   async deleteCollection(
     value,
     { actor = 'system' } = {},

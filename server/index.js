@@ -49,6 +49,7 @@ export async function createBridgeApp(config = {}) {
     enableMcpCapture: config.enableMcpCapture ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_CAPTURE) === 'true'),
     enableUnifiedOwner: config.enableUnifiedOwner ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_UNIFIED_OWNER) === 'true'),
     enableOwnerInPlace: config.enableOwnerInPlace ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_OWNER_IN_PLACE) === 'true'),
+    enableOwnerTaxonomyCreate: config.enableOwnerTaxonomyCreate ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_OWNER_TAXONOMY_CREATE) === 'true'),
     enableMcpFileIntake: config.enableMcpFileIntake ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_INTAKE) === 'true'),
     enableMcpFileHostProbe: config.enableMcpFileHostProbe ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_HOST_PROBE) === 'true'),
     mcpFileHosts: permittedFileHosts(config.mcpFileHosts ?? process.env.C_POCKET_MCP_FILE_HOSTS),
@@ -56,6 +57,10 @@ export async function createBridgeApp(config = {}) {
     captureMcpPath: cleanEnvironmentValue(config.captureMcpPath ?? process.env.C_POCKET_MCP_CAPTURE_PATH),
     dropSecret: config.dropSecret ?? (cleanEnvironmentValue(process.env.C_POCKET_DROP_SECRET) || `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`),
   }
+  if (settings.enableOwnerTaxonomyCreate && (!settings.enableUnifiedOwner || !settings.enableMcpCapture)) {
+    throw new Error('Owner taxonomy creation requires unified Owner and Capture to be enabled.')
+  }
+
   if (settings.enableMcpFileHostProbe && (!settings.enableUnifiedOwner || !settings.enableMcpCapture)) {
     throw new Error('MCP File Host Probe requires unified Owner and Capture to be enabled.')
   }
@@ -896,6 +901,7 @@ export async function createBridgeApp(config = {}) {
             enableMcpCapture: lane !== 'standard' && settings.enableMcpCapture,
             fileIntake: lane === 'owner' ? fileIntake : null,
             enableMcpFileHostProbe: lane === 'owner' && settings.enableMcpFileHostProbe,
+            enableOwnerTaxonomyCreate: lane === 'owner' && settings.enableOwnerTaxonomyCreate,
             lane,
           })
           await server.connect(transport)

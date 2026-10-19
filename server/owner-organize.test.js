@@ -198,3 +198,93 @@ test('stale snapshot revisions are refused rather than overwriting EE metadata',
     requestId: 'owner:no-revision:0002', tagsAdd: ['Design'],
   }), /expectedUpdatedAt/)
 })
+
+test('owner taxonomy creates one approved label per request with durable no-duplicate receipts', async (t) => {
+  const { store, item, dir } = await fixture(t)
+  const original = await store.get(item.id)
+  const args = {
+    requestId: 'taxonomy:tag:case001', kind: 'tag',
+    name: 'Visual Reference', approvedName: 'Visual Reference',
+  }
+  const first = await store.createOwnerTaxonomy(args)
+  assert.equal(first.changed, true)
+  assert.equal(first.duplicate, false)
+  assert.equal(first.name, 'Visual Reference')
+  assert.match(first.operationId, /^[a-f0-9-]{36}$/u)
+  assert.ok((await store.listTags()).includes('Visual Reference'))
+  assert.deepEqual(await store.get(item.id), original)
+
+  const retry = await store.createOwnerTaxonomy(args)
+  assert.equal(retry.duplicate, true)
+  assert.equal(retry.operationId, first.operationId)
+  await assert.rejects(store.createOwnerTaxonomy({
+    ...args, name: 'Different', approvedName: 'Different',
+  }), /already used/)
+  const reopened = new PocketStore(dir)
+  await reopened.init()
+  const afterRestart = await reopened.createOwnerTaxonomy(args)
+  assert.equal(afterRestart.duplicate, true)
+  assert.equal(afterRestart.operationId, first.operationId)
+
+  const sameByCase = await reopened.createOwnerTaxonomy({
+    requestId: 'taxonomy:tag:case002', kind: 'tag',
+    name: 'visual reference', approvedName: 'visual reference',
+  })
+  assert.equal(sameByCase.changed, false)
+  assert.equal(sameByCase.name, 'Visual Reference')
+  assert.equal((await reopened.listTags()).filter((v) => v.toLowerCase() === 'visual reference').length, 1)
+
+  const collection = await reopened.createOwnerTaxonomy({
+    requestId: 'taxonomy:collection:case001', kind: 'collection',
+    name: 'Reading Room', approvedName: 'Reading Room',
+  })
+  assert.equal(collection.changed, true)
+  assert.ok((await reopened.listCollections()).includes('Reading Room'))
+  assert.deepEqual(await reopened.get(item.id), original)
+
+  // Explicit organization remains a separate revision-guarded item mutation.
+  const organized = await reopened.organizeExistingMetadata(item.id, {
+    requestId: 'taxonomy:organize:case001',
+    expectedUpdatedAt: original.updatedAt,
+    tagsAdd: ['visual reference'], collection: 'reading room',
+  })
+  assert.equal(organized.changed, true)
+  assert.deepEqual(organized.tagsAdded, ['Visual Reference'])
+  assert.equal(organized.after.collection, 'Reading Room')
+  assert.equal((await reopened.get(item.id)).text, original.text)
+  const undone = await reopened.undoExistingOrganization(item.id, {
+    operationId: organized.operationId, requestId: 'taxonomy:undo:case001',
+  })
+  assert.equal(undone.undone, true)
+  assert.deepEqual(undone.after, organized.before)
+})
+
+test('owner taxonomy rejects unapproved, invalid, conflicting or deleted labels', async (t) => {
+  const { store, item } = await fixture(t)
+  const beforeItem = await store.get(item.id)
+  const beforeTags = await store.listTags()
+  const beforeCollections = await store.listCollections()
+  for (const input of [
+    { requestId: 'bad:approval:0001', kind: 'tag', name: 'NewTag', approvedName: 'Different' },
+    { requestId: 'bad:blank:000002', kind: 'tag', name: '   ', approvedName: '   ' },
+    { requestId: 'bad:long:0000003', kind: 'tag', name: 'x'.repeat(51), approvedName: 'x'.repeat(51) },
+    { requestId: 'bad:canonical:0003', kind: 'tag', name: '#Misleading', approvedName: 'Misleading' },
+    { requestId: 'bad:kind:0000004', kind: 'other', name: 'NewTag', approvedName: 'NewTag' },
+    { requestId: 'tiny', kind: 'tag', name: 'NewTag', approvedName: 'NewTag' },
+  ]) await assert.rejects(store.createOwnerTaxonomy(input))
+  assert.deepEqual(await store.listTags(), beforeTags)
+  assert.deepEqual(await store.listCollections(), beforeCollections)
+  assert.deepEqual(await store.get(item.id), beforeItem)
+
+  const created = await store.createOwnerTaxonomy({
+    requestId: 'taxonomy:delete:0001', kind: 'tag',
+    name: 'TemporaryTag', approvedName: 'TemporaryTag',
+  })
+  assert.equal(created.changed, true)
+  await store.deleteTag('TemporaryTag')
+  await assert.rejects(store.createOwnerTaxonomy({
+    requestId: 'taxonomy:delete:0001', kind: 'tag',
+    name: 'TemporaryTag', approvedName: 'TemporaryTag',
+  }), /no longer present/)
+  assert.equal((await store.listTags()).includes('TemporaryTag'), false)
+})

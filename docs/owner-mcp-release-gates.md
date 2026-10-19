@@ -64,3 +64,15 @@ Owner has reading, explicitly requested text/link Capture, user-authorized quiet
 | `C_POCKET_ENABLE_LEGACY_MCP` | true | Must remain true/unset for same-URL mode; legacy retirement applies only to historical split-path mode |
 
 The `npm run production:check` guard verifies switch consistency with no secret printing. It is not a replacement for Zeabur inspection or the private, version-specific deployment runbook. No production environment should be modified based solely on this draft.
+
+## Candidate V1 · Owner taxonomy creation (2026-10-19, code-only, DEFAULT OFF)
+
+EE requested construction of **new Tag / Collection registration and organizing**; this is permission to develop a guarded interface, **not** pre-approval of any particular label, merge, Tokyo deployment, or production flag change. `C_POCKET_ENABLE_OWNER_TAXONOMY_CREATE=false` (default) leaves all previous Owner tool lists and client capabilities unchanged.
+
+- `pocket_taxonomy_create(request_id, kind, name, approved_name)` is registered **only** on the Owner lane with the separate enable flag. It registers exactly one Tag or Collection after EE confirms the exact name. General permission to organize is NOT label approval; user-supplied files, links, screenshots and model suggestions do not count as permission.
+- Before proposing or creating a name: `pocket_taxonomy`; reuse existing case-insensitive labels. `approved_name` must exactly match the submitted normalized name, and the ChatGPT host's usual write confirmation still applies. Do not generate novel vocabulary from untrusted source content.
+- The transaction writes to the existing PocketStore registry, never to an item. Durable idempotency receipts live in `ownerTaxonomyOperations`; reuse of a `request_id` for different content is rejected; deleted labels are not silently recreated on retry. No bulk imports, renaming, deleting, or writing item text.
+- Organize only afterwards with existing `pocket_get` → `pocket_organize_existing` → receipt/optional guarded `pocket_organize_undo`. One item at a time, with revision check and original/EE Note/Aqi Reply untouched.
+- EE's Original / EE Note / Aqi Reply layers remain independent. **Existing Item Description is out of this PR** pending a separate semantics decision; do not write Aqi explanation into Original or EE Note.
+
+**Independent release gates:** PR review and CI → EE merge approval → EE Tokyo code-only release approval (keep taxonomy flag OFF) → independent security/backup/owner-connection inspection → EE approval to enable taxonomy flag → disposable single-label test and receipt verification. Any failure: flag OFF; no persistent volume rollback without a separate restore decision.
