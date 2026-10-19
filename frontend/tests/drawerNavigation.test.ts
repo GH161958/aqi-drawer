@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -263,5 +264,29 @@ test('scroll, drag, and long press do not dismiss', () => {
       elapsedMs: 900,
     }),
     false,
+  )
+})
+
+test('Inspect focus handoff uses inert, not aria-hidden, for Archive history transitions', () => {
+  // Back/Forward can present Inspect without a direct archive-button click.
+  // An inert subtree is excluded from focus and the accessibility tree.
+  const app = readFileSync(
+    new URL('../src/app/App.tsx', import.meta.url),
+    'utf8',
+  )
+  const inspect = readFileSync(
+    new URL('../src/features/inspect/InspectStage.tsx', import.meta.url),
+    'utf8',
+  )
+  const start = app.indexOf('{activeSlot && (')
+  const end = app.indexOf('<ArchiveDrawer', start)
+  assert.ok(start >= 0 && end > start)
+  const archiveHost = app.slice(start, end)
+
+  assert.match(archiveHost, /inert=\{/u)
+  assert.doesNotMatch(archiveHost, /aria-hidden=\{/u)
+  assert.match(
+    inspect,
+    /useLayoutEffect\(\s*\(\) => \{\s*if \(!presented\) return\s*returnButtonRef\.current\?\.focus/u,
   )
 })

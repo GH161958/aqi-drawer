@@ -262,7 +262,9 @@ export function InspectStage({
         )
     }, [activePaper, clearFilingInteraction])
 
-  useEffect(
+  // Take focus before paint as the Inspect dialog becomes interactive.
+  // This pairs with releasing the focused Archive trigger on opening.
+  useLayoutEffect(
     () => {
       if (!presented) return
 

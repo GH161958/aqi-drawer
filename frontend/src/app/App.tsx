@@ -409,6 +409,9 @@ export function App() {
     itemId: string,
     trigger: HTMLButtonElement,
   ) {
+    // Preserve the triggering paper for focus restoration on Back.
+    // Keep its focus during media loading; the archive only becomes
+    // inert when Inspect is ready to take focus.
     inspectFocusReturnRef.current =
       trigger
 
@@ -652,11 +655,9 @@ export function App() {
 
       {activeSlot && (
         <div
-          aria-hidden={
-            inspectPresented
-              ? true
-              : undefined
-          }
+          // `inert` covers both keyboard and accessibility exclusion.
+          // Unlike aria-hidden, it safely handles focus left on an
+          // archive paper when browser history opens Inspect.
           inert={
             inspectPresented
               ? true
