@@ -71,6 +71,7 @@ npm start
 | `C_POCKET_ENABLE_MCP_CAPTURE` | 默认 `false`；单独启用 owner write lane；**只开此开关不能让原 MCP 地址写入** |
 | `C_POCKET_ENABLE_UNIFIED_OWNER` | 默认 `false`；搭配 Capture；D-1 原地升级模式可复用现有 MCP 地址，旧分路模式仍兼容 |
 | `C_POCKET_ENABLE_OWNER_IN_PLACE` | 默认 `false`；需另有 EE 上线授权，且同时设置 Capture + Unified Owner 为 `true`、Legacy MCP 保持 `true`。只在现有私密 `C_POCKET_MCP_PATH` 注册 Owner，**不新增或修改 URL** |
+| `C_POCKET_ENABLE_OWNER_TAXONOMY_CREATE` | 默认 `false`；仅 Unified Owner 可见的单一新 Tag／Collection 登记工具；须先经 EE 单独确认准确名称；开启需要独立生产授权 |
 | `C_POCKET_ENABLE_MCP_FILE_INTAKE` | 默认 `false`；新文件 Intake 仅在统一 Owner 和 Capture 同时启用且文件域名白名单已设置后允许注册 |
 | `C_POCKET_ENABLE_MCP_FILE_HOST_PROBE` | 默认 `false`；仅在统一 Owner + Capture 都开启时，临时注册 **只返回 hostname、不下载或存储** 的文件参数诊断工具 |
 | `C_POCKET_MCP_FILE_HOSTS` | 逗号分隔的**准确 HTTPS 文件下载主机名** allowlist，仅用于官方 fileParams 临时下载，不可填写任意通配符、完整带签名 URL 或密钥；默认空/拒绝 |
@@ -183,6 +184,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 **只读兼容性工具：** `pocket_file_host_probe` 仅出现在明确开启 `C_POCKET_ENABLE_MCP_FILE_HOST_PROBE=true` 的统一 Owner 上；使用与文件 Intake 相同的 `_meta["openai/fileParams"]`，只从 ChatGPT 提供的临时链接提取并返回小写 HTTPS **hostname**。不会请求 URL、DNS、下载、读取 Drawer、写入 Store、登记白名单或回显签名地址/文件 ID/文件名。返回的域名只是 **待审核候选**，绝不自动获准下载。默认 OFF。
 
 **重要：** 真实 ChatGPT host fileParams 验证只能在独立授权的已连 Owner、一次性非敏感文件上进行；只读探针通过并不代表实际文件上传已成功。生产预检 `npm run production:check` 已增加开关组合、路径和白名单检查，错误消息不含秘密值。发布/回退按 [Owner MCP 分阶段上线 Gate](docs/owner-mcp-release-gates.md) 执行，每阶段重新批准。
+
+
+**Owner Taxonomy V1（候选，独立开关默认 OFF）**：新增 `pocket_taxonomy_create`，在经 EE 明确批准具体名称后，一次登记一个全局 Tag／Collection；持久化幂等回执、大小写去重，不修改任何已有物件。后续为物件加标签或移动抽屉仍使用 `pocket_get` → `pocket_organize_existing`（修改前版本校验、回执、可安全撤销）。仅代码施工授权，不等于标签名称授权、东京合并/部署或开启开关授权。EE Note、Aqi Reply、Original 各自独立；Existing Item Description 本轮不实现，待语义确认。
 
 ### PR C · ChatGPT 文件原始字节 Intake（候选，不在东京上线）
 
