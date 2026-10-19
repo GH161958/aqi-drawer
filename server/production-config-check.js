@@ -18,6 +18,7 @@ if (process.env.HOST !== '0.0.0.0') {
 const flags = {
   capture: flag('C_POCKET_ENABLE_MCP_CAPTURE'),
   owner: flag('C_POCKET_ENABLE_UNIFIED_OWNER'),
+  taxonomyCreate: flag('C_POCKET_ENABLE_OWNER_TAXONOMY_CREATE'),
   inPlace: flag('C_POCKET_ENABLE_OWNER_IN_PLACE'),
   hostProbe: flag('C_POCKET_ENABLE_MCP_FILE_HOST_PROBE'),
   fileIntake: flag('C_POCKET_ENABLE_MCP_FILE_INTAKE'),
@@ -28,6 +29,9 @@ if (flags.owner && !flags.capture) {
 }
 if (flags.hostProbe && (!flags.owner || !flags.capture)) {
   errors.push('File Host Probe requires the unified Owner and Capture switches.')
+}
+if (flags.taxonomyCreate && (!flags.owner || !flags.capture)) {
+  errors.push('Owner taxonomy creation requires unified Owner and Capture enabled.')
 }
 if (flags.fileIntake && (!flags.owner || !flags.capture)) {
   errors.push('File Intake requires the unified Owner and Capture switches.')
