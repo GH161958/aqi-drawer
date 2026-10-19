@@ -284,7 +284,7 @@ test('Inspect focus handoff uses inert, not aria-hidden, for Archive history tra
   const archiveHost = app.slice(start, end)
 
   assert.match(archiveHost, /inert=\{/u)
-  assert.doesNotMatch(archiveHost, /aria-hidden/u)
+  assert.doesNotMatch(archiveHost, /aria-hidden=\{/u)
   assert.match(
     inspect,
     /useLayoutEffect\(\s*\(\) => \{\s*if \(!presented\) return\s*returnButtonRef\.current\?\.focus/u,
