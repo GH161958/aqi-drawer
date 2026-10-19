@@ -46,6 +46,8 @@ test('in-place Owner requires explicit safe flags and the existing private path,
     enableMcpCapture: true, enableUnifiedOwner: true,
     enableOwnerInPlace: false, captureMcpPath: '',
   }), /C_POCKET_MCP_CAPTURE_PATH is required/)
+  await assert.rejects(createBridgeApp({ dataDir, enableOwnerTaxonomyCreate: true }),
+    /requires unified Owner and Capture/)
   // Shared unknown environment flags do not implicitly expose Owner.
   const plain = await createBridgeApp({ dataDir, mcpPath })
   await plain.close()
@@ -56,6 +58,7 @@ test('same private URL upgrades in place to Owner, preserves reads, bounded writ
   const mcpPath = privatePath()
   const bridge = await startBridge({
     dataDir, port: 0, host: '127.0.0.1', mcpPath, ...inPlaceFlags,
+    enableOwnerTaxonomyCreate: true,
   })
   const base = 'http://127.0.0.1:' + bridge.address.port
   const client = await connect(base, mcpPath)
