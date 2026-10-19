@@ -268,6 +268,7 @@ test('owner taxonomy rejects unapproved, invalid, conflicting or deleted labels'
     { requestId: 'bad:approval:0001', kind: 'tag', name: 'NewTag', approvedName: 'Different' },
     { requestId: 'bad:blank:000002', kind: 'tag', name: '   ', approvedName: '   ' },
     { requestId: 'bad:long:0000003', kind: 'tag', name: 'x'.repeat(51), approvedName: 'x'.repeat(51) },
+    { requestId: 'bad:canonical:0003', kind: 'tag', name: '#Misleading', approvedName: 'Misleading' },
     { requestId: 'bad:kind:0000004', kind: 'other', name: 'NewTag', approvedName: 'NewTag' },
     { requestId: 'tiny', kind: 'tag', name: 'NewTag', approvedName: 'NewTag' },
   ]) await assert.rejects(store.createOwnerTaxonomy(input))
