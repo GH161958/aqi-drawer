@@ -1197,7 +1197,7 @@ export class PocketStore {
     }
     const requested = kind === 'tag'
       ? normalizeTags([name])[0] : normalizeCollection(name)
-    if (!requested || requested.length > maximum
+    if (!requested || requested.length > maximum || clean(name) !== requested
       || typeof approvedName !== 'string' || clean(approvedName) !== requested) {
       throw httpError(422, 'The exact taxonomy label needs EE approval.')
     }
