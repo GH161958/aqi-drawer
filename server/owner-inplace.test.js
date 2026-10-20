@@ -277,6 +277,28 @@ test('in-place Owner can expose fileParams only behind independent flags', async
   const record = await bridge.store.readAttachment(saved.structuredContent.attachmentId, bytes.length)
   assert.deepEqual(record.data, bytes)
   assert.equal(saved.structuredContent.sha256, createHash('sha256').update(bytes).digest('hex'))
+  const item = await bridge.store.get(saved.structuredContent.itemId)
+  assert.equal(item.sourceData?.provider, 'chatgpt')
+  assert.equal(Object.hasOwn(item.sourceData, 'openaiFileId'), false)
+
+  const repeated = await client.callTool({ name: 'pocket_file_intake', arguments: {
+    request_id: 'inplace:file:0001', mode: 'new', title: 'Disposable bytes', file,
+  } })
+  assert.equal(repeated.isError, undefined)
+  assert.equal(repeated.structuredContent.duplicate, true)
+  assert.equal(repeated.structuredContent.itemId, saved.structuredContent.itemId)
+  assert.equal(repeated.structuredContent.attachmentId, saved.structuredContent.attachmentId)
+  assert.equal(downloads, 1)
+  assert.equal((await bridge.store.list()).length, 1)
+
+  const blocked = await client.callTool({ name: 'pocket_file_intake', arguments: {
+    request_id: 'inplace:file:blocked-host', mode: 'new', title: 'Blocked host',
+    file: { ...file, file_id: 'file_disposable_sdk_blocked',
+      download_url: 'https://not-allowlisted.example.org/file?token=untrusted' },
+  } })
+  assert.equal(blocked.isError, true)
+  assert.equal(downloads, 1)
+  assert.equal((await bridge.store.list()).length, 1)
 })
 
 test('Owner reads a disposable stored Markdown original without touching Pocket state', async (t) => {
