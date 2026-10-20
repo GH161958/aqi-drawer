@@ -60,6 +60,7 @@ Owner has reading, explicitly requested text/link Capture, user-authorized quiet
 | `C_POCKET_ENABLE_OWNER_IN_PLACE` | false | Requires Capture + Unified Owner + Legacy MCP true; requires second Capture path **absent** |
 | `C_POCKET_ENABLE_MCP_FILE_HOST_PROBE` | false | Requires Capture + Owner true; no DNS, download, Store read/write |
 | `C_POCKET_ENABLE_MCP_FILE_INTAKE` | false | Requires Capture + Owner true **and** reviewed nonempty host allowlist |
+| `C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2` | false | Independent V2 Prepare/Commit; requires Capture + Unified Owner; does not require or modify static V1 host list |
 | `C_POCKET_MCP_FILE_HOSTS` | unset | Exact approved DNS hostname list; host probe does not authorize |
 | `C_POCKET_ENABLE_LEGACY_MCP` | true | Must remain true/unset for same-URL mode; legacy retirement applies only to historical split-path mode |
 
@@ -76,3 +77,16 @@ EE requested construction of **new Tag / Collection registration and organizing*
 - EE's Original / EE Note / Aqi Reply layers remain independent. **Existing Item Description is out of this PR** pending a separate semantics decision; do not write Aqi explanation into Original or EE Note.
 
 **Independent release gates:** PR review and CI → EE merge approval → EE Tokyo code-only release approval (keep taxonomy flag OFF) → independent security/backup/owner-connection inspection → EE approval to enable taxonomy flag → disposable single-label test and receipt verification. Any failure: flag OFF; no persistent volume rollback without a separate restore decision.
+
+
+## Candidate V2 · Pinned one-time ChatGPT file transfer (2026-10-20, NOT DEPLOYED)
+
+**Problem:** ChatGPT fileParams may change Azure regional host between separate calls. A hostname-only probe does not pin a future fileParams result. Repeatedly appending regional domains is not a stable release plan.
+
+- Independent default-OFF `C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2` registers two Owner-only MCP tools **on the existing private route**, no second app or DB. Existing V1, taxonomy, Original, EE Note and Aqi Reply stay unchanged.
+- `pocket_file_transfer_prepare` takes ONE actual ChatGPT fileParams value plus exact intent (stable request ID, new/append, title/text). It stores the original signed URL, opaque file ID and exact hostname **only in bounded server-process RAM** for at most 15 minutes. It returns a random one-time ticket, hostname, title and expiry **without fetching any URL, writing Store or exposing the signed URL/file ID**. Expiry or restart discards the ticket. Maximum 12 pending.
+- **EE explicitly reviews the exact hostname and file title**, then separately authorizes this specific ticket. An untrusted document, website, probe result, model inference or generic project permission is not authorization.
+- `pocket_file_transfer_commit` accepts only ticket ID plus the exact EE-approved hostname and title; it cannot accept a new URL. Server uses the pinned original fileParams and exact **per-ticket** hostname via V1's validated HTTPS URL, DNS/public IPv4 pinning, TLS, no redirects, 25 MiB size cap, MIME/signature verification, durable SHA-256/receipt, idempotency and cleanup. No wildcard allowlist; no global `C_POCKET_MCP_FILE_HOSTS` mutation. Two overlapping commits of one ticket fail closed; after success ticket is consumed. Expired URL/TTL requires a fresh Prepare and fresh approval.
+- This is **not** a proof of provider ownership: a public hostname is a user-reviewable destination, not cryptographic OpenAI attestation. MCP Owner private URL remains a bearer capability, so its exposure is a separate risk. No signed URLs in logs, receipts, Git or Vault.
+- Tests must exercise regional drift, approval mismatch, expiry/restart behavior, concurrent commits, retries, hostile host/SSRF inputs, byte hash and idempotent item readback. Real ChatGPT host fileParams and outbound network need an independently approved disposable QA file after Tokyo code-only release.
+- **Independent gates:** CI + PR review → EE merge approval → EE code-only Tokyo deploy approval (flag OFF) → EE permission/backup review and separate flag-ON approval → explicit file+hostname approval for each live commit. Default OFF roll back by disabling this single new flag. Never roll back the production Volume as a normal code rollback.

@@ -14,6 +14,7 @@ import { GitHubVaultClient } from './vault-client.js'
 import { PocketContentReader } from './content-reader.js'
 import { createPocketMcpServer } from './mcp-server.js'
 import { createMcpFileIntakeService, permittedFileHosts } from './mcp-file-intake.js'
+import { createPinnedFileTransferV2 } from './mcp-file-transfer-v2.js'
 import { normalizeIncomingShare } from './share-normalizer.js'
 import { extractXhsNoteId, XhsAdapter } from './adapters/xhs.js'
 
@@ -51,6 +52,7 @@ export async function createBridgeApp(config = {}) {
     enableOwnerInPlace: config.enableOwnerInPlace ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_OWNER_IN_PLACE) === 'true'),
     enableOwnerTaxonomyCreate: config.enableOwnerTaxonomyCreate ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_OWNER_TAXONOMY_CREATE) === 'true'),
     enableMcpFileIntake: config.enableMcpFileIntake ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_INTAKE) === 'true'),
+    enableMcpFileTransferV2: config.enableMcpFileTransferV2 ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2) === 'true'),
     enableMcpFileHostProbe: config.enableMcpFileHostProbe ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_HOST_PROBE) === 'true'),
     mcpFileHosts: permittedFileHosts(config.mcpFileHosts ?? process.env.C_POCKET_MCP_FILE_HOSTS),
     enableLegacyMcp: config.enableLegacyMcp ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_LEGACY_MCP) !== 'false'),
@@ -66,6 +68,9 @@ export async function createBridgeApp(config = {}) {
   }
   if (settings.enableMcpFileIntake && (!settings.enableUnifiedOwner || !settings.enableMcpCapture || !settings.mcpFileHosts.length)) {
     throw new Error('MCP File Intake requires the unified Owner with Capture and explicit file host allowlist.')
+  }
+  if (settings.enableMcpFileTransferV2 && (!settings.enableUnifiedOwner || !settings.enableMcpCapture)) {
+    throw new Error('MCP File Transfer V2 requires unified Owner and Capture.')
   }
   // Two explicit modes: original split-path migration, or independently
   // authorized in-place Owner upgrade of the *existing* private MCP URL.
@@ -112,6 +117,11 @@ export async function createBridgeApp(config = {}) {
   const fileIntake = settings.enableMcpFileIntake
     ? createMcpFileIntakeService({
       store, allowedHosts: settings.mcpFileHosts,
+      ...(config.mcpFileDownloader ? { download: config.mcpFileDownloader } : {}),
+    }) : null
+  const pinnedFileTransferV2 = settings.enableMcpFileTransferV2
+    ? createPinnedFileTransferV2({
+      store,
       ...(config.mcpFileDownloader ? { download: config.mcpFileDownloader } : {}),
     }) : null
   const cmemory = new CMemoryClient({ baseUrl: settings.cmemoryBaseUrl, token: settings.cmemoryToken })
@@ -900,6 +910,7 @@ export async function createBridgeApp(config = {}) {
             store, cmemory, contentReader, vault,
             enableMcpCapture: lane !== 'standard' && settings.enableMcpCapture,
             fileIntake: lane === 'owner' ? fileIntake : null,
+            pinnedFileTransferV2: lane === 'owner' ? pinnedFileTransferV2 : null,
             enableMcpFileHostProbe: lane === 'owner' && settings.enableMcpFileHostProbe,
             enableOwnerTaxonomyCreate: lane === 'owner' && settings.enableOwnerTaxonomyCreate,
             lane,
