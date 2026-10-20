@@ -90,7 +90,7 @@ export function createPinnedFileTransferV2({
       // Exact per-ticket hostname, never wildcard and never a globally added host.
       // Reuse V1's hardened DNS/TLS, size/type/hash and durable idempotency path.
       const intake = createMcpFileIntakeService({
-        store, allowedHosts: [entry.hostname],
+        store, allowedHosts: [entry.hostname], persistFileId: false,
         ...(download ? { download } : {}),
       })
       const receipt = await intake.save(entry.input)

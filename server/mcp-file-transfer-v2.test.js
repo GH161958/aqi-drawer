@@ -72,6 +72,8 @@ test('commit pins the ORIGINAL fileParams URL and exact one-time host; no perman
   assert.equal(item.text, 'EE explicitly approved this exact paper.')
   assert.equal(item.attachments.length, 1)
   assert.ok(!JSON.stringify(item).includes('NEVER-REVEAL'))
+  assert.ok(!JSON.stringify(item).includes('file_qa_one'))
+  assert.equal(item.sourceData.openaiFileId, undefined)
   assert.deepEqual((await store.readAttachment(saved.attachmentId)).data, pdf)
   await assert.rejects(service.commit(approved(first)), /missing or expired/)
   assert.equal((await store.list()).length, 1)

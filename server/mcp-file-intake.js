@@ -219,7 +219,7 @@ export async function downloadChatGptFile(file, { allowedHosts, resolver = looku
   })
 }
 
-export function createMcpFileIntakeService({ store, allowedHosts = [], download = downloadChatGptFile }) {
+export function createMcpFileIntakeService({ store, allowedHosts = [], download = downloadChatGptFile, persistFileId = true }) {
   if (!store) throw new Error('File Intake requires the existing PocketStore.')
   return {
     async save({ requestId, mode, itemId, title = '', text = '', file }) {
@@ -297,7 +297,7 @@ export function createMcpFileIntakeService({ store, allowedHosts = [], download 
         await rename(pendingPath, finalPath)
         const attachment = { id: randomUUID(), name: verifiedName, mimeType, size: bytes.length, sha256, storageName }
         const receipt = await store.saveMcpFileIntake({
-          ...input, fileId, attachment,
+          ...input, fileId: persistFileId ? fileId : undefined, attachment,
         })
         committed = !receipt.duplicate
         return receipt
