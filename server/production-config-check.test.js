@@ -19,6 +19,7 @@ const base = {
   C_POCKET_ENABLE_OWNER_IN_PLACE: 'false',
   C_POCKET_ENABLE_MCP_FILE_HOST_PROBE: 'false',
   C_POCKET_ENABLE_MCP_FILE_INTAKE: 'false',
+  C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'false',
   C_POCKET_ENABLE_LEGACY_MCP: 'true',
   C_POCKET_MCP_FILE_HOSTS: '',
 }
@@ -46,6 +47,7 @@ test('invalid Owner, probe, intake and legacy retirement switch combinations fai
     { C_POCKET_ENABLE_MCP_FILE_HOST_PROBE: 'true' },
     { C_POCKET_ENABLE_OWNER_TAXONOMY_CREATE: 'true' },
     { C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true' },
+    { C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'true' },
     { C_POCKET_ENABLE_LEGACY_MCP: 'false' },
     { C_POCKET_ENABLE_MCP_CAPTURE: 'true' },
     { ...enabledOwner, C_POCKET_MCP_CAPTURE_PATH: base.C_POCKET_MCP_PATH },
@@ -93,6 +95,8 @@ test('same-path Owner upgrades require three explicit flags, no new MCP path and
     C_POCKET_MCP_FILE_HOSTS: 'uploads.example.org',
   }).status, 0)
   assert.equal(check({ ...inPlace, C_POCKET_ENABLE_OWNER_TAXONOMY_CREATE: 'true' }).status, 0)
+  assert.equal(check({ ...inPlace, C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'true' }).status, 0)
+  assert.equal(check({ ...inPlace, C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'true', C_POCKET_MCP_FILE_HOSTS: '' }).status, 0)
   assert.equal(check({ C_POCKET_ENABLE_OWNER_IN_PLACE: 'false' }).status, 0)
 })
 

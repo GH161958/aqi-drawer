@@ -328,3 +328,73 @@ test('Owner reads a disposable stored Markdown original without touching Pocket 
   assert.deepEqual(await bridge.store.get(receipt.itemId), before)
 })
 
+
+
+test('V2 two-step fileParams pins one host with V1 intake OFF and saves only after exact approval', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-inplace-pinned-v2-'))
+  const mcpPath = privatePath()
+  const host = 'oaisdmntprjapaneast.blob.core.windows.net'
+  const bytes = Buffer.from('%PDF-1.4\n%%EOF\n')
+  let downloads = 0
+  const bridge = await startBridge({
+    dataDir, mcpPath, port: 0, host: '127.0.0.1',
+    ...inPlaceFlags, enableMcpFileTransferV2: true,
+    mcpFileHosts: [],
+    mcpFileDownloader: async (file, opts) => {
+      assert.equal(new URL(file.download_url).hostname, host)
+      assert.deepEqual(opts.allowedHosts, [host])
+      downloads++
+      return bytes
+    },
+  })
+  const client = await connect('http://127.0.0.1:' + bridge.address.port, mcpPath)
+  t.after(async () => {
+    await Promise.allSettled([client.close(), bridge.stop()])
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  const tools = (await client.listTools()).tools
+  const prepareDefinition = tools.find(x => x.name === 'pocket_file_transfer_prepare')
+  assert.ok(prepareDefinition)
+  assert.deepEqual(prepareDefinition._meta?.['openai/fileParams'], ['file'])
+  assert.ok(tools.find(x => x.name === 'pocket_file_transfer_commit'))
+  assert.ok(!tools.find(x => x.name === 'pocket_file_intake'))
+  assert.ok(!tools.find(x => x.name === 'pocket_file_host_probe'))
+
+  const file = {
+    file_id: 'opaque-host-issued-qa',
+    download_url: 'https://' + host + '/original?token=NEVER-ECHO',
+    file_name: 'pinned.pdf', mime_type: 'application/pdf',
+  }
+  const prepared = await client.callTool({
+    name: 'pocket_file_transfer_prepare',
+    arguments: { request_id: 'qa:pinned:mcp:0001', mode: 'new', title: 'Pinned original',
+      text: 'Keep the exact source bytes.', file },
+  })
+  assert.equal(prepared.isError, undefined)
+  const preview = prepared.structuredContent
+  assert.equal(preview.hostname, host)
+  assert.equal(preview.title, 'Pinned original')
+  assert.ok(!JSON.stringify(preview).includes('NEVER-ECHO'))
+  assert.equal(downloads, 0)
+  assert.equal((await bridge.store.list()).length, 0)
+
+  const wrong = await client.callTool({
+    name: 'pocket_file_transfer_commit',
+    arguments: { ticket_id: preview.ticketId, approved_hostname: 'wrong.example.org',
+      approved_title: preview.title },
+  })
+  assert.equal(wrong.isError, true)
+  assert.equal(downloads, 0)
+
+  const saved = await client.callTool({
+    name: 'pocket_file_transfer_commit',
+    arguments: { ticket_id: preview.ticketId, approved_hostname: preview.hostname,
+      approved_title: preview.title },
+  })
+  assert.equal(saved.isError, undefined)
+  assert.equal(downloads, 1)
+  assert.equal(saved.structuredContent.bytes, bytes.length)
+  assert.equal(saved.structuredContent.sha256, createHash('sha256').update(bytes).digest('hex'))
+  assert.equal((await bridge.store.list()).length, 1)
+  assert.deepEqual((await bridge.store.readAttachment(saved.structuredContent.attachmentId)).data, bytes)
+})

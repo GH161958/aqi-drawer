@@ -22,6 +22,7 @@ const flags = {
   inPlace: flag('C_POCKET_ENABLE_OWNER_IN_PLACE'),
   hostProbe: flag('C_POCKET_ENABLE_MCP_FILE_HOST_PROBE'),
   fileIntake: flag('C_POCKET_ENABLE_MCP_FILE_INTAKE'),
+  fileTransferV2: flag('C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2'),
   legacy: flag('C_POCKET_ENABLE_LEGACY_MCP', true),
 }
 if (flags.owner && !flags.capture) {
@@ -35,6 +36,9 @@ if (flags.taxonomyCreate && (!flags.owner || !flags.capture)) {
 }
 if (flags.fileIntake && (!flags.owner || !flags.capture)) {
   errors.push('File Intake requires the unified Owner and Capture switches.')
+}
+if (flags.fileTransferV2 && (!flags.owner || !flags.capture)) {
+  errors.push('File Transfer V2 requires unified Owner and Capture enabled.')
 }
 if (flags.inPlace && (!flags.owner || !flags.capture || !flags.legacy)) {
   errors.push('In-place Owner requires Capture, Unified Owner, and Legacy MCP enabled.')

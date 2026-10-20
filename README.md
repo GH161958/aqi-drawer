@@ -73,6 +73,7 @@ npm start
 | `C_POCKET_ENABLE_OWNER_IN_PLACE` | 默认 `false`；需另有 EE 上线授权，且同时设置 Capture + Unified Owner 为 `true`、Legacy MCP 保持 `true`。只在现有私密 `C_POCKET_MCP_PATH` 注册 Owner，**不新增或修改 URL** |
 | `C_POCKET_ENABLE_OWNER_TAXONOMY_CREATE` | 默认 `false`；仅 Unified Owner 可见的单一新 Tag／Collection 登记工具；须先经 EE 单独确认准确名称；开启需要独立生产授权 |
 | `C_POCKET_ENABLE_MCP_FILE_INTAKE` | 默认 `false`；新文件 Intake 仅在统一 Owner 和 Capture 同时启用且文件域名白名单已设置后允许注册 |
+| `C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2` | 默认 `false`；独立 Owner 文件投送 V2，两阶段短期锁定一次 fileParams；逐次批准准确 hostname 和标题，不扩展永久白名单 |
 | `C_POCKET_ENABLE_MCP_FILE_HOST_PROBE` | 默认 `false`；仅在统一 Owner + Capture 都开启时，临时注册 **只返回 hostname、不下载或存储** 的文件参数诊断工具 |
 | `C_POCKET_MCP_FILE_HOSTS` | 逗号分隔的**准确 HTTPS 文件下载主机名** allowlist，仅用于官方 fileParams 临时下载，不可填写任意通配符、完整带签名 URL 或密钥；默认空/拒绝 |
 | `C_POCKET_ENABLE_LEGACY_MCP` | 默认 `true`；原地升级时**必须保留 true/未设置**，直接用旧地址提供 Owner；仅历史分路模式允许独立批准后关闭旧入口 |
@@ -199,6 +200,17 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 **开关默认关闭**：`C_POCKET_ENABLE_MCP_FILE_INTAKE` 不设即关闭；只在 `C_POCKET_ENABLE_MCP_CAPTURE=true` 且 `C_POCKET_ENABLE_UNIFIED_OWNER=true`、另已配置 `C_POCKET_MCP_FILE_HOSTS` 时可启用。旧 MCP 和独立五工具 Capture 均不注册文件上传工具。不要猜测 OpenAI 临时下载服务的主机名；首次宿主兼容性 QA 时，应先在私密环境观察可授权域名（**只能记录 hostname**），再由 EE 审查并添加白名单。
 
 **验收边界**：SDK 临时文件夹/模拟 downloader 测试不能证明 ChatGPT 实际向已连接插件注入 fileParams。正式上线前必须另做真实 ChatGPT Host → MCP 的最小无敏感文件手动测试，检查字节 Hash、重试、附件可读性和稳定性，并得到 EE 单独授权。PR C 仅完成候选代码，不合并、不部署、不更新 Zeabur，不使用 EE 的任何真实文件。
+
+### File Intake V2 · Pinned One-Time Transfer（独立 PR，默认关闭）
+
+ChatGPT 的 `fileParams` 可能在不同工具调用间切换临时存储区域。因此只读 Host Probe 的 hostname **不能**直接当作下一次 File Intake 必然使用的 hostname。V2 不将全部 Azure 区域加入永久白名单，也不允许通配符。
+
+启用 `C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2=true` **须经过独立审批**。只有 Unified Owner + Capture 允许注册两个新工具：
+
+1. `pocket_file_transfer_prepare` — 向 ChatGPT 收取一份真实文件的 `fileParams`，短暂锁定原始签名地址和用户明确请求的标题/说明，仅在服务器内存保存（15 分钟/至多 12 个票据）；对用户只返回准确 hostname、标题、票据、过期时间。不下载、不写 Store，绝不暴露签名地址或 file ID。
+2. `pocket_file_transfer_commit` — 用户明确批准**这次票据 + 对应准确文件标题 + hostname** 后，才使用锁定的链接进行下载，并复用 V1 HTTPS/DNS/TLS/大小/类型/哈希/防重的验证。Commit 不接受新链接，也不修改全局 `C_POCKET_MCP_FILE_HOSTS`。
+
+链接过期、进程重启、过期票据等安全失败，需要重新 Prepare 和授权。原 V1 接口与配置保持兼容（两者开关互不依赖）；不会静默自动抓取 ChatGPT 附件。它也不构成对临时 URL 服务商所有权的密码学证明。只在审核通过、独立批准合并/发布/开启开关后进行真实 QA，已上传的用户文件不用于开发阶段的生产写入。
 
 ### GPT → Drawer 收进柜子（开发候选，尚未上线）
 
