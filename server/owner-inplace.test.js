@@ -420,3 +420,105 @@ test('V2 two-step fileParams pins one host with V1 intake OFF and saves only aft
   assert.equal((await bridge.store.list()).length, 1)
   assert.deepEqual((await bridge.store.readAttachment(saved.structuredContent.attachmentId)).data, bytes)
 })
+
+
+test('V3 opt-in single entry saves approved hosts and prepares unknown hosts without downloading', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-v3-one-entry-'))
+  const mcpPath = privatePath()
+  const bytes = Buffer.from('%PDF-1.4\n%%EOF\n')
+  const observed = []
+  const bridge = await startBridge({
+    dataDir, mcpPath, port: 0, host: '127.0.0.1',
+    ...inPlaceFlags,
+    enableMcpFileIntake: true,
+    enableMcpFileTransferV2: true,
+    enableMcpFileSmartRouteV3: true,
+    mcpFileHosts: ['uploads.example.org'],
+    mcpFileDownloader: async (_file, options) => {
+      observed.push(options.allowedHosts)
+      return bytes
+    },
+  })
+  const client = await connect('http://127.0.0.1:' + bridge.address.port, mcpPath)
+  t.after(async () => {
+    await Promise.allSettled([client.close(), bridge.stop()])
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  const present = (await client.listTools()).tools.map((entry) => entry.name)
+  assert.ok(present.includes('pocket_file_intake'))
+  assert.ok(present.includes('pocket_file_transfer_commit'))
+  const trusted = {
+    file_id: 'v3-trusted-opaque', file_name: 'trusted.pdf',
+    mime_type: 'application/pdf',
+    download_url: 'https://uploads.example.org/file?token=SECRET',
+  }
+  const saved = await client.callTool({ name: 'pocket_file_intake', arguments: {
+    request_id: 'v3-one-entry-trusted-0001', mode: 'new', title: 'Trusted PDF', file: trusted,
+  } })
+  assert.equal(saved.isError, undefined)
+  assert.equal(saved.structuredContent.duplicate, false)
+  assert.deepEqual(observed, [['uploads.example.org']])
+  assert.equal((await bridge.store.list()).length, 1)
+
+  const unknown = {
+    ...trusted, file_id: 'v3-unknown-opaque', file_name: 'unknown.pdf',
+    download_url: 'https://other-region.example.net/file?token=DO-NOT-LEAK',
+  }
+  const pending = await client.callTool({ name: 'pocket_file_intake', arguments: {
+    request_id: 'v3-one-entry-unknown-0001', mode: 'new', title: 'Unknown PDF', file: unknown,
+  } })
+  assert.equal(pending.isError, undefined)
+  assert.equal(pending.structuredContent.status, 'approval_required')
+  assert.equal(pending.structuredContent.hostname, 'other-region.example.net')
+  assert.equal(pending.structuredContent.title, 'Unknown PDF')
+  assert.equal(pending.structuredContent.stored, false)
+  assert.equal(pending.structuredContent.downloaded, false)
+  assert.equal(typeof pending.structuredContent.ticketId, 'string')
+  assert.ok(!JSON.stringify(pending).includes('DO-NOT-LEAK'))
+  assert.ok(!JSON.stringify(pending).includes('v3-unknown-opaque'))
+  assert.deepEqual(observed, [['uploads.example.org']])
+  assert.equal((await bridge.store.list()).length, 1)
+
+  const wrong = await client.callTool({ name: 'pocket_file_transfer_commit', arguments: {
+    ticket_id: pending.structuredContent.ticketId,
+    approved_hostname: 'wrong.example.net', approved_title: 'Unknown PDF',
+  } })
+  assert.equal(wrong.isError, true)
+  assert.equal(observed.length, 1)
+  assert.equal((await bridge.store.list()).length, 1)
+  const committed = await client.callTool({ name: 'pocket_file_transfer_commit', arguments: {
+    ticket_id: pending.structuredContent.ticketId,
+    approved_hostname: 'other-region.example.net', approved_title: 'Unknown PDF',
+  } })
+  assert.equal(committed.isError, undefined)
+  assert.equal(committed.structuredContent.sha256, createHash('sha256').update(bytes).digest('hex'))
+  assert.deepEqual(observed, [['uploads.example.org'], ['other-region.example.net']])
+  const item = await bridge.store.get(committed.structuredContent.itemId)
+  assert.equal(item.title, 'Unknown PDF')
+  assert.equal(Object.hasOwn(item.sourceData, 'openaiFileId'), false)
+  assert.deepEqual((await bridge.store.readAttachment(committed.structuredContent.attachmentId)).data, bytes)
+  assert.equal((await bridge.store.list()).length, 2)
+
+  const unsafe = await client.callTool({ name: 'pocket_file_intake', arguments: {
+    request_id: 'v3-one-entry-unsafe-0001', mode: 'new', title: 'Unsafe PDF',
+    file: { ...unknown, download_url: 'https://127.0.0.1/private' },
+  } })
+  assert.equal(unsafe.isError, true)
+  assert.equal(observed.length, 2)
+  assert.equal((await bridge.store.list()).length, 2)
+})
+
+test('V3 gate rejects unilateral activation and does not silently turn on V1 or V2', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-v3-gate-'))
+  const mcpPath = privatePath()
+  t.after(async () => rm(dataDir, { recursive: true, force: true }))
+  for (const flags of [
+    { enableMcpFileIntake: false, enableMcpFileTransferV2: true },
+    { enableMcpFileIntake: true, enableMcpFileTransferV2: false, mcpFileHosts: ['uploads.example.org'] },
+  ]) {
+    await assert.rejects(createBridgeApp({
+      dataDir, mcpPath, ...inPlaceFlags,
+      ...flags, enableMcpFileSmartRouteV3: true,
+    }), /requires File Intake V1 and pinned Transfer V2/)
+  }
+})
