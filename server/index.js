@@ -117,6 +117,7 @@ export async function createBridgeApp(config = {}) {
   const fileIntake = settings.enableMcpFileIntake
     ? createMcpFileIntakeService({
       store, allowedHosts: settings.mcpFileHosts,
+      persistFileId: false,
       ...(config.mcpFileDownloader ? { download: config.mcpFileDownloader } : {}),
     }) : null
   const pinnedFileTransferV2 = settings.enableMcpFileTransferV2
