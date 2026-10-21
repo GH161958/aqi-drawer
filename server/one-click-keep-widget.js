@@ -44,13 +44,14 @@ function findPrivate(envelope) {
 }
 function hydrate(out, envelope) {
   const visible = out?.structuredContent ?? out ?? {}
-  if (visible.status !== 'one_click_approval_required') return
+  if (!['one_click_approval_required', 'one_click_receipt_available'].includes(visible.status)) return
   capability = findPrivate(envelope) || findPrivate(window.openai?.toolResponseMetadata)
   item.textContent = '文件：' + (visible.title || 'File')
   origin.textContent = '本次下载来源：' + (visible.hostname || '未知') + ' · 只授权这一份原件'
   status.textContent = capability
     ? '确认后由 Drawer 安全下载，并核对原件大小与 SHA-256。'
     : '当前 ChatGPT Widget 没有提供私有授权能力；不会尝试保存。'
+  save.textContent = visible.status === 'one_click_receipt_available' ? '查看已保存回执' : '确认保存这份原件'
   save.disabled = !capability
 }
 hydrate(window.openai?.toolOutput, window.openai?.toolResponseMetadata)
