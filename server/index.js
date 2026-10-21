@@ -53,6 +53,7 @@ export async function createBridgeApp(config = {}) {
     enableOwnerTaxonomyCreate: config.enableOwnerTaxonomyCreate ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_OWNER_TAXONOMY_CREATE) === 'true'),
     enableMcpFileIntake: config.enableMcpFileIntake ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_INTAKE) === 'true'),
     enableMcpFileTransferV2: config.enableMcpFileTransferV2 ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2) === 'true'),
+    enableMcpFileSmartRouteV3: config.enableMcpFileSmartRouteV3 ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_SMART_ROUTE_V3) === 'true'),
     enableMcpFileHostProbe: config.enableMcpFileHostProbe ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_HOST_PROBE) === 'true'),
     mcpFileHosts: permittedFileHosts(config.mcpFileHosts ?? process.env.C_POCKET_MCP_FILE_HOSTS),
     enableLegacyMcp: config.enableLegacyMcp ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_LEGACY_MCP) !== 'false'),
@@ -71,6 +72,11 @@ export async function createBridgeApp(config = {}) {
   }
   if (settings.enableMcpFileTransferV2 && (!settings.enableUnifiedOwner || !settings.enableMcpCapture)) {
     throw new Error('MCP File Transfer V2 requires unified Owner and Capture.')
+  }
+  // V3 is only an opt-in router over BOTH previously reviewed file paths.
+  // It cannot authorize a new hostname or enable a dormant transfer capability.
+  if (settings.enableMcpFileSmartRouteV3 && (!settings.enableMcpFileIntake || !settings.enableMcpFileTransferV2)) {
+    throw new Error('MCP File Smart Route V3 requires File Intake V1 and pinned Transfer V2.')
   }
   // Two explicit modes: original split-path migration, or independently
   // authorized in-place Owner upgrade of the *existing* private MCP URL.
@@ -912,6 +918,8 @@ export async function createBridgeApp(config = {}) {
             enableMcpCapture: lane !== 'standard' && settings.enableMcpCapture,
             fileIntake: lane === 'owner' ? fileIntake : null,
             pinnedFileTransferV2: lane === 'owner' ? pinnedFileTransferV2 : null,
+            enableMcpFileSmartRouteV3: lane === 'owner' && settings.enableMcpFileSmartRouteV3,
+            mcpFileHosts: lane === 'owner' ? settings.mcpFileHosts : [],
             enableMcpFileHostProbe: lane === 'owner' && settings.enableMcpFileHostProbe,
             enableOwnerTaxonomyCreate: lane === 'owner' && settings.enableOwnerTaxonomyCreate,
             lane,

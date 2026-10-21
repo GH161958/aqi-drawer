@@ -20,6 +20,7 @@ const base = {
   C_POCKET_ENABLE_MCP_FILE_HOST_PROBE: 'false',
   C_POCKET_ENABLE_MCP_FILE_INTAKE: 'false',
   C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'false',
+  C_POCKET_ENABLE_MCP_FILE_SMART_ROUTE_V3: 'false',
   C_POCKET_ENABLE_LEGACY_MCP: 'true',
   C_POCKET_MCP_FILE_HOSTS: '',
 }
@@ -48,6 +49,7 @@ test('invalid Owner, probe, intake and legacy retirement switch combinations fai
     { C_POCKET_ENABLE_OWNER_TAXONOMY_CREATE: 'true' },
     { C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true' },
     { C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'true' },
+    { C_POCKET_ENABLE_MCP_FILE_SMART_ROUTE_V3: 'true' },
     { C_POCKET_ENABLE_LEGACY_MCP: 'false' },
     { C_POCKET_ENABLE_MCP_CAPTURE: 'true' },
     { ...enabledOwner, C_POCKET_MCP_CAPTURE_PATH: base.C_POCKET_MCP_PATH },
@@ -117,4 +119,32 @@ test('download allowlist rejects wildcard, raw URL, IP and empty values', () => 
   }
   assert.equal(check({ ...enabledOwner, C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true',
     C_POCKET_MCP_FILE_HOSTS: 'uploads.example.org' }).status, 0)
+})
+
+test('V3 requires BOTH file lanes plus reviewed exact hosts, never a wildcard', () => {
+  const owner = {
+    C_POCKET_ENABLE_OWNER_IN_PLACE: 'true',
+    C_POCKET_ENABLE_MCP_CAPTURE: 'true',
+    C_POCKET_ENABLE_UNIFIED_OWNER: 'true',
+    C_POCKET_MCP_CAPTURE_PATH: '',
+  }
+  for (const overrides of [
+    { C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true', C_POCKET_MCP_FILE_HOSTS: 'uploads.example.org' },
+    { C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'true' },
+    { C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true', C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'true', C_POCKET_MCP_FILE_HOSTS: '*.example.org' },
+  ]) {
+    const rejected = check({
+      ...owner, ...overrides, C_POCKET_ENABLE_MCP_FILE_SMART_ROUTE_V3: 'true',
+    })
+    assert.equal(rejected.status, 1)
+    assert.ok(!rejected.stderr.includes(secret))
+  }
+  const allowed = check({
+    ...owner,
+    C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true',
+    C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'true',
+    C_POCKET_ENABLE_MCP_FILE_SMART_ROUTE_V3: 'true',
+    C_POCKET_MCP_FILE_HOSTS: 'uploads.example.org',
+  })
+  assert.equal(allowed.status, 0, allowed.stderr)
 })

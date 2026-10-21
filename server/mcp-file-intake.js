@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { lookup } from 'node:dns/promises'
+import { Resolver } from 'node:dns/promises'
 import { createWriteStream } from 'node:fs'
 import { rename, rm, stat } from 'node:fs/promises'
 import https from 'node:https'
@@ -7,6 +7,7 @@ import { isIP, BlockList } from 'node:net'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { Transform } from 'node:stream'
+import { createMcpFileOperation } from './mcp-file-operation.js'
 
 export const MAX_MCP_FILE_BYTES = 25 * 1024 * 1024
 const BLOCKED = new BlockList()
@@ -83,6 +84,41 @@ function safeName(value) {
   return name
 }
 
+// Bounded comparisons for technical metadata only. Never inspect title/text.
+const normalizeTechnicalId = value => String(value).slice(0, 4096).normalize('NFKC').toLowerCase()
+const compactTechnicalId = value => normalizeTechnicalId(value).replace(/[^\p{L}\p{N}]/gu, '')
+
+function containsLongFileId(value, fileId) {
+  const rawId = normalizeTechnicalId(fileId)
+  const raw = normalizeTechnicalId(value)
+  if (rawId.length >= 16 && raw.includes(rawId)) return true
+  const name = compactTechnicalId(value)
+  const id = compactTechnicalId(fileId)
+  const tail = compactTechnicalId(String(fileId).split(/[\\/:]/u).at(-1))
+  return [id, tail].filter(alias => alias.length >= 16).some(alias =>
+    name.includes(alias) || (alias.length >= 24
+      && (name.includes(alias.slice(0, 16)) || name.includes(alias.slice(-16)))))
+}
+
+export function validateMcpFileRequestIdPrivacy(requestId, fileId) {
+  if (containsLongFileId(requestId, fileId)) {
+    throw new Error('Use an independent stable request_id, not a temporary file identifier.')
+  }
+}
+
+function technicalFileName(file) {
+  const raw = String(file.file_name || '')
+  if (raw.length > 4096) throw new Error('Technical file name is too long.')
+  const safe = safeName(raw)
+  const extension = path.extname(safe)
+  // Percent-bearing host names are deliberately opaque: do not decode them.
+  // Keep the supplied plain extension, then run the existing type validation.
+  const sensitive = raw.includes('%') || containsLongFileId(raw, file.file_id)
+    || normalizeTechnicalId(path.basename(safe, extension)) === normalizeTechnicalId(file.file_id)
+    || normalizeTechnicalId(raw).includes(normalizeTechnicalId(file.download_url))
+  return sensitive ? 'chatgpt-file' + extension : safe
+}
+
 const EXT_BY_MIME = {
   'application/pdf': '.pdf', 'image/png': '.png', 'image/jpeg': '.jpg',
   'image/gif': '.gif', 'image/webp': '.webp', 'text/plain': '.txt',
@@ -93,7 +129,7 @@ const EXT_BY_MIME = {
 }
 
 function resolveFileName(file, bytes) {
-  if (file.file_name) return safeName(file.file_name)
+  if (file.file_name) return technicalFileName(file)
   const mime = String(file.mime_type || '').split(';')[0].toLowerCase()
   const first = bytes.subarray(0, 16)
   const extension = EXT_BY_MIME[mime]
@@ -103,7 +139,7 @@ function resolveFileName(file, bytes) {
     || (['GIF87a', 'GIF89a'].includes(first.subarray(0, 6).toString()) ? '.gif' : '')
     || (first.subarray(0, 4).toString() === 'RIFF' && first.subarray(8, 12).toString() === 'WEBP' ? '.webp' : '')
   if (!extension) throw new Error('The file host omitted its name and type. Provide a supported file name or MIME type.')
-  return safeName(file.file_id + extension)
+  return 'chatgpt-file' + extension
 }
 
 function classifyFile(name, bytes, declaredMime = '') {
@@ -166,144 +202,196 @@ export function validateMcpFileBytes(file, bytes) {
 // Fetch is intentionally restrictive: explicitly allowed HTTPS host only,
 // every resolved IPv4 address checked, pinned IP for the TLS connection,
 // no HTTP redirects, bounded bytes and time. Signed URLs never get logged.
-export async function downloadChatGptFile(file, { allowedHosts, resolver = lookup } = {}) {
-  const url = validateMcpFileUrl(file?.download_url, allowedHosts)
-  const addresses = await resolver(url.hostname, { all: true, family: 4, verbatim: true })
-  if (!Array.isArray(addresses) || !addresses.length || addresses.some((entry) => !publicIPv4(entry.address))) {
-    throw new Error('File host DNS address is not a permitted public IPv4 address.')
+export async function downloadChatGptFile(file, {
+  allowedHosts, resolver, operation, request = https.get,
+} = {}) {
+  const ownOperation = !operation
+  operation ||= createMcpFileOperation()
+  const { signal } = operation
+  // One resolver per transfer: aborting it cannot cancel another request's DNS.
+  const dns = resolver ? null : new Resolver({ timeout: 15000, tries: 1 })
+  const cancelDns = () => dns?.cancel()
+  signal.addEventListener('abort', cancelDns, { once: true })
+  try {
+    operation.check()
+    const url = validateMcpFileUrl(file?.download_url, allowedHosts)
+    // Custom resolvers may ignore cancellation: detach and discard late results
+    // before HTTPS. The production resolver's active DNS query is cancelled.
+    const addresses = await operation.wait(resolver
+      ? resolver(url.hostname, { all: true, family: 4, verbatim: true, signal })
+      : dns.resolve4(url.hostname).then(values => values.map(address => ({ address, family: 4 }))))
+    operation.check()
+    if (!Array.isArray(addresses) || !addresses.length || addresses.some((entry) => !publicIPv4(entry.address))) {
+      throw new Error('File host DNS address is not a permitted public IPv4 address.')
+    }
+    const address = addresses[0].address
+    return await operation.wait(new Promise((resolve, reject) => {
+      const req = request(url, {
+        agent: false, signal, timeout: 15000,
+        headers: { accept: 'application/octet-stream', 'accept-encoding': 'identity' },
+        lookup: (_name, options, cb) => {
+          if (options?.all) cb(null, [{ address, family: 4 }])
+          else cb(null, address, 4)
+        },
+      }, async (res) => {
+        if (res.statusCode !== 200 || Number(res.headers['content-length']) > MAX_MCP_FILE_BYTES) {
+          res.destroy()
+          reject(new Error('Temporary file download failed, redirected or exceeded the size limit.'))
+          return
+        }
+        const chunks = []
+        let total = 0
+        try {
+          await pipeline(res, new Transform({
+            transform(chunk, _encoding, callback) {
+              total += chunk.length
+              if (total > MAX_MCP_FILE_BYTES) {
+                callback(new Error('File exceeds the 25 MiB Intake limit.'))
+                return
+              }
+              chunks.push(chunk)
+              callback()
+            },
+          }), { signal })
+          operation.check()
+          if (!total) throw new Error('Downloaded file is empty.')
+          resolve(Buffer.concat(chunks, total))
+        } catch (error) {
+          req.destroy()
+          reject(error)
+        }
+      })
+      const abort = () => req.destroy(signal.reason)
+      signal.addEventListener('abort', abort, { once: true })
+      req.once('close', () => signal.removeEventListener('abort', abort))
+      req.on('timeout', () => req.destroy(new Error('File download timed out.')))
+      req.on('error', reject)
+      if (signal.aborted) abort()
+    }))
+  } finally {
+    signal.removeEventListener('abort', cancelDns)
+    cancelDns()
+    if (ownOperation) operation.dispose()
   }
-  const address = addresses[0].address
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, {
-      agent: false,
-      timeout: 15000,
-      headers: { accept: 'application/octet-stream', 'accept-encoding': 'identity' },
-      lookup: (_name, options, cb) => {
-        if (options?.all) cb(null, [{ address, family: 4 }])
-        else cb(null, address, 4)
-      },
-    }, async (res) => {
-      if (res.statusCode !== 200) {
-        res.destroy()
-        reject(new Error('Temporary file download failed or redirected. Refresh the ChatGPT file parameter.'))
-        return
-      }
-      if (Number(res.headers['content-length']) > MAX_MCP_FILE_BYTES) {
-        res.destroy()
-        reject(new Error('File exceeds the 25 MiB Intake limit.'))
-        return
-      }
-      const chunks = []
-      let total = 0
-      try {
-        await pipeline(res, new Transform({
-          transform(chunk, _encoding, callback) {
-            total += chunk.length
-            if (total > MAX_MCP_FILE_BYTES) {
-              callback(new Error('File exceeds the 25 MiB Intake limit.'))
-              return
-            }
-            chunks.push(chunk)
-            callback()
-          },
-        }))
-        if (!total) throw new Error('Downloaded file is empty.')
-        resolve(Buffer.concat(chunks, total))
-      } catch (error) {
-        request.destroy()
-        reject(error)
-      }
-    })
-    request.on('timeout', () => request.destroy(new Error('File download timed out.')))
-    request.on('error', reject)
-  })
+}
+
+// The URL participates only in a one-way fingerprint, never in durable state.
+// A changed URL is a new byte claim even if the opaque file_id is unchanged.
+export function describeMcpFileIntakeRequest({ requestId, mode, itemId, title = '', text = '', file }) {
+  if (!['new', 'append'].includes(mode)) throw new Error('Choose new or append.')
+  if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(String(requestId || ''))) {
+    throw new Error('A stable 8–120 character request_id is required.')
+  }
+  if (mode === 'new' && itemId) throw new Error('New file Intake must not supply an item ID.')
+  if (mode === 'append' && (!itemId || title || text)) throw new Error('Append requires existing item_id, without title or text replacement.')
+  if (typeof title !== 'string' || title.length > 160 || typeof text !== 'string' || text.length > 20000) {
+    throw new Error('File item title/text is too long.')
+  }
+  if (!validChatGptFileId(file?.file_id)) throw new Error('A valid ChatGPT file_id is required.')
+  validateMcpFileRequestIdPrivacy(requestId, file.file_id)
+  describeMcpFileHost(file)
+  const filename = file.file_name ? technicalFileName(file) : ''
+  const requestHash = createHash('sha256').update(JSON.stringify([
+    mode, itemId || '', title, text, file.file_id, filename, file.mime_type || '',
+    file.download_url,
+  ])).digest('hex')
+  return { requestId, requestHash, mode, itemId: itemId || '', title, text }
+}
+
+export async function readMcpFileIntakeReceipt(store, input) {
+  const previous = await store.getMcpFileIntakeReceipt(input)
+  if (!previous) return null
+  const stored = await store.readAttachment(previous.attachmentId, MAX_MCP_FILE_BYTES)
+  if (!stored || stored.data.length !== previous.bytes
+    || createHash('sha256').update(stored.data).digest('hex') !== previous.sha256) {
+    throw new Error('Previously saved attachment is missing or corrupted. Manual review required.')
+  }
+  const current = await store.getMcpFileIntakeReceipt(input)
+  if (!current || current.attachmentId !== previous.attachmentId
+    || current.sha256 !== previous.sha256 || current.bytes !== previous.bytes
+    || current.mimeType !== previous.mimeType) {
+    throw new Error('Original Intake attachment changed during retry. Manual review required.')
+  }
+  return { ...current, duplicate: true }
 }
 
 export function createMcpFileIntakeService({ store, allowedHosts = [], download = downloadChatGptFile, persistFileId = true }) {
   if (!store) throw new Error('File Intake requires the existing PocketStore.')
+  // Read-only replay probe: never grants a new host permission to download.
+  const replay = async (args) => {
+    const input = describeMcpFileIntakeRequest(args)
+    try {
+      return { receipt: await readMcpFileIntakeReceipt(store, input), verificationRequired: false }
+    } catch (error) {
+      if (error?.code !== 'MCP_FILE_REPLAY_VERIFICATION_REQUIRED') throw error
+      return { receipt: null, verificationRequired: true }
+    }
+  }
   return {
-    async save({ requestId, mode, itemId, title = '', text = '', file }) {
-      if (!['new', 'append'].includes(mode)) throw new Error('Choose new or append.')
-      if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(String(requestId || ''))) {
-        throw new Error('A stable 8–120 character request_id is required.')
-      }
-      if (mode === 'new' && itemId) throw new Error('New file Intake must not supply an item ID.')
-      if (mode === 'append' && (!itemId || title || text)) throw new Error('Append requires existing item_id, without title or text replacement.')
-      if (String(title).length > 160 || String(text).length > 20000) throw new Error('File item title/text is too long.')
-      const fileId = file?.file_id
-      const filename = file?.file_name ? safeName(file.file_name) : ''
-      if (!validChatGptFileId(fileId)) throw new Error('A valid ChatGPT file_id is required.')
-      const requestHash = createHash('sha256').update(JSON.stringify([
-        mode, itemId || '', title, text, fileId, filename, file.mime_type || '',
-      ])).digest('hex')
-      const input = { requestId, requestHash, mode, itemId: itemId || '', title, text }
-      let previous
+    replay,
+    async save({ requestId, mode, itemId, title = '', text = '', file }, suppliedOperation) {
+      const operation = suppliedOperation || createMcpFileOperation()
       try {
-        previous = await store.getMcpFileIntakeReceipt(input)
-      } catch (error) {
-        // A new host-issued file_id changes the legacy request fingerprint.
-        // Verify the NEW temporary URL's actual bytes before treating it as
-        // a retry. Different content or intent must remain a hard conflict.
-        if (error?.status !== 409
-          || error.message !== 'File Intake requestId was already used for a different item or file.') {
-          throw error
-        }
-        validateMcpFileUrl(file.download_url, allowedHosts)
-        const retryBytes = await download(file, { allowedHosts })
-        const { mimeType: retryMimeType } = validateMcpFileBytes(file, retryBytes)
-        const verifiedFile = {
-          bytes: retryBytes.length,
-          sha256: createHash('sha256').update(retryBytes).digest('hex'),
-          mimeType: retryMimeType,
-        }
-        const evidence = { ...input, title, text, verifiedFile }
-        const matched = await store.getMcpFileIntakeReceipt(evidence)
-        if (!matched) throw new Error('Original Intake request no longer exists. Manual review required.', { cause: error })
-        const stored = await store.readAttachment(matched.attachmentId, MAX_MCP_FILE_BYTES)
-        if (!stored || stored.data.length !== matched.bytes
-          || createHash('sha256').update(stored.data).digest('hex') !== matched.sha256) {
-          throw new Error('Previously saved attachment is missing or corrupted. Manual review required.', { cause: error })
-        }
-        // Re-check the attachment is still bound to this request after reading
-        // its bytes, without writing a new Store item or media object.
-        const current = await store.getMcpFileIntakeReceipt(evidence)
-        if (!current || current.attachmentId !== matched.attachmentId) {
-          throw new Error('Original Intake attachment changed during retry. Manual review required.', { cause: error })
-        }
-        return { ...current, duplicate: true }
-      }
-      if (previous) {
-        const stored = await store.readAttachment(previous.attachmentId, MAX_MCP_FILE_BYTES)
-        if (!stored || stored.data.length !== previous.bytes
-          || createHash('sha256').update(stored.data).digest('hex') !== previous.sha256) {
-          throw new Error('Previously saved attachment is missing or corrupted. Manual review required.')
-        }
-        return { ...previous, duplicate: true }
-      }
-      // Validate BEFORE making an outbound request.
-      validateMcpFileUrl(file.download_url, allowedHosts)
-      const bytes = await download(file, { allowedHosts })
-      const { filename: verifiedName, mimeType } = validateMcpFileBytes(file, bytes)
-      const sha256 = createHash('sha256').update(bytes).digest('hex')
-      const storageName = randomUUID()
-      const finalPath = path.join(store.mediaDir, storageName)
-      const pendingPath = finalPath + '.part'
-      let committed = false
-      try {
-        const writer = createWriteStream(pendingPath, { flags: 'wx', mode: 0o600 })
-        await pipeline([bytes], writer)
-        const written = await stat(pendingPath)
-        if (!written.isFile() || written.size !== bytes.length) throw new Error('File was not persisted completely.')
-        await rename(pendingPath, finalPath)
-        const attachment = { id: randomUUID(), name: verifiedName, mimeType, size: bytes.length, sha256, storageName }
-        const receipt = await store.saveMcpFileIntake({
-          ...input, fileId: persistFileId ? fileId : undefined, attachment,
+        operation.check()
+        // A downloader gets cancellation/read checks, never publication authority.
+        const downloadOperation = Object.freeze({
+          signal: operation.signal, deadline: operation.deadline,
+          check: operation.check, wait: operation.wait,
         })
-        committed = !receipt.duplicate
-        return receipt
+        const args = { requestId, mode, itemId, title, text, file }
+        const input = describeMcpFileIntakeRequest(args)
+        const fileId = file?.file_id
+        const previous = await operation.wait(replay(args))
+        if (previous.receipt) return previous.receipt
+        if (previous.verificationRequired) {
+          // Legacy fingerprints and any changed fileParams need actual bytes.
+          // No request-ID-only or opaque-file-ID-only success shortcut.
+          validateMcpFileUrl(file.download_url, allowedHosts)
+          operation.check()
+          const retryBytes = await operation.wait(download(file, { allowedHosts, operation: downloadOperation, signal: operation.signal }))
+          const { mimeType: retryMimeType } = validateMcpFileBytes(file, retryBytes)
+          const verifiedFile = {
+            bytes: retryBytes.length,
+            sha256: createHash('sha256').update(retryBytes).digest('hex'),
+            mimeType: retryMimeType,
+          }
+          const evidence = { ...input, title, text, verifiedFile }
+          const matched = await operation.wait(readMcpFileIntakeReceipt(store, evidence))
+          if (!matched) throw new Error('Original Intake request no longer exists. Manual review required.')
+          return matched
+        }
+        // Validate BEFORE making an outbound request.
+        validateMcpFileUrl(file.download_url, allowedHosts)
+        operation.check()
+        const bytes = await operation.wait(download(file, { allowedHosts, operation: downloadOperation, signal: operation.signal }))
+        const { filename: verifiedName, mimeType } = validateMcpFileBytes(file, bytes)
+        const sha256 = createHash('sha256').update(bytes).digest('hex')
+        operation.check()
+        const storageName = randomUUID()
+        const finalPath = path.join(store.mediaDir, storageName)
+        const pendingPath = finalPath + '.part'
+        let committed = false
+        try {
+          operation.check()
+          const writer = createWriteStream(pendingPath, { flags: 'wx', mode: 0o600 })
+          await pipeline([bytes], writer, { signal: operation.signal })
+          const written = await stat(pendingPath)
+          if (!written.isFile() || written.size !== bytes.length) throw new Error('File was not persisted completely.')
+          operation.check()
+          await rename(pendingPath, finalPath)
+          operation.check()
+          const attachment = { id: randomUUID(), name: verifiedName, mimeType, size: bytes.length, sha256, storageName }
+          const receipt = await operation.wait(store.saveMcpFileIntake({
+            ...input, fileId: persistFileId ? fileId : undefined, attachment, authorization: operation,
+          }))
+          committed = !receipt.duplicate
+          return receipt
+        } finally {
+          await rm(pendingPath, { force: true }).catch(() => {})
+          if (!committed) await rm(finalPath, { force: true }).catch(() => {})
+        }
       } finally {
-        await rm(pendingPath, { force: true }).catch(() => {})
-        if (!committed) await rm(finalPath, { force: true }).catch(() => {})
+        if (!suppliedOperation) { operation.cancel(); operation.dispose() }
       }
     },
   }
