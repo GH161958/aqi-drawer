@@ -39,14 +39,21 @@ function findPrivate(envelope) {
     envelope?.call_tool_result?._meta, envelope?.mcpToolResult?._meta,
     envelope?.callToolResult?._meta, envelope?.result?._meta,
   ]
-  for (const m of sources) if (typeof m?.aqiOneClickKeep?.capability === 'string') return m.aqiOneClickKeep.capability
+  for (const m of sources) {
+    const privateScope = m?.aqiOneClickKeep
+    if (typeof privateScope?.scopeId === 'string'
+      && /^[a-f0-9]{64}$/.test(privateScope?.capability || '')) return privateScope
+  }
   return null
 }
 function hydrate(out, envelope) {
   const visible = out?.structuredContent ?? out ?? {}
   if (!['one_click_approval_required', 'one_click_receipt_available'].includes(visible.status)) return
   // Never reuse an older snapshot bearer for a newer tool-result event.
-  capability = findPrivate(envelope)
+  const privateScope = findPrivate(envelope)
+  // A newer file must never reuse a different file's hidden bearer even if
+  // the Host updates the public and private snapshots separately.
+  capability = privateScope?.scopeId === visible.scopeId ? privateScope.capability : null
   item.textContent = '文件：' + (visible.title || 'File')
   origin.textContent = '本次下载来源：' + (visible.hostname || '未知') + ' · 只授权这一份原件'
   status.textContent = capability
@@ -60,6 +67,14 @@ window.addEventListener('message', event => {
   if (event.source !== window.parent) return
   const msg = event.data
   if (msg?.method === 'ui/notifications/tool-result') hydrate(msg.params, msg.params)
+}, { passive: true })
+window.addEventListener('openai:set_globals', event => {
+  // ChatGPT compatibility lifecycle: paired toolOutput + private metadata.
+  // Missing metadata deliberately disables Save rather than reusing an old token.
+  const changes = event.detail?.globals
+  if (changes && Object.prototype.hasOwnProperty.call(changes, 'toolOutput')) {
+    hydrate(changes.toolOutput, changes.toolResponseMetadata)
+  }
 }, { passive: true })
 save.onclick = async () => {
   if (submitting || !capability) return
