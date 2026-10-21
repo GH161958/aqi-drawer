@@ -349,3 +349,100 @@ test('R2: late private from an unmatched scope cannot enable B', () => {
   assert.equal(widget.elements.save.disabled, true)
   assert.deepEqual(widget.calls, [])
 })
+
+
+test('D1: explicitly null private metadata revokes current Save while absent delta preserves private-first', async () => {
+  const widget = mount({ token: 'a'.repeat(64) })
+  assert.equal(widget.elements.save.disabled, false)
+  globals(widget, { toolResponseMetadata: null })
+  assert.equal(widget.elements.save.disabled, true)
+  await widget.elements.save.onclick()
+  assert.deepEqual(widget.calls, [])
+  // Public-only replays must not recover explicitly cleared authorization.
+  globals(widget, { toolOutput: {
+    status: 'one_click_approval_required', scopeId: 'scope-current',
+    title: 'Original A', mode: 'new', hostname: 'unreviewed.example.net',
+  } })
+  assert.equal(widget.elements.save.disabled, true)
+})
+test('D1: explicitly empty private snapshot revokes and a new matching snapshot may reauthorize', () => {
+  const widget = mount({ token: 'a'.repeat(64) })
+  globals(widget, { toolResponseMetadata: { mcp_tool_result: { _meta: {} } } })
+  assert.equal(widget.elements.save.disabled, true)
+  globals(widget, { toolResponseMetadata: { mcp_tool_result: { _meta: {
+    aqiOneClickKeep: { scopeId: 'scope-current', capability: 'b'.repeat(64) },
+  } } } })
+  assert.equal(widget.elements.save.disabled, false)
+})
+test('D1: cancel A then public-only A→B→A never resurrects cancelled A', async () => {
+  const token = 'a'.repeat(64)
+  const widget = mount({ token })
+  await widget.elements.cancel.onclick()
+  assert.match(widget.elements.status.textContent, /已取消/u)
+  globals(widget, { toolOutput: { status: 'one_click_approval_required', scopeId: 'scope-B',
+    title: 'B', mode: 'new', hostname: 'unreviewed.example.net' } })
+  assert.equal(widget.elements.save.disabled, true)
+  globals(widget, { toolOutput: { status: 'one_click_approval_required', scopeId: 'scope-current',
+    title: 'A replay', mode: 'new', hostname: 'unreviewed.example.net' } })
+  assert.equal(widget.elements.save.disabled, true)
+  await widget.elements.save.onclick()
+  assert.deepEqual(widget.calls.map(c => c.name), ['pocket_file_keep_cancel'])
+  // Even an old private A snapshot replay cannot revive a retired scope.
+  globals(widget, { toolResponseMetadata: { mcp_tool_result: { _meta: {
+    aqiOneClickKeep: { scopeId: 'scope-current', capability: token },
+  } } } })
+  assert.equal(widget.elements.save.disabled, true)
+})
+test('D1: saved A then public-only A→B→A cannot revert to another Save button', async () => {
+  const token = 'a'.repeat(64)
+  const widget = mount({ token })
+  await widget.elements.save.onclick()
+  assert.match(widget.elements.status.textContent, /已入柜/u)
+  globals(widget, { toolOutput: { status: 'one_click_approval_required', scopeId: 'scope-B',
+    title: 'B', mode: 'new', hostname: 'unreviewed.example.net' } })
+  globals(widget, { toolOutput: { status: 'one_click_approval_required', scopeId: 'scope-current',
+    title: 'A replay', mode: 'new', hostname: 'unreviewed.example.net' } })
+  assert.equal(widget.elements.save.disabled, true)
+  await widget.elements.save.onclick()
+  assert.deepEqual(widget.calls.map(c => c.name), ['pocket_file_keep_redeem'])
+})
+test('D1: Save A completing after private-first B must not erase B candidate', async () => {
+  const gate = deferred(), tokenA = 'a'.repeat(64), tokenB = 'b'.repeat(64)
+  const calls = []
+  const widget = mount({ token: tokenA, callTool: async (name, args) => {
+    calls.push(args.capability)
+    return args.capability === tokenA ? gate.promise : receipt('B')
+  } })
+  const savingA = widget.elements.save.onclick()
+  globals(widget, { toolResponseMetadata: { mcp_tool_result: { _meta: {
+    aqiOneClickKeep: { scopeId: 'scope-B', capability: tokenB },
+  } } } })
+  gate.resolve(receipt('A'))
+  await savingA
+  globals(widget, { toolOutput: { status: 'one_click_approval_required', scopeId: 'scope-B',
+    title: 'B append', mode: 'append', itemId: 'target-B',
+    hostname: 'unreviewed.example.net' } })
+  assert.equal(widget.elements.save.disabled, false)
+  await widget.elements.save.onclick()
+  assert.deepEqual(calls, [tokenA, tokenB])
+  assert.match(widget.elements.origin.textContent, /attachment-B/u)
+})
+test('D1: Cancel A completion cannot erase private-first B', async () => {
+  const gate = deferred(), tokenA = 'a'.repeat(64), tokenB = 'b'.repeat(64)
+  const calls = []
+  const widget = mount({ token: tokenA, callTool: async (name, args) => {
+    calls.push(args.capability)
+    return args.capability === tokenA ? gate.promise : receipt('B')
+  } })
+  const cancellingA = widget.elements.cancel.onclick()
+  globals(widget, { toolResponseMetadata: { mcp_tool_result: { _meta: {
+    aqiOneClickKeep: { scopeId: 'scope-B', capability: tokenB },
+  } } } })
+  gate.resolve({ structuredContent: { cancelled: true } })
+  await cancellingA
+  globals(widget, { toolOutput: { status: 'one_click_approval_required', scopeId: 'scope-B',
+    title: 'B', mode: 'new', hostname: 'unreviewed.example.net' } })
+  assert.equal(widget.elements.save.disabled, false)
+  await widget.elements.save.onclick()
+  assert.deepEqual(calls, [tokenA, tokenB])
+})
