@@ -103,7 +103,7 @@ function resolveFileName(file, bytes) {
     || (['GIF87a', 'GIF89a'].includes(first.subarray(0, 6).toString()) ? '.gif' : '')
     || (first.subarray(0, 4).toString() === 'RIFF' && first.subarray(8, 12).toString() === 'WEBP' ? '.webp' : '')
   if (!extension) throw new Error('The file host omitted its name and type. Provide a supported file name or MIME type.')
-  return safeName(file.file_id + extension)
+  return 'chatgpt-file' + extension
 }
 
 function classifyFile(name, bytes, declaredMime = '') {
@@ -219,35 +219,68 @@ export async function downloadChatGptFile(file, { allowedHosts, resolver = looku
   })
 }
 
+// The URL participates only in a one-way fingerprint, never in durable state.
+// A changed URL is a new byte claim even if the opaque file_id is unchanged.
+export function describeMcpFileIntakeRequest({ requestId, mode, itemId, title = '', text = '', file }) {
+  if (!['new', 'append'].includes(mode)) throw new Error('Choose new or append.')
+  if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(String(requestId || ''))) {
+    throw new Error('A stable 8–120 character request_id is required.')
+  }
+  if (mode === 'new' && itemId) throw new Error('New file Intake must not supply an item ID.')
+  if (mode === 'append' && (!itemId || title || text)) throw new Error('Append requires existing item_id, without title or text replacement.')
+  if (typeof title !== 'string' || title.length > 160 || typeof text !== 'string' || text.length > 20000) {
+    throw new Error('File item title/text is too long.')
+  }
+  if (!validChatGptFileId(file?.file_id)) throw new Error('A valid ChatGPT file_id is required.')
+  describeMcpFileHost(file)
+  const filename = file.file_name ? safeName(file.file_name) : ''
+  const requestHash = createHash('sha256').update(JSON.stringify([
+    mode, itemId || '', title, text, file.file_id, filename, file.mime_type || '',
+    file.download_url,
+  ])).digest('hex')
+  return { requestId, requestHash, mode, itemId: itemId || '', title, text }
+}
+
+export async function readMcpFileIntakeReceipt(store, input) {
+  const previous = await store.getMcpFileIntakeReceipt(input)
+  if (!previous) return null
+  const stored = await store.readAttachment(previous.attachmentId, MAX_MCP_FILE_BYTES)
+  if (!stored || stored.data.length !== previous.bytes
+    || createHash('sha256').update(stored.data).digest('hex') !== previous.sha256) {
+    throw new Error('Previously saved attachment is missing or corrupted. Manual review required.')
+  }
+  const current = await store.getMcpFileIntakeReceipt(input)
+  if (!current || current.attachmentId !== previous.attachmentId
+    || current.sha256 !== previous.sha256 || current.bytes !== previous.bytes
+    || current.mimeType !== previous.mimeType) {
+    throw new Error('Original Intake attachment changed during retry. Manual review required.')
+  }
+  return { ...current, duplicate: true }
+}
+
 export function createMcpFileIntakeService({ store, allowedHosts = [], download = downloadChatGptFile, persistFileId = true }) {
   if (!store) throw new Error('File Intake requires the existing PocketStore.')
+  // Read-only replay probe: never grants a new host permission to download.
+  const replay = async (args) => {
+    const input = describeMcpFileIntakeRequest(args)
+    try {
+      return { receipt: await readMcpFileIntakeReceipt(store, input), verificationRequired: false }
+    } catch (error) {
+      if (error?.code !== 'MCP_FILE_REPLAY_VERIFICATION_REQUIRED') throw error
+      return { receipt: null, verificationRequired: true }
+    }
+  }
   return {
+    replay,
     async save({ requestId, mode, itemId, title = '', text = '', file }) {
-      if (!['new', 'append'].includes(mode)) throw new Error('Choose new or append.')
-      if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(String(requestId || ''))) {
-        throw new Error('A stable 8–120 character request_id is required.')
-      }
-      if (mode === 'new' && itemId) throw new Error('New file Intake must not supply an item ID.')
-      if (mode === 'append' && (!itemId || title || text)) throw new Error('Append requires existing item_id, without title or text replacement.')
-      if (String(title).length > 160 || String(text).length > 20000) throw new Error('File item title/text is too long.')
+      const args = { requestId, mode, itemId, title, text, file }
+      const input = describeMcpFileIntakeRequest(args)
       const fileId = file?.file_id
-      const filename = file?.file_name ? safeName(file.file_name) : ''
-      if (!validChatGptFileId(fileId)) throw new Error('A valid ChatGPT file_id is required.')
-      const requestHash = createHash('sha256').update(JSON.stringify([
-        mode, itemId || '', title, text, fileId, filename, file.mime_type || '',
-      ])).digest('hex')
-      const input = { requestId, requestHash, mode, itemId: itemId || '', title, text }
-      let previous
-      try {
-        previous = await store.getMcpFileIntakeReceipt(input)
-      } catch (error) {
-        // A new host-issued file_id changes the legacy request fingerprint.
-        // Verify the NEW temporary URL's actual bytes before treating it as
-        // a retry. Different content or intent must remain a hard conflict.
-        if (error?.status !== 409
-          || error.message !== 'File Intake requestId was already used for a different item or file.') {
-          throw error
-        }
+      const previous = await replay(args)
+      if (previous.receipt) return previous.receipt
+      if (previous.verificationRequired) {
+        // Legacy fingerprints and any changed fileParams need actual bytes.
+        // No request-ID-only or opaque-file-ID-only success shortcut.
         validateMcpFileUrl(file.download_url, allowedHosts)
         const retryBytes = await download(file, { allowedHosts })
         const { mimeType: retryMimeType } = validateMcpFileBytes(file, retryBytes)
@@ -257,28 +290,9 @@ export function createMcpFileIntakeService({ store, allowedHosts = [], download 
           mimeType: retryMimeType,
         }
         const evidence = { ...input, title, text, verifiedFile }
-        const matched = await store.getMcpFileIntakeReceipt(evidence)
-        if (!matched) throw new Error('Original Intake request no longer exists. Manual review required.', { cause: error })
-        const stored = await store.readAttachment(matched.attachmentId, MAX_MCP_FILE_BYTES)
-        if (!stored || stored.data.length !== matched.bytes
-          || createHash('sha256').update(stored.data).digest('hex') !== matched.sha256) {
-          throw new Error('Previously saved attachment is missing or corrupted. Manual review required.', { cause: error })
-        }
-        // Re-check the attachment is still bound to this request after reading
-        // its bytes, without writing a new Store item or media object.
-        const current = await store.getMcpFileIntakeReceipt(evidence)
-        if (!current || current.attachmentId !== matched.attachmentId) {
-          throw new Error('Original Intake attachment changed during retry. Manual review required.', { cause: error })
-        }
-        return { ...current, duplicate: true }
-      }
-      if (previous) {
-        const stored = await store.readAttachment(previous.attachmentId, MAX_MCP_FILE_BYTES)
-        if (!stored || stored.data.length !== previous.bytes
-          || createHash('sha256').update(stored.data).digest('hex') !== previous.sha256) {
-          throw new Error('Previously saved attachment is missing or corrupted. Manual review required.')
-        }
-        return { ...previous, duplicate: true }
+        const matched = await readMcpFileIntakeReceipt(store, evidence)
+        if (!matched) throw new Error('Original Intake request no longer exists. Manual review required.')
+        return matched
       }
       // Validate BEFORE making an outbound request.
       validateMcpFileUrl(file.download_url, allowedHosts)

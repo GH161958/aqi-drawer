@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdtemp, readdir, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -17,13 +17,13 @@ const fakeFile = (overrides = {}) => ({
   ...overrides,
 })
 
-async function fixture(t, download = async () => pdf) {
+async function fixture(t, download = async () => pdf, options = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'drawer-file-intake-v1-'))
   t.after(async () => rm(dir, { recursive: true, force: true }))
   const store = new PocketStore(dir)
   await store.init()
   const intake = createMcpFileIntakeService({
-    store, allowedHosts: ['uploads.example.org'], download,
+    store, allowedHosts: ['uploads.example.org'], download, ...options,
   })
   return { store, intake }
 }
@@ -86,7 +86,7 @@ test('content sniffing recognizes supported files and rejects extension tricks',
   const valid = validateMcpFileBytes(fakeFile(), pdf)
   assert.equal(valid.mimeType, 'application/pdf')
   assert.equal(valid.filename, 'reading.pdf')
-  assert.equal(validateMcpFileBytes(fakeFile({ file_name: undefined }), pdf).filename, 'file_fixture_001.pdf')
+  assert.equal(validateMcpFileBytes(fakeFile({ file_name: undefined }), pdf).filename, 'chatgpt-file.pdf')
   assert.throws(() => validateMcpFileBytes(fakeFile({ file_name: 'evil.png' }), pdf), /signature/)
   assert.throws(() => validateMcpFileBytes(fakeFile({ file_name: '../evil.exe' }), pdf), /not supported/)
   assert.throws(() => validateMcpFileBytes(fakeFile({ mime_type: 'image/png' }), pdf), /MIME metadata/)
@@ -122,8 +122,8 @@ test('new file Intake persists original bytes, SHA-256, one item and durable rec
   assert.equal(item.activity.at(-1).actor, 'Aqi')
   const stored = await store.readAttachment(saved.attachmentId, MAX_MCP_FILE_BYTES)
   assert.deepEqual(stored.data, pdf)
-  // Retrying after a simulated URL expiry does not download again.
-  const retry = await intake.save({ ...args, file: fakeFile({ download_url: 'https://uploads.example.org/expired' }) })
+  // Replaying the exact original parameters needs no live source URL.
+  const retry = await intake.save(args)
   assert.equal(retry.duplicate, true)
   assert.equal(retry.attachmentId, saved.attachmentId)
   assert.equal(downloads, 1)
@@ -236,7 +236,7 @@ test('changed file_id with different bytes or original intent stays a conflict w
   await assert.rejects(() => intake.save({
     ...args, mode: 'append', itemId: saved.itemId, title: '', text: '', file: freshFile,
   }), /already used/)
-  assert.equal(downloads, 5)
+  assert.equal(downloads, 2) // Intent conflicts fail before outbound verification.
   assert.equal((await store.list()).length, 1)
   assert.equal((await readdir(store.mediaDir)).length, 1)
   const item = await store.get(saved.itemId)
@@ -329,4 +329,90 @@ test('idempotent retry never binds a different attachment after the original was
   }], { requestId: 'unrelated:later:0001', actor: 'EE' })
   await assert.rejects(() => intake.save(args), /no longer attached/)
   assert.equal((await store.get(saved.itemId)).attachments.length, 1)
+})
+
+test('missing names never persist transient file IDs or signed URLs anywhere in new or append receipts', async (t) => {
+  const { store, intake } = await fixture(t, undefined, { persistFileId: false })
+  const file = fakeFile({ file_name: undefined, file_id: 'PRIVATE-OPAQUE-TRANSIENT-0001' })
+  const saved = await intake.save({ requestId: 'privacy:no-name:new', mode: 'new', file })
+  const appended = await intake.save({ requestId: 'privacy:no-name:append', mode: 'append', itemId: saved.itemId, file })
+  const item = await store.get(saved.itemId)
+  const serialized = JSON.stringify([item, saved, appended, await readFile(store.filePath, 'utf8')])
+  for (const secret of [file.file_id, file.download_url, 'never-log']) assert.ok(!serialized.includes(secret))
+  for (const receipt of [saved, appended]) {
+    assert.equal(receipt.fileName, 'chatgpt-file.pdf')
+    assert.equal(receipt.mimeType, 'application/pdf')
+    assert.equal(receipt.bytes, pdf.length)
+    assert.deepEqual((await store.readAttachment(receipt.attachmentId)).data, pdf)
+  }
+  const readable = fakeFile({ file_name: '伊伊的论文 2026.pdf' })
+  assert.equal((await intake.save({ requestId: 'privacy:readable-name', mode: 'new', file: readable })).fileName, readable.file_name)
+  assert.equal(validateMcpFileBytes({ file_id: file.file_id }, pdf).filename, 'chatgpt-file.pdf')
+})
+
+test('a new URL with the SAME opaque ID requires actual bytes, never a request-ID-only success', async (t) => {
+  let bytes = pdf
+  let unavailable = false
+  let downloads = 0
+  const { store, intake } = await fixture(t, async () => {
+    downloads++
+    if (unavailable) throw new Error('Source URL expired')
+    return bytes
+  })
+  const args = { requestId: 'strict:url-replay:0001', mode: 'new', file: fakeFile() }
+  const saved = await intake.save(args)
+  unavailable = true
+  assert.equal((await intake.save(args)).attachmentId, saved.attachmentId)
+  assert.equal(downloads, 1)
+  const changed = { ...args, file: fakeFile({ download_url: 'https://uploads.example.org/refreshed' }) }
+  assert.deepEqual(await intake.replay(changed), { receipt: null, verificationRequired: true })
+  assert.equal(downloads, 1)
+  await assert.rejects(intake.save(changed), /expired/)
+  unavailable = false
+  bytes = Buffer.concat([pdf, Buffer.from('DIFFERENT')])
+  await assert.rejects(intake.save(changed), /already used/)
+  bytes = pdf
+  const retry = await intake.save(changed)
+  assert.equal(retry.duplicate, true)
+  assert.equal(retry.attachmentId, saved.attachmentId)
+  assert.equal(downloads, 4)
+  assert.equal((await readdir(store.mediaDir)).length, 1)
+  assert.equal((await store.list()).length, 1)
+})
+
+test('legacy durable fingerprints recover only after byte verification without rewriting canonical identity', async (t) => {
+  let downloads = 0
+  const { store, intake } = await fixture(t, async () => { downloads++; return pdf }, { persistFileId: false })
+  const args = { requestId: 'legacy:recovery:0001', mode: 'new', title: 'Legacy PDF', file: fakeFile() }
+  const saved = await intake.save(args)
+  const state = JSON.parse(await readFile(store.filePath, 'utf8'))
+  const legacyHash = createHash('sha256').update(JSON.stringify([
+    'new', '', args.title, '', args.file.file_id, args.file.file_name, args.file.mime_type,
+  ])).digest('hex')
+  state.items[0].sourceData.fileIntakeRequestHash = legacyHash
+  state.items[0].activity.find(a => a.type === 'attachment_added').detail.fileIntakeRequestHash = legacyHash
+  await writeFile(store.filePath, JSON.stringify(state))
+  const before = await readFile(store.filePath, 'utf8')
+  assert.equal((await intake.replay(args)).verificationRequired, true)
+  assert.equal(downloads, 1)
+  const recovered = await intake.save(args)
+  assert.equal(recovered.attachmentId, saved.attachmentId)
+  assert.equal(recovered.duplicate, true)
+  assert.equal(downloads, 2)
+  assert.equal(await readFile(store.filePath, 'utf8'), before)
+})
+
+test('read-only replay refuses removed, corrupt or concurrently changed attachments', async (t) => {
+  const { store, intake } = await fixture(t)
+  const args = { requestId: 'replay:corruption:0001', mode: 'new', file: fakeFile() }
+  const saved = await intake.save(args)
+  const readAttachment = store.readAttachment.bind(store)
+  store.readAttachment = async () => ({ data: Buffer.from('corrupt') })
+  await assert.rejects(intake.replay(args), /missing or corrupted/)
+  store.readAttachment = async (...values) => {
+    const result = await readAttachment(...values)
+    await store.removeAttachment(saved.itemId, saved.attachmentId)
+    return result
+  }
+  await assert.rejects(intake.replay(args), /no longer attached/)
 })

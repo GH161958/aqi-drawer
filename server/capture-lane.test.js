@@ -538,7 +538,7 @@ test('one Owner MCP advertises fileParams, persists original bytes, appends and 
   assert.deepEqual(actual.data, fakePdf)
   const repeated = await owner.callTool({
     name: 'pocket_file_intake',
-    arguments: { ...request, file: { ...file, download_url: 'https://uploads.example.org/expired' } },
+    arguments: request, // Exact replay needs no live source URL; changed URLs need bytes.
   })
   assert.equal(repeated.structuredContent.duplicate, true)
   assert.equal(downloads, 1)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -75,7 +75,8 @@ test('commit pins the ORIGINAL fileParams URL and exact one-time host; no perman
   assert.ok(!JSON.stringify(item).includes('file_qa_one'))
   assert.equal(item.sourceData.openaiFileId, undefined)
   assert.deepEqual((await store.readAttachment(saved.attachmentId)).data, pdf)
-  await assert.rejects(service.commit(approved(first)), /missing or expired/)
+  assert.deepEqual(await service.commit(approved(first)), saved)
+  assert.equal(received.length, 1)
   assert.equal((await store.list()).length, 1)
 })
 
@@ -132,7 +133,8 @@ test('failed download can retry one pinned ticket; full file validation is retai
   const saved = await service.commit(approved(p))
   assert.equal(attempts, 2)
   assert.equal(saved.bytes, pdf.length)
-  await assert.rejects(service.commit(approved(p)), /missing or expired/)
+  assert.deepEqual(await service.commit(approved(p)), saved)
+  assert.equal(attempts, 2)
 })
 
 test('durable request_id prevents duplicate items when fileParams URL and file ID rotate', async (t) => {
@@ -173,4 +175,136 @@ test('untrusted file URL fails before any Store mutation; no executable content 
   await assert.rejects(service.commit(approved(p)), /signature/)
   assert.equal((await store.list()).length, 0)
   assert.deepEqual(await readdir(store.mediaDir), [])
+})
+
+test('prepare retries reserve one slot, preserve the exact URL and reject every conflicting input', async (t) => {
+  const { store, received, service } = await fixture(t, { maxPending: 1 })
+  const args = newIntent()
+  const before = await readFile(store.filePath, 'utf8')
+  const first = service.prepare(args)
+  for (let i = 0; i < 24; i++) assert.deepEqual(service.prepare(args), first)
+  const conflicts = [
+    { title: 'Changed' }, { text: 'Changed' },
+    { mode: 'append', itemId: 'another-item', title: '', text: '' },
+    ...[
+      { download_url: makeFile(secondHost).download_url },
+      { download_url: makeFile().download_url + '&changed=1' },
+      { file_id: 'different-opaque-id' }, { file_name: 'different.pdf' },
+      { mime_type: 'application/octet-stream' },
+    ].map(file => ({ file: { ...args.file, ...file } })),
+  ]
+  for (const changed of conflicts) assert.throws(() => service.prepare({ ...args, ...changed }), /already used/)
+  assert.throws(() => service.prepare({ ...args, requestId: 'another:request:0001' }), /Too many/)
+  assert.equal(received.length, 0)
+  assert.equal(await readFile(store.filePath, 'utf8'), before)
+  assert.deepEqual(await readdir(store.mediaDir), [])
+  const serialized = JSON.stringify(first)
+  for (const secret of [args.file.file_id, args.file.download_url, 'NEVER-REVEAL']) assert.ok(!serialized.includes(secret))
+  await service.commit(approved(first))
+  assert.equal(received[0].file.download_url, args.file.download_url)
+})
+
+test('unclaimed expiry frees capacity; retries do not refresh the original approval TTL', async (t) => {
+  let now = 1000
+  const { service, received, store } = await fixture(t, { maxPending: 1, ttlMs: 100, clock: () => now })
+  const first = service.prepare(newIntent())
+  now += 99
+  assert.deepEqual(service.prepare(newIntent()), first)
+  now += 1
+  const changed = newIntent({ ...makeFile(), download_url: 'https://other.example.org/fresh' })
+  const second = service.prepare(changed)
+  assert.notEqual(second.ticketId, first.ticketId)
+  await assert.rejects(service.commit(approved(first)), /missing or expired/)
+  assert.equal(received.length, 0)
+  assert.equal((await store.list()).length, 0)
+})
+
+test('in-flight expiry does not release a claimed request or create a second ticket', async (t) => {
+  let now = 1000
+  let release
+  const wait = new Promise(resolve => { release = resolve })
+  const { service, store } = await fixture(t, { ttlMs: 100, clock: () => now, download: async () => { await wait; return pdf } })
+  const args = newIntent()
+  const first = service.prepare(args)
+  const committing = service.commit(approved(first))
+  now += 101
+  assert.deepEqual(service.prepare(args), first)
+  assert.throws(() => service.prepare({ ...args, title: 'Changed' }), /already used/)
+  await assert.rejects(service.commit(approved(first)), /in progress/)
+  release()
+  const saved = await committing
+  assert.deepEqual(await service.commit(approved(first)), saved)
+  assert.equal((await store.list()).length, 1)
+})
+
+test('completed response-loss replay is exact, bounded, non-sliding and still checks approval', async (t) => {
+  let now = 1000
+  const { service, store, received } = await fixture(t, { maxPending: 1, ttlMs: 100, clock: () => now })
+  const args = newIntent()
+  const first = service.prepare(args)
+  const saved = await service.commit(approved(first))
+  assert.deepEqual(await service.commit(approved(first)), saved)
+  await assert.rejects(service.commit({ ...approved(first), approvedHostname: secondHost }), /must match/)
+  await assert.rejects(service.commit({ ...approved(first), approvedTitle: 'Changed' }), /must match/)
+  const ready = service.prepare(args)
+  assert.equal(ready.ticketId, first.ticketId)
+  assert.equal(ready.status, 'receipt_available')
+  assert.equal(Object.hasOwn(ready, 'stored'), false)
+  assert.equal(received.length, 1)
+  // Completion does not consume a pending slot; a second completion evicts the
+  // oldest receipt rather than growing memory or permitting an old fetch.
+  const next = service.prepare({ ...args, requestId: 'second:completed:0001' })
+  const second = await service.commit(approved(next))
+  await assert.rejects(service.commit(approved(first)), /missing or expired/)
+  now += 99
+  assert.deepEqual(await service.commit(approved(next)), second)
+  now += 1
+  await assert.rejects(service.commit(approved(next)), /missing or expired/)
+  assert.equal(received.length, 2)
+  assert.equal((await store.list()).length, 2)
+})
+
+test('process restart recovers by durable request plus exact file intent, never by an orphan ticket', async (t) => {
+  const { store, service, received } = await fixture(t)
+  const args = newIntent({ ...makeFile(), file_name: undefined })
+  const ticket = service.prepare(args)
+  const saved = await service.commit(approved(ticket))
+  const freshStore = new PocketStore(store.dataDir)
+  await freshStore.init()
+  let downloads = 0
+  let bytes = pdf
+  const restarted = createPinnedFileTransferV2({ store: freshStore, download: async () => { downloads++; return bytes } })
+  await assert.rejects(restarted.commit(approved(ticket)), /missing or expired/)
+  const recovery = restarted.prepare(args)
+  const recovered = await restarted.commit(approved(recovery))
+  assert.equal(recovered.duplicate, true)
+  assert.equal(recovered.attachmentId, saved.attachmentId)
+  assert.equal(downloads, 0)
+  const rotated = restarted.prepare(newIntent({ ...args.file, download_url: 'https://other.example.org/renewed' }))
+  const verified = await restarted.commit(approved(rotated))
+  assert.equal(verified.attachmentId, saved.attachmentId)
+  assert.equal(downloads, 1)
+  assert.deepEqual(await restarted.commit(approved(rotated)), verified)
+  assert.equal(downloads, 1)
+  bytes = Buffer.concat([pdf, Buffer.from('changed')])
+  const different = restarted.prepare(newIntent({ ...args.file, file_id: 'changed-file-id', download_url: 'https://other.example.org/different' }))
+  await assert.rejects(restarted.commit(approved(different)), /already used/)
+  const serialized = JSON.stringify([saved, recovered, verified, await readFile(store.filePath, 'utf8')])
+  for (const secret of [args.file.file_id, args.file.download_url, 'NEVER-REVEAL']) assert.ok(!serialized.includes(secret))
+  assert.equal(received.length, 1)
+  assert.equal((await store.list()).length, 1)
+  assert.equal((await readdir(store.mediaDir)).length, 1)
+})
+
+test('completed replay cannot report a removed or corrupted attachment as a success', async (t) => {
+  const { store, service, received } = await fixture(t)
+  const ticket = service.prepare(newIntent())
+  const saved = await service.commit(approved(ticket))
+  const originalRead = store.readAttachment.bind(store)
+  store.readAttachment = async () => ({ data: Buffer.from('corrupt') })
+  await assert.rejects(service.commit(approved(ticket)), /missing or corrupted/)
+  store.readAttachment = originalRead
+  await store.removeAttachment(saved.itemId, saved.attachmentId)
+  await assert.rejects(service.commit(approved(ticket)), /no longer attached/)
+  assert.equal(received.length, 1)
 })

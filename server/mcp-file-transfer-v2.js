@@ -1,9 +1,10 @@
 // File Intake V2: pin one host-provided fileParams value until EE authorizes
 // that exact hostname and file intent. Ticket and signed URL are in-memory only.
-// V1 Intake remains unchanged; this module is separately feature-gated.
-import { randomUUID } from 'node:crypto'
+// Reuses V1 byte validation and durable receipts; independently feature-gated.
+import { createHash, randomUUID } from 'node:crypto'
 import {
   createMcpFileIntakeService, describeMcpFileHost, validChatGptFileId,
+  describeMcpFileIntakeRequest, readMcpFileIntakeReceipt,
 } from './mcp-file-intake.js'
 
 export const PINNED_FILE_TTL_MS = 15 * 60 * 1000
@@ -22,11 +23,32 @@ export function createPinnedFileTransferV2({
   }
 
   const pending = new Map()
+  const completed = new Map()
+  const discard = (map, ticket) => {
+    clearTimeout(map.get(ticket)?.timer)
+    map.delete(ticket)
+  }
+  const expire = (map, ticket, entry) => {
+    entry.timer = setTimeout(() => {
+      // A claimed transfer retains its request reservation until it settles.
+      if (entry.state !== 'committing') discard(map, ticket)
+    }, ttlMs)
+    entry.timer.unref?.()
+  }
   const sweep = (now) => {
-    for (const [ticket, entry] of pending) {
-      if (entry.expiresAt <= now) pending.delete(ticket)
+    for (const map of [pending, completed]) {
+      for (const [ticket, entry] of map) {
+        if (entry.expiresAt <= now && entry.state !== 'committing') discard(map, ticket)
+      }
     }
   }
+  const previewFor = (ticketId, entry) => ({
+    ticketId, hostname: entry.hostname, expiresAt: new Date(entry.expiresAt).toISOString(),
+    mode: entry.mode, title: entry.title, itemId: entry.mode === 'append' ? entry.itemId : null,
+    ...(entry.state === 'completed'
+      ? { status: 'receipt_available' }
+      : { downloaded: false, stored: false }),
+  })
 
   function prepare({ requestId, mode, itemId, title = '', text = '', file } = {}) {
     if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(String(requestId ?? ''))) {
@@ -48,6 +70,18 @@ export function createPinnedFileTransferV2({
     const now = clock()
     if (!Number.isFinite(now)) throw new Error('Invalid transfer clock.')
     sweep(now)
+    const fingerprint = createHash('sha256').update(JSON.stringify([
+      mode, itemId || '', title, text, file.download_url, file.file_id,
+      file.mime_type ?? null, file.file_name ?? null,
+    ])).digest('hex')
+    for (const [ticket, entry] of pending) {
+      if (entry.requestId !== requestId) continue
+      if (entry.fingerprint !== fingerprint) throw new Error('Pending request_id was already used for different file input or intent.')
+      return previewFor(ticket, entry)
+    }
+    for (const [ticket, entry] of completed) {
+      if (entry.requestId === requestId && entry.fingerprint === fingerprint) return previewFor(ticket, entry)
+    }
     if (pending.size >= maxPending) throw new Error('Too many pending file approvals.')
 
     const ticketId = randomUUID()
@@ -56,33 +90,41 @@ export function createPinnedFileTransferV2({
     const pinnedFile = Object.freeze({
       download_url: file.download_url,
       file_id: file.file_id,
-      ...(file.mime_type ? { mime_type: file.mime_type } : {}),
-      ...(file.file_name ? { file_name: file.file_name } : {}),
+      ...(file.mime_type !== undefined ? { mime_type: file.mime_type } : {}),
+      ...(file.file_name !== undefined ? { file_name: file.file_name } : {}),
     })
-    pending.set(ticketId, {
+    const entry = {
       hostname: preview.hostname, expiresAt, state: 'prepared',
+      requestId, fingerprint, mode, itemId, title,
       input: Object.freeze({
         requestId, mode, itemId, title, text, file: pinnedFile,
       }),
-    })
-    const expiry = setTimeout(() => pending.delete(ticketId), ttlMs)
-    expiry.unref?.()
-    return {
-      ticketId, hostname: preview.hostname, expiresAt: new Date(expiresAt).toISOString(),
-      mode, title, itemId: mode === 'append' ? itemId : null,
-      downloaded: false, stored: false,
     }
+    pending.set(ticketId, entry)
+    expire(pending, ticketId, entry)
+    return previewFor(ticketId, entry)
   }
 
   async function commit({ ticketId, approvedHostname, approvedTitle } = {}) {
     const now = clock()
+    if (!Number.isFinite(now)) throw new Error('Invalid transfer clock.')
     sweep(now)
-    const entry = pending.get(ticketId)
+    const entry = pending.get(ticketId) ?? completed.get(ticketId)
     if (!entry) throw new Error('Pinned transfer ticket is missing or expired; prepare a fresh file.')
-    if (entry.state !== 'prepared') throw new Error('Pinned transfer already in progress.')
-    if (approvedHostname !== entry.hostname || approvedTitle !== entry.input.title) {
+    if (approvedHostname !== entry.hostname || approvedTitle !== entry.title) {
       throw new Error('Explicit approval must match the pinned hostname and title.')
     }
+    if (entry.state === 'completed') {
+      // Recheck canonical attachment identity and bytes, without retaining or
+      // re-fetching the source URL. Replay preserves the FIRST response exactly.
+      const current = await readMcpFileIntakeReceipt(store, entry.replayInput)
+      if (!current || current.attachmentId !== entry.receipt.attachmentId
+        || current.sha256 !== entry.receipt.sha256 || current.bytes !== entry.receipt.bytes) {
+        throw new Error('Completed transfer attachment changed. Manual review required.')
+      }
+      return { ...entry.receipt }
+    }
+    if (entry.state !== 'prepared') throw new Error('Pinned transfer already in progress.')
 
     // Claim the single-use ticket before any await; prevent double submissions.
     entry.state = 'committing'
@@ -94,14 +136,29 @@ export function createPinnedFileTransferV2({
         ...(download ? { download } : {}),
       })
       const receipt = await intake.save(entry.input)
-      pending.delete(ticketId)
+      const replayInput = {
+        ...describeMcpFileIntakeRequest(entry.input),
+        verifiedFile: { sha256: receipt.sha256, bytes: receipt.bytes, mimeType: receipt.mimeType },
+      }
+      discard(pending, ticketId)
+      // Completed receipts use a separate bounded cache and contain no source
+      // URL or original file ID. Reads never extend its TTL or permit a fetch.
+      while (completed.size >= maxPending) discard(completed, completed.keys().next().value)
+      const done = {
+        hostname: entry.hostname, title: entry.title, mode: entry.mode, itemId: entry.itemId,
+        requestId: entry.requestId, fingerprint: entry.fingerprint,
+        state: 'completed', expiresAt: clock() + ttlMs,
+        replayInput, receipt: Object.freeze({ ...receipt }),
+      }
+      completed.set(ticketId, done)
+      expire(completed, ticketId, done)
       return receipt
     } catch (error) {
       // Safe retry of the *same* pinned URL while the approval is still alive.
       if (clock() < entry.expiresAt && pending.get(ticketId) === entry) {
         entry.state = 'prepared'
       } else {
-        pending.delete(ticketId)
+        discard(pending, ticketId)
       }
       throw error
     }

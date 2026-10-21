@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { randomBytes, randomUUID, createHash } from 'node:crypto'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -521,4 +521,120 @@ test('V3 gate rejects unilateral activation and does not silently turn on V1 or 
       ...flags, enableMcpFileSmartRouteV3: true,
     }), /requires File Intake V1 and pinned Transfer V2/)
   }
+})
+
+test('V3 preserves pending idempotency and distinguishes prior save from unverified hostname drift', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-v3-replay-'))
+  const mcpPath = privatePath()
+  const original = Buffer.from('%PDF-1.4\n%%EOF\n')
+  let bytes = original
+  let downloads = 0
+  const bridge = await startBridge({
+    dataDir, mcpPath, port: 0, host: '127.0.0.1', ...inPlaceFlags,
+    enableMcpFileIntake: true, enableMcpFileTransferV2: true, enableMcpFileSmartRouteV3: true,
+    mcpFileHosts: ['uploads.example.org'],
+    mcpFileDownloader: async () => { downloads++; return bytes },
+  })
+  const client = await connect('http://127.0.0.1:' + bridge.address.port, mcpPath)
+  t.after(async () => {
+    await Promise.allSettled([client.close(), bridge.stop()])
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  const args = {
+    request_id: 'v3-replay-original-0001', mode: 'new', title: 'Original PDF', text: 'Original notes',
+    file: { file_id: 'PRIVATE-V3-REPLAY-ID', mime_type: 'application/pdf', download_url: 'https://uploads.example.org/file?sig=PRIVATE-SIGNATURE' },
+  }
+  const intake = (arguments_) => client.callTool({ name: 'pocket_file_intake', arguments: arguments_ })
+  const commit = (ticket) => client.callTool({ name: 'pocket_file_transfer_commit', arguments: {
+    ticket_id: ticket.ticketId, approved_hostname: ticket.hostname, approved_title: ticket.title,
+  } })
+  const saved = await intake(args)
+  assert.equal(saved.isError, undefined)
+  const before = await readFile(bridge.store.filePath, 'utf8')
+  assert.equal((await intake(args)).structuredContent.attachmentId, saved.structuredContent.attachmentId)
+  assert.equal(downloads, 1)
+  const rotated = { ...args, file: { ...args.file, download_url: 'https://other.example.net/rotated?sig=PRIVATE-SIGNATURE' } }
+  const pending = await intake(rotated)
+  assert.equal(pending.structuredContent.status, 'verification_required')
+  assert.equal(pending.structuredContent.priorSaveExists, true)
+  assert.equal(pending.structuredContent.requestedFileVerified, false)
+  assert.equal(Object.hasOwn(pending.structuredContent, 'stored'), false)
+  assert.equal(Object.hasOwn(pending.structuredContent, 'attachmentId'), false)
+  for (let i = 0; i < 16; i++) assert.deepEqual((await intake(rotated)).structuredContent, pending.structuredContent)
+  assert.equal(downloads, 1)
+  assert.equal(await readFile(bridge.store.filePath, 'utf8'), before)
+  assert.equal((await readdir(bridge.store.mediaDir)).length, 1)
+  for (const conflict of [{ title: 'Different' }, { text: 'Different' }, { mode: 'append', item_id: saved.structuredContent.itemId, title: '', text: '' }]) {
+    assert.equal((await intake({ ...rotated, ...conflict })).isError, true)
+  }
+  const conflictingUrl = { ...rotated, file: { ...rotated.file, download_url: 'https://third.example.net/another' } }
+  assert.equal((await intake(conflictingUrl)).isError, true)
+  assert.equal(downloads, 1)
+  bytes = Buffer.concat([original, Buffer.from('different original')])
+  assert.equal((await commit(pending.structuredContent)).isError, true)
+  assert.equal(await readFile(bridge.store.filePath, 'utf8'), before)
+  bytes = original
+  const verified = await commit(pending.structuredContent)
+  assert.equal(verified.isError, undefined)
+  assert.equal(verified.structuredContent.duplicate, true)
+  assert.equal(verified.structuredContent.attachmentId, saved.structuredContent.attachmentId)
+  assert.equal(downloads, 3)
+  assert.deepEqual((await commit(pending.structuredContent)).structuredContent, verified.structuredContent)
+  assert.deepEqual((await intake(rotated)).structuredContent, verified.structuredContent)
+  assert.equal(downloads, 3)
+  assert.equal(await readFile(bridge.store.filePath, 'utf8'), before)
+  const serialized = JSON.stringify([saved, pending, verified, before])
+  for (const secret of [args.file.file_id, args.file.download_url, rotated.file.download_url, 'PRIVATE-SIGNATURE']) assert.ok(!serialized.includes(secret))
+})
+
+test('V3 recovers V2 append receipts after process restart and never accepts a changed target', async (t) => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-v3-restart-'))
+  const mcpPath = privatePath()
+  let downloads = 0
+  const options = {
+    dataDir, mcpPath, port: 0, host: '127.0.0.1', ...inPlaceFlags,
+    enableMcpFileIntake: true, enableMcpFileTransferV2: true, enableMcpFileSmartRouteV3: true,
+    mcpFileHosts: ['uploads.example.org'],
+    mcpFileDownloader: async () => { downloads++; return Buffer.from('%PDF-1.4\n%%EOF\n') },
+  }
+  let bridge = await startBridge(options)
+  let client = await connect('http://127.0.0.1:' + bridge.address.port, mcpPath)
+  t.after(async () => {
+    await Promise.allSettled([client.close(), bridge.stop()])
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  const target = await bridge.store.upsert({ title: 'Existing', text: 'Keep notes', tags: ['Care'] })
+  const args = {
+    request_id: 'v3-v2-append-restart-0001', mode: 'append', item_id: target.id,
+    file: { file_id: 'v3-append-private-id', file_name: '附录.pdf', mime_type: 'application/pdf', download_url: 'https://unknown.example.net/original?sig=PRIVATE' },
+  }
+  const pending = await client.callTool({ name: 'pocket_file_intake', arguments: args })
+  assert.equal(pending.structuredContent.status, 'approval_required')
+  const approval = { ticket_id: pending.structuredContent.ticketId, approved_hostname: pending.structuredContent.hostname, approved_title: '' }
+  const saved = await client.callTool({ name: 'pocket_file_transfer_commit', arguments: approval })
+  assert.equal(saved.isError, undefined)
+  await client.close()
+  await bridge.stop()
+  bridge = await startBridge(options)
+  client = await connect('http://127.0.0.1:' + bridge.address.port, mcpPath)
+  assert.equal((await client.callTool({ name: 'pocket_file_transfer_commit', arguments: approval })).isError, true)
+  const recovered = await client.callTool({ name: 'pocket_file_intake', arguments: args })
+  assert.equal(recovered.isError, undefined)
+  assert.equal(recovered.structuredContent.attachmentId, saved.structuredContent.attachmentId)
+  assert.equal(recovered.structuredContent.duplicate, true)
+  assert.equal(downloads, 1)
+  const rotated = { ...args, file: { ...args.file, file_id: 'refreshed-private-id', download_url: 'https://new.example.net/rotated' } }
+  const verification = await client.callTool({ name: 'pocket_file_intake', arguments: rotated })
+  assert.equal(verification.structuredContent.status, 'verification_required')
+  assert.equal(Object.hasOwn(verification.structuredContent, 'stored'), false)
+  assert.equal(downloads, 1)
+  const changedTarget = await client.callTool({ name: 'pocket_file_intake', arguments: { ...rotated, item_id: 'another-item' } })
+  assert.equal(changedTarget.isError, true)
+  assert.equal(downloads, 1)
+  const item = await bridge.store.get(target.id)
+  assert.equal(item.attachments.length, 1)
+  assert.equal(item.attachments[0].name, '附录.pdf')
+  assert.equal(item.title, target.title)
+  assert.equal(item.text, target.text)
+  assert.deepEqual(item.tags, target.tags)
 })
