@@ -249,7 +249,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, fi
           requestId: request_id, mode, itemId: item_id, title, text, file,
         })
         return { ...result(pinned.public, 'One file-specific save card is prepared. NOT SAVED. Await the user clicking the card; do not invoke an alternative commit tool.'),
-          _meta: { aqiOneClickKeep: { capability: pinned.privateCapability } } }
+          _meta: { aqiOneClickKeep: { scopeId: pinned.public.scopeId, capability: pinned.privateCapability } } }
       } catch {
         // Do not echo signed source, opaque file IDs or sensitive input.
         return errorResult('Could not prepare the private file save card; no download or Store write.')
