@@ -84,7 +84,7 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, fi
     if (lane === 'capture' && !CAPTURE_LANE_ALLOWED_TOOLS.has(name)) return undefined
     // The Owner uses only bounded existing-taxonomy edits, never the legacy unbounded editor.
     if (lane === 'owner' && name === 'pocket_edit_metadata') return undefined
-    if (lane !== 'owner' && (name === 'pocket_organize_existing' || name === 'pocket_organize_undo' || name === 'pocket_taxonomy_create' || name === 'pocket_file_intake' || name === 'pocket_file_host_probe' || name === 'pocket_file_transfer_prepare' || name === 'pocket_file_transfer_commit' || name === 'pocket_file_keep_prepare' || name === 'pocket_file_keep_redeem')) return undefined
+    if (lane !== 'owner' && (name === 'pocket_organize_existing' || name === 'pocket_organize_undo' || name === 'pocket_taxonomy_create' || name === 'pocket_file_intake' || name === 'pocket_file_host_probe' || name === 'pocket_file_transfer_prepare' || name === 'pocket_file_transfer_commit' || name === 'pocket_file_keep_prepare' || name === 'pocket_file_keep_redeem' || name === 'pocket_file_keep_cancel')) return undefined
     return server.registerTool(name, definition, callback)
   }
 
@@ -255,6 +255,17 @@ export function createPocketMcpServer({ store, cmemory, contentReader, vault, fi
         return errorResult('Could not prepare the private file save card; no download or Store write.')
       }
     })
+    registerTool('pocket_file_keep_cancel', {
+      title: 'Cancel a private one-file widget authorization',
+      description: 'Widget-only explicit cancellation; revokes an unredeemed bearer without starting a download.',
+      inputSchema: { capability: z.string().regex(/^[a-f0-9]{64}$/u) },
+      _meta: { ui: { visibility: ['app'] }, 'openai/widgetAccessible': true,
+        'openai/visibility': 'private' },
+      annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
+    }, async ({ capability }) => result(
+      { cancelled: oneClickKeep.cancel(capability) },
+      'The file-specific authorization was cancelled or is no longer active. No new download was started.',
+    ))
     registerTool('pocket_file_keep_redeem', {
       title: 'Redeem the private one-file Widget approval',
       description: 'App-only POC redemption. Never called by the language model. Requires an unguessable, short-lived private capability emitted only to the matching widget, not a model-readable hostname or ticket.',
