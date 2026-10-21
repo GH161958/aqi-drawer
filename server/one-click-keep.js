@@ -55,7 +55,7 @@ export function createOneClickKeep({
     title: entry.title || 'File', mode: entry.mode,
     itemId: entry.mode === 'append' ? entry.itemId : null,
     expiresAt: new Date(entry.expiresAt).toISOString(),
-    saved: false,
+    saved: entry.state === 'completed',
   })
 
   function prepare({ requestId, mode, itemId, title = '', text = '', file } = {}) {
