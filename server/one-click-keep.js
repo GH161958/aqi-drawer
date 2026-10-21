@@ -11,7 +11,7 @@ export const ONE_CLICK_KEEP_MAX_PENDING = 8
 // Experimental, Owner-only and process-local. A model-visible ticket is NEVER
 // accepted as approval. Only the random UI-carried bearer can redeem this scope.
 export function createOneClickKeep({
-  store, download, ttlMs = ONE_CLICK_KEEP_TTL_MS,
+  store, download, reviewedHosts = [], ttlMs = ONE_CLICK_KEEP_TTL_MS,
   maxPending = ONE_CLICK_KEEP_MAX_PENDING, clock = () => Date.now(),
 } = {}) {
   if (!store || !Number.isSafeInteger(ttlMs) || ttlMs < 100 || ttlMs > ONE_CLICK_KEEP_TTL_MS
@@ -42,6 +42,7 @@ export function createOneClickKeep({
   function prepare({ requestId, mode, itemId, title = '', text = '', file } = {}) {
     const description = describeMcpFileIntakeRequest({ requestId, mode, itemId, title, text, file })
     const { hostname } = describeMcpFileHost(file)
+    if (reviewedHosts.includes(hostname)) throw new Error('Known host: use ordinary one-call File Intake.')
     purge()
     // Repeated identical preparation reuses the same private capability.
     for (const entry of pending.values()) {
