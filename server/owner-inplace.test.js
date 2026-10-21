@@ -727,8 +727,23 @@ test('isolated One-Click Keep POC returns private widget bearer and stores only 
   const tools = (await client.listTools()).tools
   const prepareTool = tools.find(x => x.name === 'pocket_file_keep_prepare')
   const redeemTool = tools.find(x => x.name === 'pocket_file_keep_redeem')
+  const cancelTool = tools.find(x => x.name === 'pocket_file_keep_cancel')
   assert.ok(prepareTool)
+  assert.ok(redeemTool)
+  assert.ok(cancelTool)
+  // The plugin scanner requires both the four-property fileParams schema and
+  // an explicit output contract for each structured response.
+  const fileInput = prepareTool.inputSchema.properties.file
+  assert.deepEqual(Object.keys(fileInput.properties).sort(),
+    ['download_url', 'file_id', 'file_name', 'mime_type'].sort())
+  assert.deepEqual([...fileInput.required].sort(), ['download_url', 'file_id'])
+  assert.equal(prepareTool.outputSchema.properties.scopeId.type, 'string')
+  assert.equal(prepareTool.outputSchema.properties.hostname.type, 'string')
+  assert.equal(redeemTool.outputSchema.properties.attachmentId.type, 'string')
+  assert.equal(redeemTool.outputSchema.properties.sha256.type, 'string')
+  assert.equal(cancelTool.outputSchema.properties.cancelled.type, 'boolean')
   assert.deepEqual(redeemTool?._meta?.ui?.visibility, ['app'])
+  assert.deepEqual(cancelTool?._meta?.ui?.visibility, ['app'])
   const ui = await client.readResource({ uri: 'ui://aqi-drawer/one-click-keep-v0.html' })
   assert.match(ui.contents[0].text, /确认保存这份原件/)
   const file = {
