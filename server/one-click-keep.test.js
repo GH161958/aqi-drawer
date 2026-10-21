@@ -112,3 +112,48 @@ test('cancelling a prepared capability revokes it before any file download', asy
   assert.equal(downloads, 0)
   assert.equal((await store.list()).length, 0)
 })
+
+test('completed receipts do not consume pending slots; completed cache remains bounded', async t => {
+  const { store, service } = await fixture(t, { maxPending: 1 })
+  const first = service.prepare(intent('keep:completed:first'))
+  const receipt = await service.redeem(first.privateCapability)
+  assert.equal(service.prepare(intent('keep:completed:first')).public.status, 'one_click_receipt_available')
+  const second = service.prepare(intent('keep:completed:second'))
+  assert.notEqual(second.privateCapability, first.privateCapability)
+  await service.redeem(second.privateCapability)
+  await assert.rejects(service.redeem(first.privateCapability), /expired private Keep approval/u)
+  assert.equal((await store.list()).length, 2)
+})
+test('published original survives a deadline timer before async save resolves', async t => {
+  let now = 1000
+  let enter
+  const published = new Promise(resolve => { enter = resolve })
+  let release
+  const held = new Promise(resolve => { release = resolve })
+  const { store, service } = await fixture(t, { ttlMs: 100, clock: () => now })
+  const save = store.saveMcpFileIntake.bind(store)
+  store.saveMcpFileIntake = async args => {
+    const saved = await save(args)
+    enter()
+    await held
+    return saved
+  }
+  const first = service.prepare(intent('keep:race:published'))
+  const promise = service.redeem(first.privateCapability)
+  await published
+  // Simulate time passing after the Store has already admitted and published
+  // the canonical mutation. Purge must preserve the in-flight receipt.
+  now += 500
+  const other = service.prepare(intent('keep:race:second'))
+  assert.equal(other.public.saved, false)
+  release()
+  const receipt = await promise
+  assert.ok(receipt.attachmentId)
+  const recovered = await service.redeem(first.privateCapability)
+  assert.equal(recovered.attachmentId, receipt.attachmentId)
+  assert.equal((await store.list()).length, 1)
+})
+test('reviewed source host uses original V1 and cannot create a redundant keep card', async t => {
+  const { service } = await fixture(t, { reviewedHosts: ['unknown.example.net'] })
+  assert.throws(() => service.prepare(intent('keep:reviewed:source')), /Known host/u)
+})
