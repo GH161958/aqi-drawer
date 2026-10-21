@@ -19,20 +19,39 @@ export function createOneClickKeep({
     throw new Error('Invalid isolated Keep POC configuration.')
   }
   const pending = new Map()
-  const forget = (token, entry) => {
-    if (pending.get(token) !== entry) return
+  const completed = new Map()
+  const forget = (map, token, entry) => {
+    if (map.get(token) !== entry) return
     entry.operation?.cancel()
     entry.operation?.dispose()
     clearTimeout(entry.timer)
     entry.intent = null
-    pending.delete(token)
+    map.delete(token)
+  }
+  const expire = (map, token, entry) => {
+    clearTimeout(entry.timer)
+    entry.timer = setTimeout(() => {
+      // Publication won the race: let the in-flight save return its receipt,
+      // then move it to completed. Never delete a published file's evidence.
+      if (entry.state === 'committing' && entry.operation?.accepted) return
+      forget(map, token, entry)
+    }, Math.max(0, entry.expiresAt - clock()))
+    entry.timer.unref?.()
   }
   const purge = () => {
     const now = clock()
-    for (const [token, entry] of pending) if (entry.expiresAt <= now) forget(token, entry)
+    for (const [token, entry] of pending) {
+      if (entry.expiresAt <= now && !(entry.state === 'committing' && entry.operation?.accepted)) {
+        forget(pending, token, entry)
+      }
+    }
+    for (const [token, entry] of completed) {
+      if (entry.expiresAt <= now) forget(completed, token, entry)
+    }
   }
   const preview = (entry) => ({
-    status: 'one_click_approval_required', hostname: entry.hostname,
+    status: entry.state === 'completed' ? 'one_click_receipt_available' : 'one_click_approval_required',
+    hostname: entry.hostname,
     title: entry.title || 'File', mode: entry.mode,
     itemId: entry.mode === 'append' ? entry.itemId : null,
     expiresAt: new Date(entry.expiresAt).toISOString(),
@@ -45,7 +64,7 @@ export function createOneClickKeep({
     if (reviewedHosts.includes(hostname)) throw new Error('Known host: use ordinary one-call File Intake.')
     purge()
     // Repeated identical preparation reuses the same private capability.
-    for (const entry of pending.values()) {
+    for (const entry of [...pending.values(), ...completed.values()]) {
       if (entry.requestId !== requestId) continue
       if (entry.requestHash !== description.requestHash) {
         throw new Error('Keep request_id conflicts with a different pinned file or target.')
@@ -62,8 +81,7 @@ export function createOneClickKeep({
       intent: Object.freeze({ requestId, mode, itemId, title, text, file: Object.freeze({ ...file }) }),
     }
     pending.set(token, entry)
-    entry.timer = setTimeout(() => forget(token, entry), Math.max(0, expiresAt - clock()))
-    entry.timer.unref?.()
+    expire(pending, token, entry)
     return { public: preview(entry), privateCapability: token }
   }
 
@@ -72,7 +90,7 @@ export function createOneClickKeep({
       throw new Error('Invalid or expired private Keep approval.')
     }
     purge()
-    const entry = pending.get(capability)
+    const entry = pending.get(capability) ?? completed.get(capability)
     if (!entry) throw new Error('Invalid or expired private Keep approval.')
     if (entry.state === 'completed') {
       const saved = await readMcpFileIntakeReceipt(store, entry.replayInput)
@@ -106,9 +124,17 @@ export function createOneClickKeep({
         entry.receipt = Object.freeze({ ...receipt })
         entry.intent = null
         entry.state = 'completed'
+        pending.delete(capability)
+        entry.expiresAt = clock() + ttlMs
+        completed.set(capability, entry)
+        expire(completed, capability, entry)
+        while (completed.size > maxPending) {
+          const oldest = completed.keys().next().value
+          forget(completed, oldest, completed.get(oldest))
+        }
         return { ...entry.receipt }
       } catch (error) {
-        forget(capability, entry)
+        forget(pending, capability, entry)
         throw error
       } finally {
         entry.operation?.dispose()
@@ -122,7 +148,7 @@ export function createOneClickKeep({
     purge()
     const entry = pending.get(capability)
     if (!entry || entry.state === 'completed' || entry.operation?.accepted) return false
-    forget(capability, entry)
+    forget(pending, capability, entry)
     return true
   }
   return { prepare, redeem, cancel }
