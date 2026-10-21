@@ -32,6 +32,7 @@ const status = document.getElementById('status')
 const save = document.getElementById('save')
 const cancel = document.getElementById('cancel')
 let capability = null
+let currentVisible = null
 let submitting = false
 function findPrivate(envelope) {
   const sources = [
@@ -49,6 +50,7 @@ function findPrivate(envelope) {
 function hydrate(out, envelope) {
   const visible = out?.structuredContent ?? out ?? {}
   if (!['one_click_approval_required', 'one_click_receipt_available'].includes(visible.status)) return
+  currentVisible = visible
   // Never reuse an older snapshot bearer for a newer tool-result event.
   const privateScope = findPrivate(envelope)
   // A newer file must never reuse a different file's hidden bearer even if
@@ -78,8 +80,15 @@ window.addEventListener('openai:set_globals', event => {
   // ChatGPT compatibility lifecycle: paired toolOutput + private metadata.
   // Missing metadata deliberately disables Save rather than reusing an old token.
   const changes = event.detail?.globals
-  if (changes && Object.prototype.hasOwnProperty.call(changes, 'toolOutput')) {
-    hydrate(changes.toolOutput, changes.toolResponseMetadata)
+  if (!changes) return
+  const hasOutput = Object.prototype.hasOwnProperty.call(changes, 'toolOutput')
+  const hasPrivate = Object.prototype.hasOwnProperty.call(changes, 'toolResponseMetadata')
+  if (hasOutput || hasPrivate) {
+    // The Host can deliver visible and private updates separately. Match the
+    // private scopeId against the CURRENT visible file before enabling Save.
+    // For a new visible file without metadata, fail closed immediately.
+    hydrate(hasOutput ? changes.toolOutput : currentVisible,
+      hasPrivate ? changes.toolResponseMetadata : null)
   }
 }, { passive: true })
 save.onclick = async () => {
