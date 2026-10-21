@@ -21,6 +21,7 @@ const base = {
   C_POCKET_ENABLE_MCP_FILE_INTAKE: 'false',
   C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'false',
   C_POCKET_ENABLE_MCP_FILE_SMART_ROUTE_V3: 'false',
+  C_POCKET_ENABLE_ONE_CLICK_KEEP_POC: 'false',
   C_POCKET_ENABLE_LEGACY_MCP: 'true',
   C_POCKET_MCP_FILE_HOSTS: '',
 }
@@ -50,6 +51,7 @@ test('invalid Owner, probe, intake and legacy retirement switch combinations fai
     { C_POCKET_ENABLE_MCP_FILE_INTAKE: 'true' },
     { C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2: 'true' },
     { C_POCKET_ENABLE_MCP_FILE_SMART_ROUTE_V3: 'true' },
+    { C_POCKET_ENABLE_ONE_CLICK_KEEP_POC: 'true' },
     { C_POCKET_ENABLE_LEGACY_MCP: 'false' },
     { C_POCKET_ENABLE_MCP_CAPTURE: 'true' },
     { ...enabledOwner, C_POCKET_MCP_CAPTURE_PATH: base.C_POCKET_MCP_PATH },
