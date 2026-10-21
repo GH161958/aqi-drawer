@@ -707,3 +707,63 @@ test('Owner MCP F1 F2 F3 privacy guards cover V1 V2 and completed replay with V3
     assert.equal((await readdir(bridge.store.mediaDir)).length, 5)
   })
 })
+
+
+test('isolated One-Click Keep POC returns private widget bearer and stores only after one scoped redemption', async t => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-widget-keep-poc-'))
+  const mcpPath = privatePath()
+  let downloads = 0
+  const bridge = await startBridge({
+    dataDir, port: 0, host: '127.0.0.1', mcpPath, ...inPlaceFlags,
+    enableMcpFileIntake: true, enableMcpFileTransferV2: true, enableOneClickKeepPoc: true,
+    mcpFileHosts: ['approved.example.org'],
+    mcpFileDownloader: async () => { downloads++; return Buffer.from('%PDF-1.4\\nTest original\\n%%EOF') },
+  })
+  const client = await connect('http://127.0.0.1:' + bridge.address.port, mcpPath)
+  t.after(async () => {
+    await Promise.allSettled([client.close(), bridge.stop()])
+    await rm(dataDir, { recursive: true, force: true })
+  })
+  const tools = (await client.listTools()).tools
+  const prepareTool = tools.find(x => x.name === 'pocket_file_keep_prepare')
+  const redeemTool = tools.find(x => x.name === 'pocket_file_keep_redeem')
+  assert.ok(prepareTool)
+  assert.deepEqual(redeemTool?._meta?.ui?.visibility, ['app'])
+  const ui = await client.readResource({ uri: 'ui://aqi-drawer/one-click-keep-v0.html' })
+  assert.match(ui.contents[0].text, /确认保存这份原件/)
+  const file = {
+    file_id: 'PRIVATE-ONE-CLICK-FILE-ID', file_name: 'notes.pdf', mime_type: 'application/pdf',
+    download_url: 'https://unreviewed.example.net/exact?sig=PRIVATE-URL-SECRET',
+  }
+  const args = { request_id: 'keep:poc:owner1', mode: 'new', title: 'Keep this single PDF', file }
+  const initial = await client.callTool({ name: 'pocket_file_keep_prepare', arguments: args })
+  assert.notEqual(initial.isError, true)
+  assert.equal(initial.structuredContent.status, 'one_click_approval_required')
+  const token = initial._meta?.aqiOneClickKeep?.capability
+  assert.match(token, /^[a-f0-9]{64}$/u)
+  const visible = JSON.stringify([initial.structuredContent, initial.content])
+  for (const secret of [file.file_id, file.download_url, token]) assert.ok(!visible.includes(secret))
+  assert.equal(downloads, 0)
+  assert.equal((await bridge.store.list()).length, 0)
+  assert.deepEqual((await client.callTool({ name: 'pocket_file_keep_prepare', arguments: args }))._meta.aqiOneClickKeep.capability, token)
+  const rejected = await client.callTool({
+    name: 'pocket_file_keep_redeem', arguments: { capability: 'b'.repeat(64) },
+  })
+  assert.equal(rejected.isError, true)
+  assert.equal(downloads, 0)
+  const saved = await client.callTool({
+    name: 'pocket_file_keep_redeem', arguments: { capability: token },
+  })
+  assert.notEqual(saved.isError, true)
+  assert.equal(saved.structuredContent.bytes, Buffer.from('%PDF-1.4\\nTest original\\n%%EOF').length)
+  const replay = await client.callTool({
+    name: 'pocket_file_keep_redeem', arguments: { capability: token },
+  })
+  assert.equal(replay.structuredContent.attachmentId, saved.structuredContent.attachmentId)
+  assert.equal(downloads, 1)
+  assert.equal((await bridge.store.list()).length, 1)
+  assert.deepEqual((await bridge.store.readAttachment(saved.structuredContent.attachmentId)).data,
+    Buffer.from('%PDF-1.4\\nTest original\\n%%EOF'))
+  const state = JSON.stringify([saved, replay, await readFile(bridge.store.filePath, 'utf8')])
+  for (const secret of [file.file_id, file.download_url, 'PRIVATE-URL-SECRET']) assert.ok(!state.includes(secret))
+})
