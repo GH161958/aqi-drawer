@@ -83,3 +83,31 @@ test('MCP Apps tool-result notification updates widget without calling redemptio
   assert.match(widget.elements.item.textContent, /Updated original/u)
   assert.deepEqual(widget.calls, [])
 })
+
+
+test('a newer file event without its own private metadata must not reuse the old bearer', async () => {
+  const widget = mount({ token: 'd'.repeat(64) })
+  assert.equal(widget.elements.save.disabled, false)
+  widget.listeners.message({ source: widget.parent, data: {
+    jsonrpc: '2.0', method: 'ui/notifications/tool-result',
+    params: { structuredContent: {
+      status: 'one_click_approval_required', title: 'A different file',
+      hostname: 'different.example.net',
+    } },
+  } })
+  assert.equal(widget.elements.save.disabled, true)
+  await widget.elements.save.onclick()
+  assert.deepEqual(widget.calls, [])
+  assert.match(widget.elements.status.textContent, /没有提供私有授权能力/u)
+})
+test('a completed card displays receipt recovery rather than asking for another save', async () => {
+  const widget = mount({ token: 'e'.repeat(64), output: {
+    status: 'one_click_receipt_available', saved: true,
+    title: 'Previously saved PDF', hostname: 'unreviewed.example.net',
+  } })
+  assert.equal(widget.elements.save.textContent, '查看已保存回执')
+  assert.equal(widget.elements.save.disabled, false)
+  await widget.elements.save.onclick()
+  assert.equal(widget.calls.length, 1)
+  assert.match(widget.elements.status.textContent, /已入柜/u)
+})
