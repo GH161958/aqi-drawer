@@ -55,13 +55,18 @@ function hydrate(out, envelope) {
   // the Host updates the public and private snapshots separately.
   capability = privateScope && typeof visible.scopeId === 'string'
     && privateScope.scopeId === visible.scopeId ? privateScope.capability : null
-  item.textContent = '文件：' + (visible.title || 'File')
+  const target = visible.mode === 'append'
+    ? (typeof visible.itemId === 'string' && visible.itemId
+      ? '追加到现有条目：' + visible.itemId
+      : '目标条目缺失：不可保存')
+    : '创建新条目'
+  item.textContent = '文件：' + (visible.title || 'File') + ' · ' + target
   origin.textContent = '本次下载来源：' + (visible.hostname || '未知') + ' · 只授权这一份原件'
   status.textContent = capability
     ? '确认后由 Drawer 安全下载，并核对原件大小与 SHA-256。'
     : '当前 ChatGPT Widget 没有提供私有授权能力；不会尝试保存。'
   save.textContent = visible.status === 'one_click_receipt_available' ? '查看已保存回执' : '确认保存这份原件'
-  save.disabled = !capability
+  save.disabled = !capability || (visible.mode === 'append' && !visible.itemId)
 }
 hydrate(window.openai?.toolOutput, window.openai?.toolResponseMetadata)
 window.addEventListener('message', event => {
