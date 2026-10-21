@@ -203,3 +203,149 @@ test('late private metadata for another file does not activate the new card', as
   await widget.elements.save.onclick()
   assert.deepEqual(widget.calls, [])
 })
+
+
+function deferred() {
+  let resolve, reject
+  const promise = new Promise((a, b) => { resolve = a; reject = b })
+  return { promise, resolve, reject }
+}
+function globals(widget, changes) {
+  widget.listeners['openai:set_globals']({ detail: { globals: changes } })
+}
+function show(widget, scopeId, token, mode = 'new') {
+  globals(widget, {
+    toolOutput: { status: 'one_click_approval_required', scopeId,
+      title: 'File ' + scopeId, hostname: 'unreviewed.example.net',
+      mode, itemId: mode === 'append' ? 'target-B' : null },
+    toolResponseMetadata: { mcp_tool_result: { _meta: {
+      aqiOneClickKeep: { scopeId, capability: token },
+    } } },
+  })
+}
+function receipt(name) {
+  return { structuredContent: { itemId: 'item-' + name, attachmentId: 'attachment-' + name,
+    bytes: 99, sha256: '9'.repeat(64) } }
+}
+
+test('R1: delayed A Save success must not claim B append was saved or clear B bearer', async () => {
+  const gate = deferred(), tokenA = 'a'.repeat(64), tokenB = 'b'.repeat(64)
+  const calls = []
+  const widget = mount({ token: tokenA, callTool: async (name, args) => {
+    calls.push(args.capability)
+    return args.capability === tokenA ? gate.promise : receipt('B')
+  } })
+  const savingA = widget.elements.save.onclick()
+  show(widget, 'scope-B', tokenB, 'append')
+  assert.match(widget.elements.item.textContent, /target-B/u)
+  assert.equal(widget.elements.save.disabled, false)
+  gate.resolve(receipt('A'))
+  await savingA
+  assert.doesNotMatch(widget.elements.status.textContent, /已入柜/u)
+  assert.doesNotMatch(widget.elements.origin.textContent, /attachment-A/u)
+  assert.equal(widget.elements.save.disabled, false)
+  await widget.elements.save.onclick()
+  assert.match(widget.elements.origin.textContent, /attachment-B/u)
+  assert.deepEqual(calls, [tokenA, tokenB])
+})
+test('R1: A Save rejection and finally cannot overwrite B busy Save', async () => {
+  const a = deferred(), b = deferred(), tokenA = 'a'.repeat(64), tokenB = 'b'.repeat(64)
+  const widget = mount({ token: tokenA,
+    callTool: (_, args) => args.capability === tokenA ? a.promise : b.promise })
+  const saveA = widget.elements.save.onclick()
+  show(widget, 'scope-B', tokenB)
+  const saveB = widget.elements.save.onclick()
+  a.reject(new Error('A failed'))
+  await saveA
+  assert.match(widget.elements.status.textContent, /正在安全保存/u)
+  assert.equal(widget.elements.cancel.disabled, true)
+  b.resolve(receipt('B'))
+  await saveB
+  assert.match(widget.elements.origin.textContent, /attachment-B/u)
+})
+test('R1: delayed A Cancel success must not mark B cancelled or disable B', async () => {
+  const gate = deferred(), tokenA = 'c'.repeat(64), tokenB = 'd'.repeat(64)
+  const calls = []
+  const widget = mount({ token: tokenA, callTool: async (name, args) => {
+    calls.push(args.capability)
+    return name === 'pocket_file_keep_cancel' ? gate.promise : receipt('B')
+  } })
+  const cancellingA = widget.elements.cancel.onclick()
+  show(widget, 'scope-B', tokenB, 'append')
+  gate.resolve({ structuredContent: { cancelled: true } })
+  await cancellingA
+  assert.match(widget.elements.item.textContent, /target-B/u)
+  assert.doesNotMatch(widget.elements.status.textContent, /已取消/u)
+  assert.equal(widget.elements.save.disabled, false)
+  await widget.elements.save.onclick()
+  assert.match(widget.elements.origin.textContent, /attachment-B/u)
+  assert.deepEqual(calls, [tokenA, tokenB])
+})
+test('R1: rejected A Cancel cannot alter B', async () => {
+  const gate = deferred()
+  const widget = mount({ token: 'a'.repeat(64), callTool: () => gate.promise })
+  const cancellingA = widget.elements.cancel.onclick()
+  show(widget, 'scope-B', 'b'.repeat(64))
+  gate.reject(new Error('timeout'))
+  await cancellingA
+  assert.equal(widget.elements.save.disabled, false)
+  assert.doesNotMatch(widget.elements.status.textContent, /取消结果未确认/u)
+})
+test('R1: same-scope event never re-enables buttons during busy Save or after receipt', async () => {
+  const gate = deferred()
+  let calls = 0
+  const widget = mount({ token: 'a'.repeat(64), callTool: () => {
+    calls++
+    return gate.promise
+  } })
+  const saving = widget.elements.save.onclick()
+  show(widget, 'scope-current', 'a'.repeat(64))
+  assert.equal(widget.elements.save.disabled, true)
+  assert.equal(widget.elements.cancel.disabled, true)
+  await widget.elements.save.onclick()
+  await widget.elements.cancel.onclick()
+  assert.equal(calls, 1)
+  gate.resolve(receipt('A'))
+  await saving
+  assert.match(widget.elements.status.textContent, /已入柜/u)
+  show(widget, 'scope-current', 'a'.repeat(64))
+  assert.equal(widget.elements.save.disabled, true)
+  assert.match(widget.elements.status.textContent, /已入柜/u)
+})
+test('R1: same-scope event cannot re-enable Save during or after Cancel', async () => {
+  const gate = deferred()
+  const widget = mount({ token: 'a'.repeat(64), callTool: () => gate.promise })
+  const cancelling = widget.elements.cancel.onclick()
+  show(widget, 'scope-current', 'a'.repeat(64))
+  assert.equal(widget.elements.save.disabled, true)
+  assert.equal(widget.elements.cancel.disabled, true)
+  gate.resolve({ structuredContent: { cancelled: true } })
+  await cancelling
+  assert.match(widget.elements.status.textContent, /服务器已撤销/u)
+  show(widget, 'scope-current', 'a'.repeat(64))
+  assert.equal(widget.elements.save.disabled, true)
+})
+test('R2: private B first then public B enables matched append without auto-call', async () => {
+  const tokenB = 'b'.repeat(64), widget = mount({ token: 'a'.repeat(64) })
+  globals(widget, { toolResponseMetadata: { mcp_tool_result: { _meta: {
+    aqiOneClickKeep: { scopeId: 'scope-B', capability: tokenB },
+  } } } })
+  assert.deepEqual(widget.calls, [])
+  globals(widget, { toolOutput: { status: 'one_click_approval_required',
+    scopeId: 'scope-B', mode: 'append', itemId: 'target-B',
+    title: 'B', hostname: 'unreviewed.example.net' } })
+  assert.equal(widget.elements.save.disabled, false)
+  assert.match(widget.elements.item.textContent, /target-B/u)
+  await widget.elements.save.onclick()
+  assert.equal(widget.calls[0].args.capability, tokenB)
+})
+test('R2: late private from an unmatched scope cannot enable B', () => {
+  const widget = mount({ token: 'a'.repeat(64) })
+  globals(widget, { toolResponseMetadata: { mcp_tool_result: { _meta: {
+    aqiOneClickKeep: { scopeId: 'old-A', capability: 'c'.repeat(64) },
+  } } } })
+  globals(widget, { toolOutput: { status: 'one_click_approval_required',
+    scopeId: 'scope-B', title: 'B', mode: 'new', hostname: 'unreviewed.example.net' } })
+  assert.equal(widget.elements.save.disabled, true)
+  assert.deepEqual(widget.calls, [])
+})
