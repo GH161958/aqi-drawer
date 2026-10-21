@@ -24,6 +24,7 @@ const flags = {
   fileIntake: flag('C_POCKET_ENABLE_MCP_FILE_INTAKE'),
   fileTransferV2: flag('C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2'),
   fileSmartRouteV3: flag('C_POCKET_ENABLE_MCP_FILE_SMART_ROUTE_V3'),
+  oneClickKeepPoc: flag('C_POCKET_ENABLE_ONE_CLICK_KEEP_POC'),
   legacy: flag('C_POCKET_ENABLE_LEGACY_MCP', true),
 }
 if (flags.owner && !flags.capture) {
@@ -43,6 +44,9 @@ if (flags.fileTransferV2 && (!flags.owner || !flags.capture)) {
 }
 if (flags.fileSmartRouteV3 && (!flags.fileIntake || !flags.fileTransferV2)) {
   errors.push('File Smart Route V3 requires both reviewed File Intake V1 and File Transfer V2 enabled.')
+}
+if (flags.oneClickKeepPoc && (!flags.owner || !flags.capture || !flags.fileIntake || !flags.fileTransferV2)) {
+  errors.push('One-Click Keep POC requires Owner/Capture plus reviewed File Intake V1 and Transfer V2.')
 }
 if (flags.inPlace && (!flags.owner || !flags.capture || !flags.legacy)) {
   errors.push('In-place Owner requires Capture, Unified Owner, and Legacy MCP enabled.')
