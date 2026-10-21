@@ -170,3 +170,36 @@ test('append card without a target remains disabled even if hidden capability is
   assert.match(widget.elements.item.textContent, /目标条目缺失/u)
   assert.equal(widget.elements.save.disabled, true)
 })
+
+
+test('private metadata arriving after public output enables only the matching current file', async () => {
+  const widget = mount()
+  widget.listeners['openai:set_globals']({ detail: { globals: {
+    toolOutput: { status: 'one_click_approval_required', scopeId: 'scope-current',
+      mode: 'new', title: 'Second PDF', hostname: 'unreviewed.example.net' },
+  } } })
+  assert.equal(widget.elements.save.disabled, true)
+  widget.listeners['openai:set_globals']({ detail: { globals: {
+    toolResponseMetadata: { mcp_tool_result: { _meta: {
+      aqiOneClickKeep: { scopeId: 'scope-current', capability: '1'.repeat(64) },
+    } } },
+  } } })
+  assert.equal(widget.elements.save.disabled, false)
+  await widget.elements.save.onclick()
+  assert.equal(widget.calls[0].args.capability, '1'.repeat(64))
+})
+test('late private metadata for another file does not activate the new card', async () => {
+  const widget = mount()
+  widget.listeners['openai:set_globals']({ detail: { globals: {
+    toolOutput: { status: 'one_click_approval_required', scopeId: 'new',
+      mode: 'new', title: 'New file', hostname: 'unreviewed.example.net' },
+  } } })
+  widget.listeners['openai:set_globals']({ detail: { globals: {
+    toolResponseMetadata: { mcp_tool_result: { _meta: {
+      aqiOneClickKeep: { scopeId: 'previous', capability: '2'.repeat(64) },
+    } } },
+  } } })
+  assert.equal(widget.elements.save.disabled, true)
+  await widget.elements.save.onclick()
+  assert.deepEqual(widget.calls, [])
+})
