@@ -471,8 +471,9 @@ test('V2 alias filename retries and completed receipt recovery leak no technical
     if (++attempts === 1) throw new Error('Transient failure')
     return pdf
   } })
+  const encoded = [...'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST'].map(c => '%' + c.charCodeAt(0).toString(16)).join('')
   const file = { ...makeFile(firstHost, 'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST'),
-    file_name: 'paper-AUDIT-TRANSIENT-ID-NOT-TO-PERSIST.pdf' }
+    file_name: encoded + '%.pdf' }
   const target = await store.upsert({ title: 'Original', text: 'Unchanged' })
   const receipts = []
   for (const mode of ['new', 'append']) {
@@ -487,7 +488,39 @@ test('V2 alias filename retries and completed receipt recovery leak no technical
     receipts.push(saved)
   }
   const serialized = JSON.stringify([receipts, await store.list(), await readFile(store.filePath, 'utf8')])
-  for (const secret of [file.file_id, file.download_url, 'NEVER-REVEAL']) assert.ok(!serialized.includes(secret))
+  for (const secret of [file.file_id, encoded, file.download_url, 'NEVER-REVEAL']) assert.ok(!serialized.includes(secret))
   assert.equal((await readdir(store.mediaDir)).length, 2)
   assert.equal(attempts, 3)
+})
+
+test('privacy F1 V2 rejects derived keys without reserving slots; independent keys retain exact completed replay', async (t) => {
+  const { service, store, received } = await fixture(t, { maxPending: 1 })
+  const id = 'PRIVACY-TRANSIENT-FILE-ID-93cda74b'
+  const encoded = [...id].map(c => '%' + c.charCodeAt(0).toString(16)).join('')
+  const file = { ...makeFile(firstHost, id), file_name: encoded + '%.pdf' }
+  const target = await store.upsert({ title: 'Existing', text: 'Unchanged' })
+  const before = await readFile(store.filePath, 'utf8')
+  for (const mode of ['new', 'append']) for (const requestId of [id, 'keep:' + id, id.replaceAll('-', '_')]) {
+    assert.throws(() => service.prepare({ requestId, mode, file, ...(mode === 'append' ? { itemId: target.id } : {}) }), error => {
+      assert.match(error.message, /independent stable/)
+      assert.ok(!error.message.includes(id)); assert.ok(!error.message.includes(requestId))
+      return true
+    })
+  }
+  assert.equal(received.length, 0)
+  assert.equal(await readFile(store.filePath, 'utf8'), before)
+  const receipts = []
+  for (const mode of ['new', 'append']) {
+    const args = { requestId: 'stable:v2:privacy:' + mode, mode, file, ...(mode === 'append' ? { itemId: target.id } : {}) }
+    const ticket = service.prepare(args)
+    assert.deepEqual(service.prepare(args), ticket)
+    const saved = await service.commit(approved(ticket))
+    assert.equal(saved.fileName, 'chatgpt-file.pdf')
+    assert.deepEqual(await service.commit(approved(ticket)), saved)
+    assert.equal(service.prepare(args).status, 'receipt_available')
+    receipts.push(ticket, saved)
+  }
+  const serialized = JSON.stringify([receipts, await store.list(), await readFile(store.filePath, 'utf8')])
+  for (const secret of [id, encoded, file.download_url, 'NEVER-REVEAL']) assert.ok(!serialized.includes(secret))
+  assert.equal(received.length, 2)
 })

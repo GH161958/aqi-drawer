@@ -499,7 +499,8 @@ test('alias filename failure retry and durable completed recovery stay private w
     if (++attempts === 1) throw new Error('Transient failure')
     return pdf
   }, { persistFileId: false })
-  const file = fakeFile({ file_id: 'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST', file_name: 'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST.pdf' })
+  const encoded = [...'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST'].map(c => '%' + c.charCodeAt(0).toString(16)).join('')
+  const file = fakeFile({ file_id: 'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST', file_name: encoded + '%.pdf' })
   const args = { requestId: 'alias:retry-and-restart', mode: 'new', file }
   await assert.rejects(intake.save(args), /Transient failure/)
   assert.deepEqual(await readdir(store.mediaDir), [])
@@ -514,7 +515,7 @@ test('alias filename failure retry and durable completed recovery stay private w
   assert.equal(recovered.duplicate, true)
   assert.equal(attempts, 2)
   const serialized = JSON.stringify([saved, recovered, await readFile(store.filePath, 'utf8')])
-  for (const secret of [file.file_id, file.download_url, 'never-log']) assert.ok(!serialized.includes(secret))
+  for (const secret of [file.file_id, encoded, file.download_url, 'never-log']) assert.ok(!serialized.includes(secret))
   assert.equal((await readdir(store.mediaDir)).length, 1)
 })
 
@@ -683,4 +684,73 @@ test('monotonic deadline survives wall-clock rollback and publication authority 
   live.publish(() => writes++)
   assert.throws(() => live.publish(() => writes++), /already committed/)
   assert.equal(writes, 1)
+})
+
+test('privacy F1 rejects long file-derived request keys before replay download or mutation', async (t) => {
+  let downloads = 0
+  const { store, intake } = await fixture(t, async () => { downloads++; return pdf }, { persistFileId: false })
+  const id = 'PRIVACY-TRANSIENT-FILE-ID-93cda74b'
+  const target = await store.upsert({ title: 'Existing', text: 'Unchanged' })
+  const before = await readFile(store.filePath, 'utf8')
+  const keys = [id, 'keep:' + id, id.replaceAll('-', '_').toLowerCase(), id.replaceAll('-', '').slice(0, 16)]
+  for (const mode of ['new', 'append']) for (const requestId of keys) {
+    const args = { requestId, mode, file: fakeFile({ file_id: id }), ...(mode === 'append' ? { itemId: target.id } : {}) }
+    for (const run of [() => intake.save(args), () => intake.replay(args)]) {
+      await assert.rejects(run(), error => {
+        assert.match(error.message, /independent stable request_id/)
+        assert.ok(!error.message.includes(id)); assert.ok(!error.message.includes(requestId))
+        return true
+      })
+    }
+  }
+  const tail = '7a0f19cc-29b9-4987-a81b-034b945a10d1'
+  await assert.rejects(intake.save({ requestId: tail, mode: 'new', file: fakeFile({ file_id: 'urn:chatgpt:asset/' + tail }) }), /independent stable/)
+  assert.equal(downloads, 0)
+  assert.equal(await readFile(store.filePath, 'utf8'), before)
+  assert.deepEqual(await readdir(store.mediaDir), [])
+})
+
+test('privacy F2 percent-bearing names use fallback across new append and durable replay without encoded identifiers', async (t) => {
+  let downloads = 0
+  const { store, intake } = await fixture(t, async () => { downloads++; return pdf }, { persistFileId: false })
+  const id = 'PRIVACY-TRANSIENT-FILE-ID-93cda74b'
+  const encoded = [...id].map(c => '%' + c.charCodeAt(0).toString(16)).join('')
+  const doubled = encoded.replaceAll('%', '%25')
+  const variants = [encoded + '.pdf', encoded + '%.pdf', doubled + '%ZZ.pdf', 'folder%2F' + encoded + '/notes.pdf', '100% Notes.pdf']
+  const target = await store.upsert({ title: 'Existing', text: 'Unchanged' })
+  const receipts = []
+  for (const [i, file_name] of variants.entries()) for (const mode of ['new', 'append']) {
+    const args = { requestId: 'privacy:percent:' + i + ':' + mode, mode, file: fakeFile({ file_id: id, file_name }),
+      ...(mode === 'append' ? { itemId: target.id } : {}) }
+    const saved = await intake.save(args)
+    assert.equal(saved.fileName, 'chatgpt-file.pdf')
+    const repeated = await intake.save(args)
+    assert.equal(repeated.attachmentId, saved.attachmentId)
+    assert.equal(repeated.duplicate, true)
+    receipts.push(saved, repeated)
+  }
+  assert.equal(downloads, variants.length * 2)
+  const serialized = JSON.stringify([receipts, await store.list(), await readFile(store.filePath, 'utf8')])
+  for (const secret of [id, encoded, doubled, 'never-log', fakeFile().download_url]) assert.ok(!serialized.includes(secret))
+  for (const file_name of [encoded + '%.exe', encoded + '%.png']) {
+    assert.throws(() => validateMcpFileBytes(fakeFile({ file_id: id, file_name }), pdf), /not supported|signature/)
+  }
+  assert.throws(() => validateMcpFileBytes(fakeFile({ file_id: id, file_name: encoded + '%.pdf', mime_type: 'image/png' }), pdf), /MIME/)
+  assert.throws(() => validateMcpFileBytes(fakeFile({ file_id: id, file_name: encoded + '%2Epdf' }), pdf), /safe name/)
+})
+
+test('privacy F3 short opaque IDs preserve unrelated readable names and independent stable keys', async (t) => {
+  const { store, intake } = await fixture(t, undefined, { persistFileId: false })
+  const zip = Buffer.from('504b0304000000', 'hex')
+  for (const [index, file_id] of ['a', 'pdf', 'file', 'notes', '12345678'].entries()) {
+    assert.equal(validateMcpFileBytes(fakeFile({ file_id, file_name: 'Research Notes.pdf' }), pdf).filename, 'Research Notes.pdf')
+    assert.equal(validateMcpFileBytes(fakeFile({ file_id, file_name: 'Research Notes.docx',
+      mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), zip).filename, 'Research Notes.docx')
+    assert.equal(validateMcpFileBytes(fakeFile({ file_id, file_name: file_id + '.pdf' }), pdf).filename, 'chatgpt-file.pdf')
+    const args = { requestId: 'stable:research:20261021:' + index, mode: 'new', file: fakeFile({ file_id, file_name: 'Research Notes.pdf' }) }
+    const saved = await intake.save(args)
+    assert.equal(saved.fileName, 'Research Notes.pdf')
+    assert.equal((await intake.save(args)).attachmentId, saved.attachmentId)
+  }
+  assert.equal((await store.list()).length, 5)
 })

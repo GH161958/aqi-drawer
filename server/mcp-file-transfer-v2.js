@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createMcpFileOperation, MCP_FILE_OPERATION_MS } from './mcp-file-operation.js'
 import {
   createMcpFileIntakeService, describeMcpFileHost, validChatGptFileId,
-  describeMcpFileIntakeRequest, readMcpFileIntakeReceipt,
+  describeMcpFileIntakeRequest, readMcpFileIntakeReceipt, validateMcpFileRequestIdPrivacy,
 } from './mcp-file-intake.js'
 
 export const PINNED_FILE_TTL_MS = 15 * 60 * 1000
@@ -75,6 +75,7 @@ export function createPinnedFileTransferV2({
     // No DNS resolution, download, or persistent write during prepare.
     const preview = describeMcpFileHost(file)
     if (!validChatGptFileId(file.file_id)) throw new Error('Invalid ChatGPT file parameter.')
+    validateMcpFileRequestIdPrivacy(requestId, file.file_id)
 
     const now = clock()
     if (!Number.isFinite(now)) throw new Error('Invalid transfer clock.')

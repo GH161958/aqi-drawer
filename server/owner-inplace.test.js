@@ -638,3 +638,72 @@ test('V3 recovers V2 append receipts after process restart and never accepts a c
   assert.equal(item.text, target.text)
   assert.deepEqual(item.tags, target.tags)
 })
+
+test('Owner MCP F1 F2 F3 privacy guards cover V1 V2 and completed replay with V3 OFF or ON', async (t) => {
+  for (const v3 of [false, true]) await t.test('V3 ' + (v3 ? 'ON' : 'OFF'), async (t) => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), 'drawer-owner-privacy-'))
+    const mcpPath = privatePath()
+    let bridge, client, downloads = 0
+    t.after(async () => {
+      await Promise.allSettled([client?.close(), bridge?.stop()])
+      await rm(dataDir, { recursive: true, force: true })
+    })
+    bridge = await startBridge({
+      dataDir, port: 0, host: '127.0.0.1', mcpPath, ...inPlaceFlags,
+      enableMcpFileIntake: true, enableMcpFileTransferV2: true, enableMcpFileSmartRouteV3: v3,
+      mcpFileHosts: ['uploads.example.org'],
+      mcpFileDownloader: async () => { downloads++; return Buffer.from('%PDF-1.4\nprivacy fixture\n%%EOF') },
+    })
+    client = await connect('http://127.0.0.1:' + bridge.address.port, mcpPath)
+    const id = 'PRIVACY-TRANSIENT-FILE-ID-93cda74b'
+    const encoded = [...id].map(c => '%' + c.charCodeAt(0).toString(16)).join('')
+    const doubled = encoded.replaceAll('%', '%25')
+    const file = { file_id: id, file_name: doubled + '%ZZ.pdf', mime_type: 'application/pdf',
+      download_url: 'https://uploads.example.org/fixture?sig=PRIVATE-URL-SENTINEL' }
+    const target = await bridge.store.upsert({ title: 'Existing', text: 'Unchanged' })
+    const before = await readFile(bridge.store.filePath, 'utf8')
+    const responses = []
+    for (const name of ['pocket_file_intake', 'pocket_file_transfer_prepare']) for (const mode of ['new', 'append']) {
+      const denied = await client.callTool({ name, arguments: {
+        request_id: 'keep:' + id, mode, file, ...(mode === 'append' ? { item_id: target.id } : {}),
+      } })
+      assert.equal(denied.isError, true)
+      assert.match(JSON.stringify(denied), /independent stable/)
+      responses.push(denied)
+    }
+    assert.equal(downloads, 0)
+    assert.equal(await readFile(bridge.store.filePath, 'utf8'), before)
+    assert.deepEqual(await readdir(bridge.store.mediaDir), [])
+    for (const mode of ['new', 'append']) {
+      const args = { request_id: 'stable:owner:v1:' + mode, mode, file,
+        ...(mode === 'append' ? { item_id: target.id } : { title: 'Readable explicit title', text: 'Keep this ordinary content' }) }
+      const saved = await client.callTool({ name: 'pocket_file_intake', arguments: args })
+      assert.notEqual(saved.isError, true)
+      assert.equal(saved.structuredContent.fileName, 'chatgpt-file.pdf')
+      const replay = await client.callTool({ name: 'pocket_file_intake', arguments: args })
+      assert.equal(replay.structuredContent.attachmentId, saved.structuredContent.attachmentId)
+      assert.equal(replay.structuredContent.duplicate, true)
+      responses.push(saved, replay)
+      const prepareArgs = { ...args, request_id: 'stable:owner:v2:' + mode }
+      const pending = await client.callTool({ name: 'pocket_file_transfer_prepare', arguments: prepareArgs })
+      const repeated = await client.callTool({ name: 'pocket_file_transfer_prepare', arguments: prepareArgs })
+      assert.deepEqual(repeated.structuredContent, pending.structuredContent)
+      const p = pending.structuredContent
+      const approval = { ticket_id: p.ticketId, approved_hostname: p.hostname, approved_title: p.title }
+      const committed = await client.callTool({ name: 'pocket_file_transfer_commit', arguments: approval })
+      assert.equal(committed.structuredContent.fileName, 'chatgpt-file.pdf')
+      const recovered = await client.callTool({ name: 'pocket_file_transfer_commit', arguments: approval })
+      assert.deepEqual(recovered.structuredContent, committed.structuredContent)
+      responses.push(pending, committed, recovered)
+    }
+    assert.equal(downloads, 4)
+    const short = await client.callTool({ name: 'pocket_file_intake', arguments: {
+      request_id: 'stable:owner:short-id', mode: 'new', file: { ...file, file_id: 'a', file_name: 'Research Notes.pdf' },
+    } })
+    assert.equal(short.structuredContent.fileName, 'Research Notes.pdf')
+    responses.push(short)
+    const serialized = JSON.stringify([responses, await bridge.store.list(), await readFile(bridge.store.filePath, 'utf8')])
+    for (const secret of [id, encoded, doubled, file.download_url, 'PRIVATE-URL-SENTINEL']) assert.ok(!serialized.includes(secret))
+    assert.equal((await readdir(bridge.store.mediaDir)).length, 5)
+  })
+})

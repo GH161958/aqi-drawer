@@ -84,31 +84,39 @@ function safeName(value) {
   return name
 }
 
-// Only host-supplied technical names are filtered. Explicit title/text is not.
-// Bounded normalization recognizes percent encoding (two rounds), Unicode
-// compatibility forms, case/separator changes and >=16-character edge aliases.
+// Bounded comparisons for technical metadata only. Never inspect title/text.
+const normalizeTechnicalId = value => String(value).slice(0, 4096).normalize('NFKC').toLowerCase()
+const compactTechnicalId = value => normalizeTechnicalId(value).replace(/[^\p{L}\p{N}]/gu, '')
+
+function containsLongFileId(value, fileId) {
+  const rawId = normalizeTechnicalId(fileId)
+  const raw = normalizeTechnicalId(value)
+  if (rawId.length >= 16 && raw.includes(rawId)) return true
+  const name = compactTechnicalId(value)
+  const id = compactTechnicalId(fileId)
+  const tail = compactTechnicalId(String(fileId).split(/[\\/:]/u).at(-1))
+  return [id, tail].filter(alias => alias.length >= 16).some(alias =>
+    name.includes(alias) || (alias.length >= 24
+      && (name.includes(alias.slice(0, 16)) || name.includes(alias.slice(-16)))))
+}
+
+export function validateMcpFileRequestIdPrivacy(requestId, fileId) {
+  if (containsLongFileId(requestId, fileId)) {
+    throw new Error('Use an independent stable request_id, not a temporary file identifier.')
+  }
+}
+
 function technicalFileName(file) {
   const raw = String(file.file_name || '')
   if (raw.length > 4096) throw new Error('Technical file name is too long.')
-  const decode = (value) => {
-    let result = String(value).slice(0, 4096)
-    for (let i = 0; i < 2; i++) {
-      try { result = decodeURIComponent(result) } catch { break }
-    }
-    return result.normalize('NFKC').toLowerCase()
-  }
-  const normalize = value => decode(value).replace(/[^\p{L}\p{N}]/gu, '')
-  const id = normalize(file.file_id)
-  const tail = normalize(String(file.file_id).split(/[\\/:]/u).at(-1))
-  const name = normalize(raw)
-  const aliases = [id, ...(tail.length >= 16 ? [tail] : [])].filter(Boolean)
-  const sensitive = decode(raw).includes(decode(file.file_id)) || aliases.some(alias =>
-    name.includes(alias) || (alias.length >= 24
-      && (name.includes(alias.slice(0, 16)) || name.includes(alias.slice(-16)))))
-    || name.includes(normalize(file.download_url))
   const safe = safeName(raw)
-  // Preserve the supplied extension so fallback cannot bypass type validation.
-  return sensitive ? 'chatgpt-file' + path.extname(safe) : safe
+  const extension = path.extname(safe)
+  // Percent-bearing host names are deliberately opaque: do not decode them.
+  // Keep the supplied plain extension, then run the existing type validation.
+  const sensitive = raw.includes('%') || containsLongFileId(raw, file.file_id)
+    || normalizeTechnicalId(path.basename(safe, extension)) === normalizeTechnicalId(file.file_id)
+    || normalizeTechnicalId(raw).includes(normalizeTechnicalId(file.download_url))
+  return sensitive ? 'chatgpt-file' + extension : safe
 }
 
 const EXT_BY_MIME = {
@@ -280,6 +288,7 @@ export function describeMcpFileIntakeRequest({ requestId, mode, itemId, title = 
     throw new Error('File item title/text is too long.')
   }
   if (!validChatGptFileId(file?.file_id)) throw new Error('A valid ChatGPT file_id is required.')
+  validateMcpFileRequestIdPrivacy(requestId, file.file_id)
   describeMcpFileHost(file)
   const filename = file.file_name ? technicalFileName(file) : ''
   const requestHash = createHash('sha256').update(JSON.stringify([
