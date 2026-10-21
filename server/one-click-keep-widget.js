@@ -67,6 +67,7 @@ save.onclick = async () => {
   }
   submitting = true
   save.disabled = true
+  cancel.disabled = true
   status.textContent = '正在安全保存原件…'
   try {
     // The only redemption is in this explicit button handler.
@@ -84,11 +85,22 @@ save.onclick = async () => {
     status.textContent = '保存未完成；如需重试，请重新打开本次保存请求。'
   } finally { submitting = false }
 }
-cancel.onclick = () => {
+cancel.onclick = async () => {
+  if (submitting) return
+  const token = capability
   capability = null
   save.disabled = true
   cancel.disabled = true
-  status.textContent = '已取消；没有发起文件下载。'
+  if (token && typeof window.openai?.callTool === 'function') {
+    try {
+      const out = await window.openai.callTool('pocket_file_keep_cancel', { capability: token })
+      status.textContent = out?.structuredContent?.cancelled
+        ? '已取消；服务器已撤销本次授权，未下载。'
+        : '已退出卡片；授权可能已失效或已处理，请检查抽屉回执。'
+      return
+    } catch {}
+  }
+  status.textContent = '已退出卡片；服务器授权将在两分钟内过期。没有由此按钮发起下载。'
 }
 </script>
 </body></html>
