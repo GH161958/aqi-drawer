@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import path from 'node:path'
+import { renameSync } from 'node:fs'
 import { canonicalizeUrl, inferSourceApp, isGenericSourceApp, normalizeIncomingShare } from './share-normalizer.js'
 
 const EMPTY_STORE = {
@@ -743,7 +744,7 @@ export class PocketStore {
 
   async saveMcpFileIntake({
     requestId, requestHash, mode, itemId = '', title = '', text = '',
-    fileId, attachment,
+    fileId, attachment, authorization,
   }) {
     if (!/^[A-Za-z0-9_.:-]{8,120}$/u.test(requestId)
       || !/^[a-f0-9]{64}$/u.test(requestHash)
@@ -795,7 +796,7 @@ export class PocketStore {
         requestId, fileIntakeRequestHash: requestHash,
       }, now)
       return { ...payload, itemId: item.id }
-    })
+    }, authorization)
   }
 
   async getForContentRead(id) {
@@ -1868,18 +1869,31 @@ export class PocketStore {
     return parsed
   }
 
-  async #write(state) {
+  async #write(state, authorization) {
     const next = { ...state, updatedAt: new Date().toISOString() }
     const temporary = `${this.filePath}.${process.pid}.${randomUUID()}.tmp`
-    await writeFile(temporary, JSON.stringify(next, null, 2), 'utf8')
-    await rename(temporary, this.filePath)
+    try {
+      authorization?.check()
+      await writeFile(temporary, JSON.stringify(next, null, 2), 'utf8')
+      if (authorization) {
+        // Cancellation check and canonical rename share a synchronous critical
+        // section. No await may separate the final check from publication.
+        authorization.publish(() => renameSync(temporary, this.filePath))
+      } else {
+        await rename(temporary, this.filePath)
+      }
+    } finally {
+      await unlink(temporary).catch(() => {})
+    }
   }
 
-  #mutate(operation) {
+  #mutate(operation, authorization) {
     const run = async () => {
+      authorization?.check()
       const state = await this.#read()
+      authorization?.check()
       const result = await operation(state)
-      await this.#write(state)
+      await this.#write(state, authorization)
       return result
     }
     this.queue = this.queue.then(run, run)

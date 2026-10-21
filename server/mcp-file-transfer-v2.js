@@ -2,6 +2,7 @@
 // that exact hostname and file intent. Ticket and signed URL are in-memory only.
 // Reuses V1 byte validation and durable receipts; independently feature-gated.
 import { createHash, randomUUID } from 'node:crypto'
+import { createMcpFileOperation, MCP_FILE_OPERATION_MS } from './mcp-file-operation.js'
 import {
   createMcpFileIntakeService, describeMcpFileHost, validChatGptFileId,
   describeMcpFileIntakeRequest, readMcpFileIntakeReceipt,
@@ -13,6 +14,7 @@ export const MAX_PINNED_FILES = 12
 export function createPinnedFileTransferV2({
   store, download, clock = () => Date.now(),
   ttlMs = PINNED_FILE_TTL_MS, maxPending = MAX_PINNED_FILES,
+  budgetMs = MCP_FILE_OPERATION_MS,
 } = {}) {
   if (!store) throw new Error('Pinned File Intake requires the existing PocketStore.')
   if (!(Number.isSafeInteger(ttlMs) && ttlMs > 0 && ttlMs <= PINNED_FILE_TTL_MS)) {
@@ -22,23 +24,30 @@ export function createPinnedFileTransferV2({
     throw new Error('Invalid pinned-file capacity.')
   }
 
+  if (!(budgetMs > 0 && budgetMs <= MCP_FILE_OPERATION_MS)) throw new Error('Invalid file operation budget.')
+
   const pending = new Map()
   const completed = new Map()
   const discard = (map, ticket) => {
-    clearTimeout(map.get(ticket)?.timer)
+    const entry = map.get(ticket)
+    // Revoke BEFORE making capacity/request_id available to another prepare.
+    entry?.operation?.cancel()
+    entry?.operation?.dispose()
+    clearTimeout(entry?.timer)
+    if (entry) entry.input = null
     map.delete(ticket)
   }
   const expire = (map, ticket, entry) => {
     entry.timer = setTimeout(() => {
-      // A claimed transfer retains its request reservation until it settles.
-      if (entry.state !== 'committing') discard(map, ticket)
-    }, ttlMs)
+      if (!entry.operation?.accepted) discard(map, ticket)
+    }, Math.max(0, entry.expiresAt - clock()))
     entry.timer.unref?.()
   }
   const sweep = (now) => {
     for (const map of [pending, completed]) {
       for (const [ticket, entry] of map) {
-        if (entry.expiresAt <= now && entry.state !== 'committing') discard(map, ticket)
+        if (!entry.operation?.accepted && (entry.expiresAt <= now
+          || (entry.operation && entry.operation.deadline <= now))) discard(map, ticket)
       }
     }
   }
@@ -128,16 +137,27 @@ export function createPinnedFileTransferV2({
 
     // Claim the single-use ticket before any await; prevent double submissions.
     entry.state = 'committing'
+    if (!entry.operation) {
+      entry.operation = createMcpFileOperation({ clock, expiresAt: entry.expiresAt, budgetMs })
+      entry.operation.signal.addEventListener('abort', () => {
+        if (pending.get(ticketId) === entry) discard(pending, ticketId)
+      }, { once: true })
+    }
+    // Retries retain the FIRST commit's deadline, even after transient errors.
+    const operation = entry.operation
     try {
+      operation.check()
+      const replayInputBase = describeMcpFileIntakeRequest(entry.input)
       // Exact per-ticket hostname, never wildcard and never a globally added host.
       // Reuse V1's hardened DNS/TLS, size/type/hash and durable idempotency path.
       const intake = createMcpFileIntakeService({
         store, allowedHosts: [entry.hostname], persistFileId: false,
         ...(download ? { download } : {}),
       })
-      const receipt = await intake.save(entry.input)
+      const receipt = await intake.save(entry.input, operation)
+      operation.check()
       const replayInput = {
-        ...describeMcpFileIntakeRequest(entry.input),
+        ...replayInputBase,
         verifiedFile: { sha256: receipt.sha256, bytes: receipt.bytes, mimeType: receipt.mimeType },
       }
       discard(pending, ticketId)
@@ -155,7 +175,7 @@ export function createPinnedFileTransferV2({
       return receipt
     } catch (error) {
       // Safe retry of the *same* pinned URL while the approval is still alive.
-      if (clock() < entry.expiresAt && pending.get(ticketId) === entry) {
+      if (!operation.signal.aborted && clock() < operation.deadline && pending.get(ticketId) === entry) {
         entry.state = 'prepared'
       } else {
         discard(pending, ticketId)

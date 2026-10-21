@@ -4,9 +4,14 @@ import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { EventEmitter } from 'node:events'
+import { performance } from 'node:perf_hooks'
+import { PassThrough } from 'node:stream'
+import { Resolver } from 'node:dns/promises'
+import { createMcpFileOperation } from './mcp-file-operation.js'
 import { PocketStore } from './store.js'
 import {
-  MAX_MCP_FILE_BYTES, createMcpFileIntakeService, permittedFileHosts,
+  MAX_MCP_FILE_BYTES, createMcpFileIntakeService, permittedFileHosts, downloadChatGptFile,
   validateMcpFileUrl, validateMcpFileBytes, validChatGptFileId,
 } from './mcp-file-intake.js'
 
@@ -415,4 +420,267 @@ test('read-only replay refuses removed, corrupt or concurrently changed attachme
     return result
   }
   await assert.rejects(intake.replay(args), /no longer attached/)
+})
+
+
+test('technical filename aliases are redacted for new and append across full canonical serialization', async (t) => {
+  const sentinel = 'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST'
+  const compact = sentinel.replaceAll('-', '')
+  const aliases = [
+    ['direct', sentinel + '.pdf'],
+    ['prefix', sentinel + '-paper.pdf'],
+    ['middle', 'paper-' + sentinel + '-notes.pdf'],
+    ['suffix', 'paper-' + sentinel + '.pdf'],
+    ['path', '/tmp/' + sentinel + '/Research.pdf'],
+    ['windows path', 'folder\\' + sentinel + '\\Research.pdf'],
+    ['separators', sentinel.replaceAll('-', '_').toLowerCase() + '.pdf'],
+    ['percent encoding', sentinel.replaceAll('-', '%2D') + '.pdf'],
+    ['double encoding', sentinel.replaceAll('-', '%252D') + '.pdf'],
+    ['truncated prefix', compact.slice(0, 16) + '-paper.pdf'],
+    ['truncated suffix', 'paper-' + compact.slice(-16) + '.pdf'],
+    ['unicode compatibility', [...sentinel].map(c => /[A-Z]/u.test(c) ? String.fromCharCode(c.charCodeAt(0) + 0xFEE0) : c).join('') + '.pdf'],
+  ]
+  const { store, intake } = await fixture(t, undefined, { persistFileId: false })
+  const existing = await store.upsert({ title: 'Existing', text: 'Unchanged' })
+  for (const [index, [label, file_name]] of aliases.entries()) {
+    await t.test(label, async () => {
+      const file = fakeFile({ file_id: sentinel, file_name })
+      const receipts = []
+      for (const mode of ['new', 'append']) {
+        const args = { requestId: 'alias:' + index + ':' + mode, mode, file,
+          ...(mode === 'append' ? { itemId: existing.id } : {}) }
+        receipts.push(await intake.save(args))
+        receipts.push(await intake.save(args))
+      }
+      for (const receipt of receipts) assert.equal(receipt.fileName, 'chatgpt-file.pdf')
+      const raw = await readFile(store.filePath, 'utf8')
+      const serialized = JSON.stringify([raw, await store.list(), receipts])
+      for (const secret of [sentinel, file.download_url, 'never-log', compact.slice(0, 16), compact.slice(-16)]) {
+        assert.ok(!serialized.includes(secret), label)
+      }
+    })
+  }
+})
+
+test('opaque path-component filename aliases are redacted without modifying explicit content', async (t) => {
+  const id = 'urn:chatgpt:asset/7a0f19cc-29b9-4987-a81b-034b945a10d1'
+  const { store, intake } = await fixture(t, undefined, { persistFileId: false })
+  const receipt = await intake.save({ requestId: 'alias:explicit-content', mode: 'new',
+    title: 'My ' + id, text: 'EE explicitly asked to keep ' + id,
+    file: fakeFile({ file_id: id, file_name: id.split('/').at(-1) + '.pdf' }),
+  })
+  const item = await store.get(receipt.itemId)
+  assert.equal(receipt.fileName, 'chatgpt-file.pdf')
+  assert.equal(item.title, 'My ' + id)
+  assert.equal(item.text, 'EE explicitly asked to keep ' + id)
+  assert.ok(!JSON.stringify(item.attachments).includes('7a0f19cc'))
+})
+
+test('readable supplied filename survives and redaction never bypasses extension MIME or signature checks', async (t) => {
+  const sentinel = 'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST'
+  const { store, intake } = await fixture(t, async () => Buffer.from('504b0304000000', 'hex'), { persistFileId: false })
+  const receipt = await intake.save({ requestId: 'readable:research-docx', mode: 'new',
+    file: fakeFile({ file_id: sentinel, file_name: 'Research Notes.docx',
+      mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }),
+  })
+  assert.equal(receipt.fileName, 'Research Notes.docx')
+  assert.equal((await store.get(receipt.itemId)).attachments[0].name, 'Research Notes.docx')
+  for (const [file_name, mime_type, bytes, expected] of [
+    [sentinel + '.exe', 'application/pdf', pdf, /not supported/],
+    [sentinel + '.png', 'application/pdf', pdf, /signature/],
+    [sentinel + '.pdf', 'image/png', pdf, /MIME/],
+    [sentinel + '.pdf', 'application/pdf', Buffer.from('bad'), /signature/],
+  ]) assert.throws(() => validateMcpFileBytes(fakeFile({ file_id: sentinel, file_name, mime_type }), bytes), expected)
+})
+
+test('alias filename failure retry and durable completed recovery stay private with one attachment', async (t) => {
+  let attempts = 0
+  const { store, intake } = await fixture(t, async () => {
+    if (++attempts === 1) throw new Error('Transient failure')
+    return pdf
+  }, { persistFileId: false })
+  const file = fakeFile({ file_id: 'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST', file_name: 'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST.pdf' })
+  const args = { requestId: 'alias:retry-and-restart', mode: 'new', file }
+  await assert.rejects(intake.save(args), /Transient failure/)
+  assert.deepEqual(await readdir(store.mediaDir), [])
+  const saved = await intake.save(args)
+  const reopened = new PocketStore(store.dataDir)
+  await reopened.init()
+  const restarted = createMcpFileIntakeService({ store: reopened, persistFileId: false,
+    download: async () => { throw new Error('Must not download completed replay') },
+  })
+  const recovered = await restarted.save(args)
+  assert.equal(recovered.attachmentId, saved.attachmentId)
+  assert.equal(recovered.duplicate, true)
+  assert.equal(attempts, 2)
+  const serialized = JSON.stringify([saved, recovered, await readFile(store.filePath, 'utf8')])
+  for (const secret of [file.file_id, file.download_url, 'never-log']) assert.ok(!serialized.includes(secret))
+  assert.equal((await readdir(store.mediaDir)).length, 1)
+})
+
+test('absolute deadline detaches a forever-hung custom DNS resolver and blocks its late HTTPS start', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let release, requests = 0
+  const operation = createMcpFileOperation({ clock: () => 1000, budgetMs: 100 })
+  const promise = downloadChatGptFile(fakeFile(), {
+    allowedHosts: ['uploads.example.org'], operation,
+    resolver: () => new Promise(resolve => { release = resolve }),
+    request: () => { requests++; throw new Error('Unexpected HTTPS') },
+  })
+  const failure = assert.rejects(promise, /expired or cancelled/)
+  t.mock.timers.tick(100)
+  await failure
+  release([{ address: '8.8.8.8', family: 4 }])
+  await Promise.resolve()
+  assert.equal(requests, 0)
+  assert.equal(operation.signal.aborted, true)
+})
+
+test('production per-transfer DNS resolver is actually cancelled at the absolute deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let cancels = 0
+  t.mock.method(Resolver.prototype, 'resolve4', () => new Promise(() => {}))
+  t.mock.method(Resolver.prototype, 'cancel', () => { cancels++ })
+  const operation = createMcpFileOperation({ clock: () => 1000, budgetMs: 100 })
+  const failure = assert.rejects(downloadChatGptFile(fakeFile(), {
+    allowedHosts: ['uploads.example.org'], operation,
+  }), /expired or cancelled/)
+  t.mock.timers.tick(100)
+  await failure
+  assert.ok(cancels >= 1)
+})
+
+function fakeHttpsRequest(onRequest, response) {
+  return (_url, options, onResponse) => {
+    const req = new EventEmitter()
+    req.destroyed = false
+    req.destroy = error => {
+      if (req.destroyed) return
+      req.destroyed = true
+      if (error) req.emit('error', error)
+      req.emit('close')
+    }
+    onRequest({ req, options })
+    if (response) queueMicrotask(() => onResponse(response))
+    return req
+  }
+}
+
+test('absolute deadline destroys an HTTPS connection that never reaches a response', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let entered
+  const started = new Promise(resolve => { entered = resolve })
+  const operation = createMcpFileOperation({ clock: () => 1000, budgetMs: 100 })
+  const failure = assert.rejects(downloadChatGptFile(fakeFile(), {
+    allowedHosts: ['uploads.example.org'], operation,
+    resolver: async () => [{ address: '8.8.8.8', family: 4 }],
+    request: fakeHttpsRequest(entered),
+  }), /expired or cancelled/)
+  const { req, options } = await started
+  assert.equal(options.signal, operation.signal)
+  let pinned
+  options.lookup('uploads.example.org', {}, (_error, address) => { pinned = address })
+  assert.equal(pinned, '8.8.8.8')
+  t.mock.timers.tick(100)
+  await failure
+  assert.equal(req.destroyed, true)
+})
+
+test('continuous response trickle cannot renew deadline and its response stream is destroyed', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let entered
+  const started = new Promise(resolve => { entered = resolve })
+  const res = new PassThrough()
+  res.statusCode = 200
+  res.headers = {}
+  const operation = createMcpFileOperation({ clock: () => 1000, budgetMs: 100 })
+  const failure = assert.rejects(downloadChatGptFile(fakeFile(), {
+    allowedHosts: ['uploads.example.org'], operation,
+    resolver: async () => [{ address: '8.8.8.8', family: 4 }],
+    request: fakeHttpsRequest(entered, res),
+  }), /expired or cancelled/)
+  const { req } = await started
+  await Promise.resolve()
+  for (let i = 0; i < 9; i++) {
+    res.write(Buffer.from('x')) // Activity every 10 ms, never socket-idle.
+    t.mock.timers.tick(10)
+    await Promise.resolve()
+  }
+  assert.equal(operation.signal.aborted, false)
+  t.mock.timers.tick(10)
+  await failure
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(req.destroyed, true)
+  assert.equal(res.destroyed, true)
+})
+
+test('V1 owns a full-operation deadline even with an uncooperative injected downloader', async (t) => {
+  let enter, release
+  const started = new Promise(resolve => { enter = resolve })
+  const late = new Promise(resolve => { release = resolve })
+  const { store, intake } = await fixture(t, (_file, { signal }) => { enter(signal); return late }, { persistFileId: false })
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const before = await readFile(store.filePath, 'utf8')
+  const failure = assert.rejects(intake.save({ requestId: 'v1:deadline:standalone', mode: 'new', file: fakeFile() }), /expired or cancelled/)
+  const signal = await started
+  t.mock.timers.tick(60_000)
+  await failure
+  assert.equal(signal.aborted, true)
+  release(pdf)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(await readFile(store.filePath, 'utf8'), before)
+  assert.deepEqual(await readdir(store.mediaDir), [])
+})
+
+test('bounded downloader retains successful byte transfer DNS rejection redirect and size guards', async (t) => {
+  for (const scenario of ['success', 'mixed private DNS', 'redirect', 'content length', 'stream size']) {
+    await t.test(scenario, async () => {
+      const operation = createMcpFileOperation()
+      t.after(() => { operation.cancel(); operation.dispose() })
+      const res = new PassThrough()
+      res.statusCode = scenario === 'redirect' ? 302 : 200
+      res.headers = scenario === 'content length' ? { 'content-length': MAX_MCP_FILE_BYTES + 1 } : {}
+      let requests = 0
+      const request = fakeHttpsRequest(() => {
+        requests++
+        queueMicrotask(() => res.end(scenario === 'stream size' ? Buffer.alloc(MAX_MCP_FILE_BYTES + 1) : pdf))
+      }, res)
+      const promise = downloadChatGptFile(fakeFile(), {
+        allowedHosts: ['uploads.example.org'], operation, request,
+        resolver: async () => scenario === 'mixed private DNS'
+          ? [{ address: '8.8.8.8' }, { address: '127.0.0.1' }] : [{ address: '8.8.8.8' }],
+      })
+      if (scenario === 'success') assert.deepEqual(await promise, pdf)
+      else await assert.rejects(promise, scenario === 'mixed private DNS' ? /public IPv4/ : /redirected|size limit|25 MiB/)
+      assert.equal(requests, scenario === 'mixed private DNS' ? 0 : 1)
+    })
+  }
+})
+
+test('opaque punctuation-only IDs and full signed URLs cannot hide in supplied filenames', () => {
+  for (const id of ['---', '🔑', '%%%']) {
+    assert.equal(validateMcpFileBytes(fakeFile({ file_id: id, file_name: id + '.pdf' }), pdf).filename, 'chatgpt-file.pdf')
+  }
+  const file = fakeFile()
+  file.file_name = file.download_url + '.pdf'
+  assert.equal(validateMcpFileBytes(file, pdf).filename, 'chatgpt-file.pdf')
+  assert.throws(() => validateMcpFileBytes(fakeFile({ file_name: 'x'.repeat(4097) + '.pdf' }), pdf), /too long/)
+})
+
+
+test('monotonic deadline survives wall-clock rollback and publication authority is single-use', (t) => {
+  let elapsed = 0, now = 1000
+  t.mock.method(performance, 'now', () => elapsed)
+  const operation = createMcpFileOperation({ clock: () => now, budgetMs: 100 })
+  t.after(() => operation.dispose())
+  now -= 500
+  elapsed = 100
+  assert.throws(() => operation.check(), /expired or cancelled/)
+  let writes = 0
+  assert.throws(() => operation.publish(() => writes++), /expired or cancelled/)
+  const live = createMcpFileOperation({ clock: () => now, budgetMs: 100 })
+  t.after(() => live.dispose())
+  live.publish(() => writes++)
+  assert.throws(() => live.publish(() => writes++), /already committed/)
+  assert.equal(writes, 1)
 })

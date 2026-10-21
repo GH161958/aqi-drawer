@@ -15,7 +15,7 @@ const makeFile = (host = firstHost, id = 'file_qa_one') => ({
   download_url: 'https://' + host + '/signed?token=NEVER-REVEAL',
 })
 
-async function fixture(t, { download, clock, ttlMs, maxPending } = {}) {
+async function fixture(t, { download, clock, ttlMs, maxPending, budgetMs } = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'drawer-pinned-transfer-v2-'))
   t.after(() => rm(dir, { recursive: true, force: true }))
   const store = new PocketStore(dir)
@@ -27,7 +27,7 @@ async function fixture(t, { download, clock, ttlMs, maxPending } = {}) {
   })
   return {
     store, received,
-    service: createPinnedFileTransferV2({ store, download: downloader, clock, ttlMs, maxPending }),
+    service: createPinnedFileTransferV2({ store, download: downloader, clock, ttlMs, maxPending, budgetMs }),
   }
 }
 const newIntent = (file = makeFile(), overrides = {}) => ({
@@ -219,22 +219,37 @@ test('unclaimed expiry frees capacity; retries do not refresh the original appro
   assert.equal((await store.list()).length, 0)
 })
 
-test('in-flight expiry does not release a claimed request or create a second ticket', async (t) => {
+test('expired in-flight request is revoked before the same request_id can prepare again', async (t) => {
   let now = 1000
-  let release
+  let release, started
   const wait = new Promise(resolve => { release = resolve })
-  const { service, store } = await fixture(t, { ttlMs: 100, clock: () => now, download: async () => { await wait; return pdf } })
+  const entered = new Promise(resolve => { started = resolve })
+  let calls = 0
+  const { service, store } = await fixture(t, {
+    ttlMs: 100, clock: () => now,
+    download: async (_file, { signal }) => {
+      if (++calls === 1) { started(signal); await wait }
+      return pdf
+    },
+  })
   const args = newIntent()
   const first = service.prepare(args)
   const committing = service.commit(approved(first))
+  const rejected = assert.rejects(committing, /expired or cancelled/)
+  const oldSignal = await entered
   now += 101
-  assert.deepEqual(service.prepare(args), first)
-  assert.throws(() => service.prepare({ ...args, title: 'Changed' }), /already used/)
-  await assert.rejects(service.commit(approved(first)), /in progress/)
-  release()
-  const saved = await committing
-  assert.deepEqual(await service.commit(approved(first)), saved)
+  const next = service.prepare(args)
+  assert.equal(oldSignal.aborted, true)
+  assert.notEqual(next.ticketId, first.ticketId)
+  await rejected
+  const saved = await service.commit(approved(next))
+  release() // Completely uncooperative old downloader returns valid PDF bytes.
+  await new Promise(resolve => setImmediate(resolve))
   assert.equal((await store.list()).length, 1)
+  assert.equal((await store.get(saved.itemId)).attachments.length, 1)
+  assert.equal((await readdir(store.mediaDir)).length, 1)
+  await assert.rejects(service.commit(approved(first)), /missing or expired/)
+  assert.deepEqual(await service.commit(approved(next)), saved)
 })
 
 test('completed response-loss replay is exact, bounded, non-sliding and still checks approval', async (t) => {
@@ -307,4 +322,172 @@ test('completed replay cannot report a removed or corrupted attachment as a succ
   await store.removeAttachment(saved.itemId, saved.attachmentId)
   await assert.rejects(service.commit(approved(ticket)), /no longer attached/)
   assert.equal(received.length, 1)
+})
+
+
+test('twelve never-returning commits expire, revoke all signals and recover every pending slot', async (t) => {
+  let now = 1000
+  const signals = []
+  const { service, store } = await fixture(t, {
+    ttlMs: 100, clock: () => now,
+    download: (_file, { signal }) => { signals.push(signal); return new Promise(() => {}) },
+  })
+  const before = await readFile(store.filePath, 'utf8')
+  const failures = []
+  for (let i = 0; i < 12; i++) {
+    const ticket = service.prepare(newIntent(makeFile(), { requestId: 'hung:request:' + i }))
+    failures.push(assert.rejects(service.commit(approved(ticket)), /expired or cancelled/))
+  }
+  // Let each canonical replay read finish, then all downloaders remain hung.
+  while (signals.length < 12) await new Promise(resolve => setImmediate(resolve))
+  assert.throws(() => service.prepare(newIntent()), /Too many/)
+  now += 100
+  for (let i = 0; i < 12; i++) service.prepare(newIntent(makeFile(), { requestId: 'fresh:request:' + i }))
+  await Promise.all(failures)
+  assert.equal(signals.length, 12)
+  assert.ok(signals.every(signal => signal.aborted))
+  assert.equal(await readFile(store.filePath, 'utf8'), before)
+  assert.deepEqual(await readdir(store.mediaDir), [])
+})
+
+test('first commit budget is shorter than approval and is never renewed by a retry', async (t) => {
+  let now = 1000, calls = 0
+  const { service, store } = await fixture(t, {
+    clock: () => now, ttlMs: 1000, budgetMs: 100,
+    download: async () => { calls++; throw new Error('Transient error') },
+  })
+  const ticket = service.prepare(newIntent())
+  await assert.rejects(service.commit(approved(ticket)), /Transient error/)
+  now += 99
+  await assert.rejects(service.commit(approved(ticket)), /Transient error/)
+  now += 1
+  await assert.rejects(service.commit(approved(ticket)), /missing or expired/)
+  assert.notEqual(service.prepare(newIntent()).ticketId, ticket.ticketId)
+  assert.equal(calls, 2)
+  assert.deepEqual(await readdir(store.mediaDir), [])
+})
+
+test('approval remainder bounds a commit even when its download budget is longer', async (t) => {
+  let now = 1000, operation
+  const { service } = await fixture(t, {
+    clock: () => now, ttlMs: 100, budgetMs: 1000,
+    download: async (_file, options) => { operation = options.operation; throw new Error('Transient error') },
+  })
+  const ticket = service.prepare(newIntent())
+  now += 90
+  await assert.rejects(service.commit(approved(ticket)), /Transient error/)
+  assert.equal(operation.deadline, 1100)
+  now += 10
+  service.prepare(newIntent())
+  assert.equal(operation.signal.aborted, true)
+})
+
+test('timer alone cancels a hung downloader without another prepare or clock sweep', async (t) => {
+  let enter
+  const started = new Promise(resolve => { enter = resolve })
+  const { service, store } = await fixture(t, {
+    ttlMs: 1000, budgetMs: 100,
+    download: (_file, { signal }) => { enter(signal); return new Promise(() => {}) },
+  })
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const ticket = service.prepare(newIntent())
+  const rejected = assert.rejects(service.commit(approved(ticket)), /expired or cancelled/)
+  const signal = await started
+  t.mock.timers.tick(100)
+  await rejected
+  assert.equal(signal.aborted, true)
+  assert.notEqual(service.prepare(newIntent()).ticketId, ticket.ticketId)
+  assert.deepEqual(await readdir(store.mediaDir), [])
+})
+
+test('cancel while queued for Store rejects late mutation and cleans staged media', async (t) => {
+  let now = 1000, release, entered
+  const queued = new Promise(resolve => { entered = resolve })
+  const { service, store } = await fixture(t, { clock: () => now, ttlMs: 100 })
+  const before = await readFile(store.filePath, 'utf8')
+  store.queue = new Promise(resolve => { release = resolve })
+  const original = store.saveMcpFileIntake.bind(store)
+  store.saveMcpFileIntake = args => { const result = original(args); entered(); return result }
+  const ticket = service.prepare(newIntent())
+  const failure = assert.rejects(service.commit(approved(ticket)), /expired or cancelled/)
+  await queued
+  now += 100
+  const next = service.prepare(newIntent())
+  await failure
+  assert.deepEqual(await readdir(store.mediaDir), [])
+  release()
+  await assert.rejects(store.queue, /expired or cancelled/)
+  assert.equal(await readFile(store.filePath, 'utf8'), before)
+  const saved = await service.commit(approved(next))
+  assert.equal(saved.duplicate, false)
+  assert.equal((await store.list()).length, 1)
+  assert.equal((await readdir(store.mediaDir)).length, 1)
+})
+
+test('expiry at final canonical publication rejects mutation and removes metadata temp and media', async (t) => {
+  let now = 1000, reached = false
+  const { service, store } = await fixture(t, { clock: () => now, ttlMs: 100 })
+  const before = await readFile(store.filePath, 'utf8')
+  const original = store.saveMcpFileIntake.bind(store)
+  store.saveMcpFileIntake = args => original({ ...args, authorization: {
+    ...args.authorization,
+    publish(write) { reached = true; now += 100; return args.authorization.publish(write) },
+  } })
+  const ticket = service.prepare(newIntent())
+  await assert.rejects(service.commit(approved(ticket)), /expired or cancelled/)
+  await store.queue.catch(() => {})
+  assert.equal(reached, true)
+  assert.equal(await readFile(store.filePath, 'utf8'), before)
+  assert.deepEqual(await readdir(store.mediaDir), [])
+  assert.ok(!(await readdir(store.dataDir)).some(name => name.endsWith('.tmp')))
+})
+
+test('canonical publication winning cancellation keeps its successful receipt and referenced media', async (t) => {
+  let now = 1000, reached = false
+  const { service, store } = await fixture(t, { clock: () => now, ttlMs: 100 })
+  const original = store.saveMcpFileIntake.bind(store)
+  store.saveMcpFileIntake = args => original({ ...args, authorization: {
+    ...args.authorization,
+    publish(write) {
+      const result = args.authorization.publish(write)
+      reached = true
+      now += 100
+      args.authorization.cancel() // Already atomically published: cannot undo it.
+      return result
+    },
+  } })
+  const ticket = service.prepare(newIntent())
+  const saved = await service.commit(approved(ticket))
+  assert.equal(reached, true)
+  assert.equal(saved.duplicate, false)
+  assert.deepEqual((await store.readAttachment(saved.attachmentId)).data, pdf)
+  assert.deepEqual(await service.commit(approved(ticket)), saved)
+  assert.equal((await readdir(store.mediaDir)).length, 1)
+})
+
+test('V2 alias filename retries and completed receipt recovery leak no technical ID or URL', async (t) => {
+  let attempts = 0
+  const { service, store } = await fixture(t, { download: async () => {
+    if (++attempts === 1) throw new Error('Transient failure')
+    return pdf
+  } })
+  const file = { ...makeFile(firstHost, 'AUDIT-TRANSIENT-ID-NOT-TO-PERSIST'),
+    file_name: 'paper-AUDIT-TRANSIENT-ID-NOT-TO-PERSIST.pdf' }
+  const target = await store.upsert({ title: 'Original', text: 'Unchanged' })
+  const receipts = []
+  for (const mode of ['new', 'append']) {
+    const args = { requestId: 'alias:v2:' + mode, mode, file,
+      ...(mode === 'append' ? { itemId: target.id } : { title: 'Private metadata' }) }
+    const preview = service.prepare(args)
+    if (mode === 'new') await assert.rejects(service.commit(approved(preview)), /Transient failure/)
+    const saved = await service.commit(approved(preview))
+    assert.equal(saved.fileName, 'chatgpt-file.pdf')
+    assert.deepEqual(await service.commit(approved(preview)), saved)
+    assert.equal(service.prepare(args).status, 'receipt_available')
+    receipts.push(saved)
+  }
+  const serialized = JSON.stringify([receipts, await store.list(), await readFile(store.filePath, 'utf8')])
+  for (const secret of [file.file_id, file.download_url, 'NEVER-REVEAL']) assert.ok(!serialized.includes(secret))
+  assert.equal((await readdir(store.mediaDir)).length, 2)
+  assert.equal(attempts, 3)
 })
