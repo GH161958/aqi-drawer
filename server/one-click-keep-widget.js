@@ -45,7 +45,7 @@ function findPrivate(envelope) {
 function hydrate(out, envelope) {
   const visible = out?.structuredContent ?? out ?? {}
   if (visible.status !== 'one_click_approval_required') return
-  capability = findPrivate(envelope)
+  capability = findPrivate(envelope) || findPrivate(window.openai?.toolResponseMetadata)
   item.textContent = '文件：' + (visible.title || 'File')
   origin.textContent = '本次下载来源：' + (visible.hostname || '未知') + ' · 只授权这一份原件'
   status.textContent = capability
