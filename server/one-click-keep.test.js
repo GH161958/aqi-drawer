@@ -117,6 +117,7 @@ test('completed receipts do not consume pending slots; completed cache remains b
   const { store, service } = await fixture(t, { maxPending: 1 })
   const first = service.prepare(intent('keep:completed:first'))
   const receipt = await service.redeem(first.privateCapability)
+  assert.equal(receipt.duplicate, false)
   assert.equal(service.prepare(intent('keep:completed:first')).public.status, 'one_click_receipt_available')
   const second = service.prepare(intent('keep:completed:second'))
   assert.notEqual(second.privateCapability, first.privateCapability)
