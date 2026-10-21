@@ -138,7 +138,8 @@ export async function createBridgeApp(config = {}) {
       ...(config.mcpFileDownloader ? { download: config.mcpFileDownloader } : {}),
     }) : null
   const oneClickKeep = settings.enableOneClickKeepPoc
-    ? createOneClickKeep({ store, ...(config.mcpFileDownloader ? { download: config.mcpFileDownloader } : {}) }) : null
+    ? createOneClickKeep({ store, reviewedHosts: settings.mcpFileHosts,
+      ...(config.mcpFileDownloader ? { download: config.mcpFileDownloader } : {}) }) : null
   const cmemory = new CMemoryClient({ baseUrl: settings.cmemoryBaseUrl, token: settings.cmemoryToken })
   const vault = config.vault ?? new GitHubVaultClient({
     token: settings.vaultToken,
