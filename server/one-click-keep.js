@@ -117,5 +117,13 @@ export function createOneClickKeep({
     entry.promise = task
     return task
   }
-  return { prepare, redeem }
+  function cancel(capability) {
+    if (typeof capability !== 'string' || !/^[a-f0-9]{64}$/u.test(capability)) return false
+    purge()
+    const entry = pending.get(capability)
+    if (!entry || entry.state === 'completed' || entry.operation?.accepted) return false
+    forget(capability, entry)
+    return true
+  }
+  return { prepare, redeem, cancel }
 }
