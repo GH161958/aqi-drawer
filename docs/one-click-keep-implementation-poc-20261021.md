@@ -30,3 +30,19 @@ The POC adds `server/one-click-keep.test.js` plus a real isolated Owner MCP tran
 3. Only then separately decide whether to merge/deploy/enable. V2 is unchanged and serves as rollback. PR #34 remains the design record.
 
 Sources: https://developers.openai.com/plugins/build/chatgpt-ui and https://developers.openai.com/plugins/reference.
+
+
+## Host QA handoff — requires EE's separate approval, NOT automatically executable
+
+Current code-only CI does not establish actual ChatGPT Host behavior. The next gate is one temporary, isolated QA instance with **synthetic data and an empty disposable PocketStore**, never the existing Tokyo data, private MCP path, production credentials, or EE's real original files. Do not expose a new public upload endpoint or turn on the POC flag in production.
+
+1. Before any test deployment: independent limited code review, explicit EE approval of the exact isolated environment/URL, isolated secrets and rollback plan. Production and existing Owner connection remain untouched.
+2. Confirm Host tool scan sees `pocket_file_keep_prepare` (complete four-field `fileParams` schema and `outputSchema`), the `ui://` resource, and that `pocket_file_keep_redeem` / `pocket_file_keep_cancel` appear as app-only. `ui.visibility` is discovery, not proof of human click.
+3. Create and attach a self-authored disposable PDF containing no personal content. Call Prepare once. Verify no DNS requests, no Store item/media, no raw signed URL or opaque file ID in public tool output. Inspect model-visible content versus Widget-only `toolResponseMetadata.mcp_tool_result._meta` separately.
+4. Check **first render** plus both `ui/notifications/tool-result` and ChatGPT `openai:set_globals` update paths. Simulate public output arriving before private metadata; only the matching `scopeId` enables Save.
+5. Press Save on exactly one pinned file. Verify actual Host `callTool` delivery and any platform approval UI (never bypass it), exact source URL/hostname, Store `itemId`, `attachmentId`, `bytes`, original byte SHA-256, and independent attachment re-read.
+6. Repeat Save / lose the first reply: no duplicate item, exact verified receipt. Check expired card, Cancel, late old metadata, changed file source, and existing-host V1 no-extra-click route. Do a separate append-target-visible test on disposable item only.
+7. Record desktop and optional mobile behavior separately; if the Host hides metadata, blocks UI tools, or does not render the card, **fail closed** and report which interface failed. No expanding permanent hostname allowlists, credential exposure or live Storage mutation to compensate.
+8. After QA: shut down disposable instance, revoke isolated credentials, verify no production configuration changed, and bring evidence back to the PR. Merge/release/rollout remain separate owner decisions.
+
+**Do not mark this POC as real-host verified until these steps actually execute.** All GitHub Actions results validate code and synthetic fixtures only.
