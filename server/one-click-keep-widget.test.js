@@ -6,7 +6,7 @@ import { KEEP_WIDGET_HTML } from './one-click-keep-widget.js'
 const script = KEEP_WIDGET_HTML.match(/<script type="module">([\s\S]*?)<\/script>/u)?.[1]
 assert.ok(script, 'Self-contained Widget must include its in-iframe controller.')
 
-function mount({ token, output, callTool } = {}) {
+function mount({ token, scopeId = 'scope-current', output, callTool } = {}) {
   const elements = Object.fromEntries(['item', 'origin', 'status', 'save', 'cancel'].map(id =>
     [id, { textContent: '', disabled: id === 'save', onclick: null }]))
   const calls = []
@@ -20,13 +20,13 @@ function mount({ token, output, callTool } = {}) {
   })
   const openai = {
     toolOutput: output ?? {
-      status: 'one_click_approval_required', title: 'One synthetic PDF',
+      status: 'one_click_approval_required', scopeId, title: 'One synthetic PDF',
       hostname: 'unreviewed.example.net',
     },
     toolResponseMetadata: {
       status: 'success', call_tool_result: {},
       mcp_tool_result: { _meta: token
-        ? { aqiOneClickKeep: { capability: token } } : {} },
+        ? { aqiOneClickKeep: { scopeId, capability: token } } : {} },
     },
     callTool: actualTool,
   }
@@ -75,9 +75,9 @@ test('MCP Apps tool-result notification updates widget without calling redemptio
   widget.listeners.message({ source: widget.parent, data: {
     jsonrpc: '2.0', method: 'ui/notifications/tool-result',
     params: { structuredContent: {
-      status: 'one_click_approval_required', title: 'Updated original',
+      status: 'one_click_approval_required', scopeId: 'scope-updated', title: 'Updated original',
       hostname: 'another.example.net',
-    }, _meta: { aqiOneClickKeep: { capability: token } } },
+    }, _meta: { aqiOneClickKeep: { scopeId: 'scope-updated', capability: token } } },
   } })
   assert.equal(widget.elements.save.disabled, false)
   assert.match(widget.elements.item.textContent, /Updated original/u)
@@ -102,7 +102,7 @@ test('a newer file event without its own private metadata must not reuse the old
 })
 test('a completed card displays receipt recovery rather than asking for another save', async () => {
   const widget = mount({ token: 'e'.repeat(64), output: {
-    status: 'one_click_receipt_available', saved: true,
+    status: 'one_click_receipt_available', saved: true, scopeId: 'scope-current',
     title: 'Previously saved PDF', hostname: 'unreviewed.example.net',
   } })
   assert.equal(widget.elements.save.textContent, '查看已保存回执')
@@ -110,4 +110,43 @@ test('a completed card displays receipt recovery rather than asking for another 
   await widget.elements.save.onclick()
   assert.equal(widget.calls.length, 1)
   assert.match(widget.elements.status.textContent, /已入柜/u)
+})
+
+test('ChatGPT globals update hydrates paired visible file and private capability', async () => {
+  const widget = mount()
+  const token = 'f'.repeat(64)
+  widget.listeners['openai:set_globals']({ detail: { globals: {
+    toolOutput: { status: 'one_click_approval_required', scopeId: 'new-scope',
+      title: 'Newly selected PDF', hostname: 'host.example.net' },
+    toolResponseMetadata: { mcp_tool_result: { _meta: {
+      aqiOneClickKeep: { scopeId: 'new-scope', capability: token },
+    } } },
+  } } })
+  assert.equal(widget.elements.save.disabled, false)
+  assert.match(widget.elements.item.textContent, /Newly selected PDF/u)
+  await widget.elements.save.onclick()
+  assert.equal(widget.calls[0].args.capability, token)
+})
+test('mismatched hidden capability cannot authorize a different visible file', async () => {
+  const widget = mount({ token: 'a'.repeat(64) })
+  widget.listeners['openai:set_globals']({ detail: { globals: {
+    toolOutput: { status: 'one_click_approval_required', scopeId: 'different-file',
+      title: 'A different PDF', hostname: 'host.example.net' },
+    toolResponseMetadata: { mcp_tool_result: { _meta: {
+      aqiOneClickKeep: { scopeId: 'old-file', capability: 'b'.repeat(64) },
+    } } },
+  } } })
+  assert.equal(widget.elements.save.disabled, true)
+  await widget.elements.save.onclick()
+  assert.deepEqual(widget.calls, [])
+})
+test('ChatGPT globals file update without metadata refuses an old private token', async () => {
+  const widget = mount({ token: 'a'.repeat(64) })
+  widget.listeners['openai:set_globals']({ detail: { globals: {
+    toolOutput: { status: 'one_click_approval_required', scopeId: 'new-file',
+      title: 'Another PDF', hostname: 'host.example.net' },
+  } } })
+  assert.equal(widget.elements.save.disabled, true)
+  await widget.elements.save.onclick()
+  assert.deepEqual(widget.calls, [])
 })
