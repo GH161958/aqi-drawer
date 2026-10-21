@@ -53,7 +53,8 @@ function hydrate(out, envelope) {
   const privateScope = findPrivate(envelope)
   // A newer file must never reuse a different file's hidden bearer even if
   // the Host updates the public and private snapshots separately.
-  capability = privateScope?.scopeId === visible.scopeId ? privateScope.capability : null
+  capability = privateScope && typeof visible.scopeId === 'string'
+    && privateScope.scopeId === visible.scopeId ? privateScope.capability : null
   item.textContent = '文件：' + (visible.title || 'File')
   origin.textContent = '本次下载来源：' + (visible.hostname || '未知') + ' · 只授权这一份原件'
   status.textContent = capability
