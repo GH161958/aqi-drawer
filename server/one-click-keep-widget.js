@@ -34,6 +34,9 @@ const cancel = document.getElementById('cancel')
 let capability = null
 let currentVisible = null
 let privateCandidate = null
+// Bounded per-widget tombstones. A completed/cancelled scope cannot be
+// resurrected by an old Host public/private snapshot replay.
+const retiredScopes = new Set()
 let viewEpoch = 0
 let inFlight = null
 let outcome = null
@@ -50,6 +53,15 @@ function findPrivate(envelope) {
       && /^[a-f0-9]{64}$/.test(privateScope?.capability || '')) return privateScope
   }
   return null
+}
+
+function retire(attempt) {
+  if (typeof attempt.scopeId !== 'string') return
+  retiredScopes.add(attempt.scopeId)
+  while (retiredScopes.size > 16) retiredScopes.delete(retiredScopes.values().next().value)
+  // An older A operation must not erase private B already received first.
+  if (privateCandidate?.scopeId === attempt.scopeId
+    && privateCandidate.capability === attempt.token) privateCandidate = null
 }
 
 function isCurrent(attempt) {
@@ -79,11 +91,15 @@ function render() {
   cancel.disabled = busy || !!outcome?.terminal
 }
 
-function hydrate(out, envelope) {
-  const incoming = findPrivate(envelope)
-  // Keep the latest candidate for private-first updates. A mismatch cannot
-  // authorize the currently displayed file. No unbounded bearer cache.
-  if (incoming) privateCandidate = incoming
+function hydrate(out, envelope, privateUpdated = false) {
+  // A missing delta field preserves a private-first candidate; an explicit
+  // null or empty private snapshot *revokes* it. This also revokes the active
+  // UI's capability, without cancelling an operation already in flight.
+  if (privateUpdated) {
+    const incoming = findPrivate(envelope)
+    privateCandidate = incoming && !retiredScopes.has(incoming.scopeId) ? incoming : null
+    if (!privateCandidate) capability = null
+  }
   const visible = out?.structuredContent ?? out ?? {}
   if (!['one_click_approval_required', 'one_click_receipt_available'].includes(visible.status)) return
   const switched = !currentVisible || currentVisible.scopeId !== visible.scopeId
@@ -94,20 +110,28 @@ function hydrate(out, envelope) {
     capability = null
   }
   currentVisible = visible
-  const matched = privateCandidate?.scopeId === visible.scopeId ? privateCandidate : null
-  if (!outcome?.terminal && !(inFlight?.epoch === viewEpoch && inFlight.action === 'cancel')) {
-    if (matched) capability = matched.capability
+  const matched = !retiredScopes.has(visible.scopeId)
+    && privateCandidate?.scopeId === visible.scopeId ? privateCandidate : null
+  if (outcome?.terminal || (inFlight?.epoch === viewEpoch && inFlight.action === 'cancel')) {
+    capability = null
+  } else {
+    capability = matched?.capability ?? null
   }
-  // No matching private snapshot for a NEW scope always fails closed.
-  if (switched && !matched) capability = null
   render()
 }
 
-hydrate(window.openai?.toolOutput, window.openai?.toolResponseMetadata)
+hydrate(window.openai?.toolOutput, window.openai?.toolResponseMetadata,
+  window.openai?.toolResponseMetadata !== undefined)
 window.addEventListener('message', event => {
   if (event.source !== window.parent) return
   const msg = event.data
-  if (msg?.method === 'ui/notifications/tool-result') hydrate(msg.params, msg.params)
+  if (msg?.method === 'ui/notifications/tool-result') {
+    const params = msg.params
+    const hasPrivate = params && ['_meta', 'mcp_tool_result', 'call_tool_result',
+      'mcpToolResult', 'callToolResult'].some(key =>
+      Object.prototype.hasOwnProperty.call(params, key))
+    hydrate(params, params, !!hasPrivate)
+  }
 }, { passive: true })
 window.addEventListener('openai:set_globals', event => {
   const changes = event.detail?.globals
@@ -118,7 +142,7 @@ window.addEventListener('openai:set_globals', event => {
     // Private-first and public-first are both supported. The candidate only
     // enables a file when scopeIds match, never merely due to event order.
     hydrate(hasOutput ? changes.toolOutput : currentVisible,
-      hasPrivate ? changes.toolResponseMetadata : null)
+      hasPrivate ? changes.toolResponseMetadata : undefined, hasPrivate)
   }
 }, { passive: true })
 
@@ -139,8 +163,10 @@ save.onclick = async () => {
   try {
     // Capture the exact private token at click time, not a mutable global.
     const out = await window.openai.callTool('pocket_file_keep_redeem', { capability: token })
+    const saved = !out?.isError && !!out?.structuredContent?.attachmentId
+    if (saved) retire(attempt)
     if (!isCurrent(attempt)) return
-    if (out?.isError || !out?.structuredContent?.attachmentId) {
+    if (!saved) {
       outcome = { message: '保存未获确认；可重试本次保存，或重新发起文件请求。' }
       return
     }
@@ -181,6 +207,7 @@ cancel.onclick = async () => {
       message = '取消结果未确认；本次授权将在两分钟内过期。'
     }
   }
+  retire(attempt)
   if (!isCurrent(attempt)) return
   outcome = { terminal: true, message }
   inFlight = null
