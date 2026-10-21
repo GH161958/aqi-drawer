@@ -101,3 +101,14 @@ test('invalid request ID carrying opaque file ID is rejected before issuing toke
   const { service } = await fixture(t)
   assert.throws(() => service.prepare(intent('keep:' + file.file_id)), /independent stable request_id/)
 })
+
+test('cancelling a prepared capability revokes it before any file download', async t => {
+  let downloads = 0
+  const { store, service } = await fixture(t, { download: async () => { downloads++; return pdf } })
+  const p = service.prepare(intent('keep:cancel:fixture'))
+  assert.equal(service.cancel(p.privateCapability), true)
+  assert.equal(service.cancel(p.privateCapability), false)
+  await assert.rejects(service.redeem(p.privateCapability), /Invalid or expired private Keep approval/)
+  assert.equal(downloads, 0)
+  assert.equal((await store.list()).length, 0)
+})
