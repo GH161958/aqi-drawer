@@ -33,7 +33,11 @@ const save = document.getElementById('save')
 const cancel = document.getElementById('cancel')
 let capability = null
 let currentVisible = null
-let submitting = false
+let privateCandidate = null
+let viewEpoch = 0
+let inFlight = null
+let outcome = null
+
 function findPrivate(envelope) {
   const sources = [
     envelope?._meta, envelope?.mcp_tool_result?._meta,
@@ -47,29 +51,58 @@ function findPrivate(envelope) {
   }
   return null
 }
-function hydrate(out, envelope) {
-  const visible = out?.structuredContent ?? out ?? {}
-  if (!['one_click_approval_required', 'one_click_receipt_available'].includes(visible.status)) return
-  currentVisible = visible
-  // Never reuse an older snapshot bearer for a newer tool-result event.
-  const privateScope = findPrivate(envelope)
-  // A newer file must never reuse a different file's hidden bearer even if
-  // the Host updates the public and private snapshots separately.
-  capability = privateScope && typeof visible.scopeId === 'string'
-    && privateScope.scopeId === visible.scopeId ? privateScope.capability : null
+
+function isCurrent(attempt) {
+  return inFlight === attempt && viewEpoch === attempt.epoch
+    && currentVisible?.scopeId === attempt.scopeId
+}
+
+function render() {
+  const visible = currentVisible
+  if (!visible) return
+  const targetMissing = visible.mode === 'append' && !(typeof visible.itemId === 'string' && visible.itemId)
   const target = visible.mode === 'append'
-    ? (typeof visible.itemId === 'string' && visible.itemId
-      ? '追加到现有条目：' + visible.itemId
-      : '目标条目缺失：不可保存')
+    ? (targetMissing ? '目标条目缺失：不可保存' : '追加到现有条目：' + visible.itemId)
     : '创建新条目'
   item.textContent = '文件：' + (visible.title || 'File') + ' · ' + target
-  origin.textContent = '本次下载来源：' + (visible.hostname || '未知') + ' · 只授权这一份原件'
-  status.textContent = capability
-    ? '确认后由 Drawer 安全下载，并核对原件大小与 SHA-256。'
-    : '当前 ChatGPT Widget 没有提供私有授权能力；不会尝试保存。'
-  save.textContent = visible.status === 'one_click_receipt_available' ? '查看已保存回执' : '确认保存这份原件'
-  save.disabled = !capability || (visible.mode === 'append' && !visible.itemId)
+  origin.textContent = outcome?.origin
+    ?? '本次下载来源：' + (visible.hostname || '未知') + ' · 只授权这一份原件'
+  save.textContent = visible.status === 'one_click_receipt_available'
+    ? '查看已保存回执' : '确认保存这份原件'
+  const busy = inFlight?.epoch === viewEpoch
+  status.textContent = busy
+    ? (inFlight.action === 'save' ? '正在安全保存原件…' : '正在取消本次授权…')
+    : outcome?.message ?? (capability
+      ? '确认后由 Drawer 安全下载，并核对原件大小与 SHA-256。'
+      : '当前 ChatGPT Widget 没有提供私有授权能力；不会尝试保存。')
+  save.disabled = busy || !capability || targetMissing || !!outcome?.terminal
+  cancel.disabled = busy || !!outcome?.terminal
 }
+
+function hydrate(out, envelope) {
+  const incoming = findPrivate(envelope)
+  // Keep the latest candidate for private-first updates. A mismatch cannot
+  // authorize the currently displayed file. No unbounded bearer cache.
+  if (incoming) privateCandidate = incoming
+  const visible = out?.structuredContent ?? out ?? {}
+  if (!['one_click_approval_required', 'one_click_receipt_available'].includes(visible.status)) return
+  const switched = !currentVisible || currentVisible.scopeId !== visible.scopeId
+  if (switched) {
+    viewEpoch++
+    inFlight = null // Old async operations may finish, but cannot touch this view.
+    outcome = null
+    capability = null
+  }
+  currentVisible = visible
+  const matched = privateCandidate?.scopeId === visible.scopeId ? privateCandidate : null
+  if (!outcome?.terminal && !(inFlight?.epoch === viewEpoch && inFlight.action === 'cancel')) {
+    if (matched) capability = matched.capability
+  }
+  // No matching private snapshot for a NEW scope always fails closed.
+  if (switched && !matched) capability = null
+  render()
+}
+
 hydrate(window.openai?.toolOutput, window.openai?.toolResponseMetadata)
 window.addEventListener('message', event => {
   if (event.source !== window.parent) return
@@ -77,62 +110,81 @@ window.addEventListener('message', event => {
   if (msg?.method === 'ui/notifications/tool-result') hydrate(msg.params, msg.params)
 }, { passive: true })
 window.addEventListener('openai:set_globals', event => {
-  // ChatGPT compatibility lifecycle: paired toolOutput + private metadata.
-  // Missing metadata deliberately disables Save rather than reusing an old token.
   const changes = event.detail?.globals
   if (!changes) return
   const hasOutput = Object.prototype.hasOwnProperty.call(changes, 'toolOutput')
   const hasPrivate = Object.prototype.hasOwnProperty.call(changes, 'toolResponseMetadata')
   if (hasOutput || hasPrivate) {
-    // The Host can deliver visible and private updates separately. Match the
-    // private scopeId against the CURRENT visible file before enabling Save.
-    // For a new visible file without metadata, fail closed immediately.
+    // Private-first and public-first are both supported. The candidate only
+    // enables a file when scopeIds match, never merely due to event order.
     hydrate(hasOutput ? changes.toolOutput : currentVisible,
       hasPrivate ? changes.toolResponseMetadata : null)
   }
 }, { passive: true })
+
 save.onclick = async () => {
-  if (submitting || !capability) return
+  const token = capability
+  if (!token || !currentVisible || (inFlight?.epoch === viewEpoch) || outcome?.terminal
+    || save.disabled) return
   if (typeof window.openai?.callTool !== 'function') {
-    status.textContent = '此 Host 不支持组件内工具调用；未保存。'
+    outcome = { message: '此 Host 不支持组件内工具调用；未保存。' }
+    render()
     return
   }
-  submitting = true
-  save.disabled = true
-  cancel.disabled = true
-  status.textContent = '正在安全保存原件…'
+  const attempt = { scopeId: currentVisible.scopeId, epoch: viewEpoch,
+    token, action: 'save' }
+  inFlight = attempt
+  outcome = null
+  render()
   try {
-    // The only redemption is in this explicit button handler.
-    const out = await window.openai.callTool('pocket_file_keep_redeem', { capability })
+    // Capture the exact private token at click time, not a mutable global.
+    const out = await window.openai.callTool('pocket_file_keep_redeem', { capability: token })
+    if (!isCurrent(attempt)) return
     if (out?.isError || !out?.structuredContent?.attachmentId) {
-      status.textContent = '保存失败或授权已过期，请重新发起这一份文件的保存。'
+      outcome = { message: '保存未获确认；可重试本次保存，或重新发起文件请求。' }
       return
     }
-    const r = out.structuredContent
-    status.textContent = '已入柜 · 原件 ' + r.bytes + ' bytes · SHA-256 ' + r.sha256
-    origin.textContent = 'Item ' + r.itemId + ' · Attachment ' + r.attachmentId
+    const receipt = out.structuredContent
     capability = null
-    cancel.disabled = true
+    outcome = { terminal: true,
+      message: '已入柜 · 原件 ' + receipt.bytes + ' bytes · SHA-256 ' + receipt.sha256,
+      origin: 'Item ' + receipt.itemId + ' · Attachment ' + receipt.attachmentId }
   } catch {
-    status.textContent = '保存未完成；如需重试，请重新打开本次保存请求。'
-  } finally { submitting = false }
+    if (isCurrent(attempt)) {
+      outcome = { message: '保存未完成；可以重试本次保存。' }
+    }
+  } finally {
+    if (isCurrent(attempt)) {
+      inFlight = null
+      render()
+    }
+  }
 }
+
 cancel.onclick = async () => {
-  if (submitting) return
+  if (inFlight?.epoch === viewEpoch || outcome?.terminal || !currentVisible) return
   const token = capability
-  capability = null
-  save.disabled = true
-  cancel.disabled = true
+  const attempt = { scopeId: currentVisible.scopeId, epoch: viewEpoch,
+    token, action: 'cancel' }
+  inFlight = attempt
+  capability = null // Never re-enable during an in-flight cancellation.
+  outcome = null
+  render()
+  let message = '已退出卡片；服务器授权将在两分钟内过期。没有由此按钮发起下载。'
   if (token && typeof window.openai?.callTool === 'function') {
     try {
       const out = await window.openai.callTool('pocket_file_keep_cancel', { capability: token })
-      status.textContent = out?.structuredContent?.cancelled
+      message = out?.structuredContent?.cancelled
         ? '已取消；服务器已撤销本次授权，未下载。'
         : '已退出卡片；授权可能已失效或已处理，请检查抽屉回执。'
-      return
-    } catch {}
+    } catch {
+      message = '取消结果未确认；本次授权将在两分钟内过期。'
+    }
   }
-  status.textContent = '已退出卡片；服务器授权将在两分钟内过期。没有由此按钮发起下载。'
+  if (!isCurrent(attempt)) return
+  outcome = { terminal: true, message }
+  inFlight = null
+  render()
 }
 </script>
 </body></html>
