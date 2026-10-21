@@ -751,6 +751,18 @@ test('isolated One-Click Keep POC returns private widget bearer and stores only 
   })
   assert.equal(rejected.isError, true)
   assert.equal(downloads, 0)
+  const cancelledIntent = await client.callTool({ name: 'pocket_file_keep_prepare',
+    arguments: { ...args, request_id: 'keep:poc:cancel01' } })
+  const cancelledToken = cancelledIntent._meta?.aqiOneClickKeep?.capability
+  const revoked = await client.callTool({
+    name: 'pocket_file_keep_cancel', arguments: { capability: cancelledToken },
+  })
+  assert.equal(revoked.structuredContent.cancelled, true)
+  const cannotRedeem = await client.callTool({
+    name: 'pocket_file_keep_redeem', arguments: { capability: cancelledToken },
+  })
+  assert.equal(cannotRedeem.isError, true)
+  assert.equal(downloads, 0)
   const saved = await client.callTool({
     name: 'pocket_file_keep_redeem', arguments: { capability: token },
   })
