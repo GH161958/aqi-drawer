@@ -741,6 +741,8 @@ test('isolated One-Click Keep POC returns private widget bearer and stores only 
   assert.equal(initial.structuredContent.status, 'one_click_approval_required')
   const token = initial._meta?.aqiOneClickKeep?.capability
   assert.match(token, /^[a-f0-9]{64}$/u)
+  assert.match(initial.structuredContent.scopeId, /^[a-f0-9-]{36}$/u)
+  assert.equal(initial.structuredContent.scopeId, initial._meta.aqiOneClickKeep.scopeId)
   const visible = JSON.stringify([initial.structuredContent, initial.content])
   for (const secret of [file.file_id, file.download_url, token]) assert.ok(!visible.includes(secret))
   assert.equal(downloads, 0)
