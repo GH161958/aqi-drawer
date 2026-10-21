@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { createMcpFileOperation } from './mcp-file-operation.js'
 import {
   createMcpFileIntakeService, describeMcpFileHost,
@@ -53,6 +53,7 @@ export function createOneClickKeep({
     status: entry.state === 'completed' ? 'one_click_receipt_available' : 'one_click_approval_required',
     hostname: entry.hostname,
     title: entry.title || 'File', mode: entry.mode,
+    scopeId: entry.scopeId,
     itemId: entry.mode === 'append' ? entry.itemId : null,
     expiresAt: new Date(entry.expiresAt).toISOString(),
     saved: entry.state === 'completed',
@@ -75,7 +76,7 @@ export function createOneClickKeep({
     const token = randomBytes(32).toString('hex')
     const expiresAt = clock() + ttlMs
     const entry = {
-      token, requestId, requestHash: description.requestHash, hostname,
+      token, scopeId: randomUUID(), requestId, requestHash: description.requestHash, hostname,
       mode, itemId, title, expiresAt, state: 'prepared',
       // Exact original fileParams pinned only in process memory.
       intent: Object.freeze({ requestId, mode, itemId, title, text, file: Object.freeze({ ...file }) }),
