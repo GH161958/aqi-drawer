@@ -150,3 +150,23 @@ test('ChatGPT globals file update without metadata refuses an old private token'
   await widget.elements.save.onclick()
   assert.deepEqual(widget.calls, [])
 })
+
+
+test('append card shows exact target before the click and never silently creates another item', async () => {
+  const widget = mount({ token: 'f'.repeat(64), output: {
+    status: 'one_click_approval_required', scopeId: 'scope-current',
+    mode: 'append', itemId: 'existing-item-123',
+    title: 'Synthetic attachment', hostname: 'unreviewed.example.net',
+  } })
+  assert.match(widget.elements.item.textContent, /追加到现有条目：existing-item-123/u)
+  assert.equal(widget.elements.save.disabled, false)
+})
+test('append card without a target remains disabled even if hidden capability is present', async () => {
+  const widget = mount({ token: 'f'.repeat(64), output: {
+    status: 'one_click_approval_required', scopeId: 'scope-current',
+    mode: 'append', itemId: null,
+    title: 'Synthetic attachment', hostname: 'unreviewed.example.net',
+  } })
+  assert.match(widget.elements.item.textContent, /目标条目缺失/u)
+  assert.equal(widget.elements.save.disabled, true)
+})
