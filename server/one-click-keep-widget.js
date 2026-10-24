@@ -12,19 +12,16 @@ export const KEEP_WIDGET_HTML = `
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --paper: #faf7f1; --paper-deep: #f4eee4; --ink: #40372e; --muted: #766d60;
   --rule: #e4d8c7; --sage: #697866; --sage-tint: #eef3eb;
+  /* Shared minimums keep collapsed states stable; long content may still grow. */
+  --origin-slot: 25px; --status-slot: 42px; --footer-slot: 60px;
   --brass: #ae9160; --button: #665347; --button-hover: #503e34; --focus: #997d52;
 }
 * { box-sizing: border-box }
 body { margin: 0; padding: 7px; color: var(--ink); background: transparent }
 .card {
-  position: relative; width: 100%; max-width: 440px; overflow: hidden;
+  position: relative; width: 100%; max-width: 440px;
   background: var(--paper); border: 0; border-radius: 16px;
   padding: 21px 20px 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
-}
-.card::before {
-  content: ""; position: absolute; inset: 0 auto auto 0;
-  width: 100%; height: 3px;
-  background: linear-gradient(90deg, var(--brass), #dbcbaa 38%, transparent 86%);
 }
 .header { display: flex; gap: 11px; align-items: center; margin-bottom: 19px }
 .mark {
@@ -42,19 +39,29 @@ h2 { margin: 0; font-size: 19px; line-height: 1.3; letter-spacing: .015em; font-
   color: var(--sage); border-radius: 6px; background: var(--sage-tint);
   font-size: 18px; font-weight: 500;
 }
-.file-meta { min-width: 0; flex: 1 }
+.file-meta { min-width: 0; flex: 1; display: grid;
+  grid-template-rows: auto auto minmax(var(--origin-slot), auto);
+}
 .kicker { margin: 0 0 5px; font-size: 10px; letter-spacing: .09em; color: var(--muted) }
 #item { margin: 0; font-size: 13px; font-weight: 650; line-height: 1.55; overflow-wrap: anywhere }
 #origin { margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55;
   overflow-wrap: anywhere; word-break: break-word;
 }
+.footer {
+  display: flex; flex-direction: column; justify-content: center; gap: 15px;
+  margin-top: 13px; min-block-size: calc(var(--status-slot) + var(--footer-slot) + 15px);
+}
+.footer-content {
+  display: grid; align-content: center; gap: 13px; min-width: 0; min-block-size: var(--footer-slot);
+}
 .status {
-  margin: 13px 0 0; padding: 11px 12px; font-size: 12px; line-height: 1.6;
+  display: flex; align-items: center; min-block-size: var(--status-slot);
+  margin: 0; padding: 11px 12px; font-size: 12px; line-height: 1.6;
   color: var(--muted); background: var(--paper-deep); border-radius: 10px;
   overflow-wrap: anywhere; word-break: break-word;
 }
 [hidden] { display: none !important }
-.receipt-details { margin-top: 12px; padding-top: 11px; border-top: 1px dashed var(--rule) }
+.receipt-details { min-width: 0; margin: 0; padding-top: 11px; border-top: 1px dashed var(--rule) }
 .receipt-details summary { cursor: pointer; list-style: none; font-size: 11px; font-weight: 650;
   color: var(--muted); outline-offset: 3px;
 }
@@ -65,7 +72,7 @@ h2 { margin: 0; font-size: 19px; line-height: 1.3; letter-spacing: .015em; font-
   font: 500 10.5px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   overflow-wrap: anywhere; word-break: break-word;
 }
-.actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 15px }
+.actions { display: flex; flex-wrap: wrap; gap: 9px; margin: 0 }
 button { min-height: 42px; margin: 0; padding: 11px 14px;
   font-family: inherit; font-size: 13px; font-weight: 650; line-height: 1.35;
   border: 1px solid transparent; border-radius: 10px; cursor: pointer;
@@ -78,23 +85,27 @@ button { min-height: 42px; margin: 0; padding: 11px 14px;
 button:disabled { opacity: .43; cursor: not-allowed }
 button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px }
 .saved-note {
-  display: none; margin: 13px 0 0; padding: 1px 0 0; color: var(--sage);
+  display: none; margin: 0; padding: 1px 0 0; color: var(--sage);
   font-size: 12px; font-weight: 650; letter-spacing: .02em;
 }
 html[data-keep-state="saved"] .status {
   color: var(--sage); background: var(--sage-tint);
-  border-left: 3px solid var(--sage);
 }
 html[data-keep-state="saved"] .saved-note { display: block }
 html[data-keep-state="saved"] #origin { display: none }
 html[data-keep-state="saved"] .actions,
 html[data-keep-state="closed"] .actions { display: none }
+html[data-keep-state="closed"] .footer-content { display: none }
 html[data-keep-state="saved"] .eyebrow::after { content: " · SAFELY KEPT" }
 @media (max-width: 390px) {
+  :root { --origin-slot: 42px; --status-slot: 61px }
   body { padding: 4px }
   .card { padding: 18px 15px 16px }
   .file-slip { padding: 11px; gap: 9px }
   .header { margin-bottom: 15px }
+}
+@media (max-width: 350px) {
+  :root { --status-slot: 80px }
 }
 @media (prefers-reduced-motion: reduce) { button { transition: none } }
 @media (prefers-color-scheme: dark) {
@@ -122,7 +133,9 @@ html[data-keep-state="saved"] .eyebrow::after { content: " · SAFELY KEPT" }
     <p id="origin"></p>
   </div>
 </div>
+<footer class="footer">
 <p id="status" class="status" role="status">只会保存这一份文件；不会信任整个网站。</p>
+<div class="footer-content">
 <details id="receipt-details" class="receipt-details" hidden>
   <summary>查看原件校验与保存回执</summary>
   <p id="receipt-item"></p>
@@ -133,6 +146,8 @@ html[data-keep-state="saved"] .eyebrow::after { content: " · SAFELY KEPT" }
   <button id="cancel" type="button">取消</button>
 </div>
 <p class="saved-note">✓ 已妥善收好 · 原件留在抽屉里</p>
+</div>
+</footer>
 </section>
 <script type="module">
 const item = document.getElementById('item')
