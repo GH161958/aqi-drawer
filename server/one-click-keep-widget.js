@@ -53,8 +53,21 @@ h2 { margin: 0; font-size: 19px; line-height: 1.3; letter-spacing: .015em; font-
   color: var(--muted); background: var(--paper-deep); border-radius: 10px;
   overflow-wrap: anywhere; word-break: break-word;
 }
+[hidden] { display: none !important }
+.receipt-details { margin-top: 12px; padding-top: 11px; border-top: 1px dashed var(--rule) }
+.receipt-details summary { cursor: pointer; list-style: none; font-size: 11px; font-weight: 650;
+  color: var(--muted); outline-offset: 3px;
+}
+.receipt-details summary::-webkit-details-marker { display: none }
+.receipt-details summary::after { content: "＋"; float: right; color: var(--brass) }
+.receipt-details[open] summary::after { content: "−" }
+.receipt-details p { margin: 8px 0 0; color: var(--muted);
+  font: 500 10.5px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere; word-break: break-word;
+}
 .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 15px }
-button { min-height: 42px; margin: 0; padding: 11px 14px; font: 650 13px/1.35 inherit;
+button { min-height: 42px; margin: 0; padding: 11px 14px;
+  font-family: inherit; font-size: 13px; font-weight: 650; line-height: 1.35;
   border: 1px solid transparent; border-radius: 10px; cursor: pointer;
   transition: background-color .16s ease, border-color .16s ease;
 }
@@ -73,6 +86,7 @@ html[data-keep-state="saved"] .status {
   border-left: 3px solid var(--sage);
 }
 html[data-keep-state="saved"] .saved-note { display: block }
+html[data-keep-state="saved"] #origin { display: none }
 html[data-keep-state="saved"] .actions,
 html[data-keep-state="closed"] .actions { display: none }
 html[data-keep-state="saved"] .eyebrow::after { content: " · SAFELY KEPT" }
@@ -109,6 +123,11 @@ html[data-keep-state="saved"] .eyebrow::after { content: " · SAFELY KEPT" }
   </div>
 </div>
 <p id="status" class="status" role="status">只会保存这一份文件；不会信任整个网站。</p>
+<details id="receipt-details" class="receipt-details" hidden>
+  <summary>查看原件校验与保存回执</summary>
+  <p id="receipt-item"></p>
+  <p id="receipt-sha"></p>
+</details>
 <div class="actions">
   <button id="save" type="button" disabled>确认保存这份原件</button>
   <button id="cancel" type="button">取消</button>
@@ -184,6 +203,17 @@ function render() {
       : '当前 ChatGPT Widget 没有提供私有授权能力；不会尝试保存。')
   save.disabled = busy || !capability || targetMissing || !!outcome?.terminal
   cancel.disabled = busy || !!outcome?.terminal
+  // Read-only technical receipt lives in an optional disclosure instead of
+  // monopolizing the success message with long UUIDs and a 64-char hash.
+  const detail = document.getElementById('receipt-details')
+  if (detail) {
+    const hasReceipt = !!(outcome?.terminal && outcome.origin && outcome.sha256)
+    detail.hidden = !hasReceipt
+    if (hasReceipt) {
+      document.getElementById('receipt-item').textContent = outcome.origin
+      document.getElementById('receipt-sha').textContent = 'SHA-256 ' + outcome.sha256
+    }
+  }
 }
 
 function hydrate(out, envelope, privateUpdated = false) {
@@ -268,8 +298,9 @@ save.onclick = async () => {
     const receipt = out.structuredContent
     capability = null
     outcome = { terminal: true,
-      message: '已入柜 · 原件 ' + receipt.bytes + ' bytes · SHA-256 ' + receipt.sha256,
-      origin: 'Item ' + receipt.itemId + ' · Attachment ' + receipt.attachmentId }
+      message: '已入柜 · 原件 ' + receipt.bytes + ' bytes · SHA-256 已核对',
+      origin: 'Item ' + receipt.itemId + ' · Attachment ' + receipt.attachmentId,
+      sha256: receipt.sha256 }
   } catch {
     if (isCurrent(attempt)) {
       outcome = { message: '保存未完成；可以重试本次保存。' }
