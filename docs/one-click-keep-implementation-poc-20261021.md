@@ -1,0 +1,61 @@
+# One-Click Keep · isolated, default-OFF executable POC (2026-10-21)
+
+**Development only. NOT deployed, merged, enabled, or exercised against real ChatGPT private files.** Parent design: [PR #34](https://github.com/GH161958/aqi-drawer/pull/34). Baseline: [merged PR #33](https://github.com/GH161958/aqi-drawer/pull/33).
+
+## Exact user experience under test
+
+EE says "把这份文件收进抽屉" with one ChatGPT file attachment. For already approved exact hosts, use existing V1 single-call save. For other HTTPS hosts, call the separate `pocket_file_keep_prepare` tool to show a compact in-chat file-specific card. This tool does **not** download, resolve DNS, or write Store/Media. EE presses the one save button. The Widget invokes `pocket_file_keep_redeem`, which receives only a short-lived private token (never raw URL/fileParams), and returns a genuine PocketStore receipt with item ID, attachment ID, bytes, SHA-256. No external upload page or permanent wildcard allowlist.
+
+**Important:** the button and private capability cannot cryptographically establish an actual physical human click. A malicious script in a compromised Widget or an actor that steals the one-time bearer can redeem it. The official ChatGPT tool-result `_meta` is model-hidden but is **not** an independent user-consent attestation. Therefore POC results must be distinguished from an independently enforced human-approval proof.
+
+## Security and scope
+
+- POC gated behind `C_POCKET_ENABLE_ONE_CLICK_KEEP_POC=true` (default **false**), with runtime and production preflight also requiring existing Owner/Capture, File Intake V1 (and its reviewed static host list) and V2. No active service exists when OFF.
+- Only the private Owner MCP connection registers the new tools. `pocket_file_keep_prepare` is model callable, requires one valid `fileParams` object and a stable **independent** request ID, and pins the exact original URL, file ID, title/text/target in process memory for at most two minutes.
+- `pocket_file_keep_redeem` is marked app-only through `_meta.ui.visibility=['app']` and additionally requires a random 256-bit private bearer in tool arguments. The bearer is delivered exclusively as tool-result `_meta.aqiOneClickKeep.capability` to the Widget. Neither public `structuredContent` nor model-visible `content` carries that bearer. The legacy model-callable V2 Commit never has an associated ticket for this workflow and therefore **cannot** redeem it.
+- The Widget uses a real button handler (no automatic calls/effects), with `window.openai.callTool` and private `window.openai.toolResponseMetadata`. Feature detection fails closed when the Host cannot provide private metadata/tool interaction. It has no remote scripts, CORS access, storage, cookies, long-lived token or direct browser fetch.
+- `createOneClickKeep` handles single intent conflicts and de-duplication, one in-flight save per capability, bound TTL, expiry and cancellation. Successful redemption reuses existing File Intake with one **exact hostname** in that operation only. Same URL, SSRF, public IPv4+DNS pinning, TLS, redirects prohibited, byte size <=25 MiB, type/MIME, request SHA and Store publication validation as PR #33. No new database, upload API, schema or permanent egress list.
+- Completed replay within TTL re-reads/verifies the already stored original attachment; it cannot re-download, retarget or substitute fileParams. Expired/changed file references require a new explicit per-file action. Raw signed URL and File ID are dropped from the completed intent. The private bearer remains temporarily in a bounded in-memory completed-receipt cache to permit verified replay within TTL; it is not persisted and is removed on expiry/eviction or process restart. Process restart invalidates unredeemed capabilities.
+
+## Actual scope of automated tests
+
+The POC adds `server/one-click-keep.test.js` plus a real isolated Owner MCP transport regression. Synthetic disposable PDF bytes, temporary PocketStore only. Tests: no prepare egress/write, private token absent from public results, invalid/forged tokens, source+intent conflicts, bounded approval capacity, expiry, late uncooperative downloader, same-capability concurrent redemption and verified durable replay. Owner MCP fixture inspects Widget resource and registered tool visibility; checks no pre-click egress, authenticated app-token redemption and original attachment read-back. Preflight tests default-OFF + prerequisite gates.
+
+**Not yet proved:** ChatGPT Host renders the widget or correctly passes private `_meta` in all desktop/mobile clients, Host itself enforces UI-only tool discovery, actual click provenance, real fileParams URLs/host rotation, generated image or document handoff, live TLS compatibility, source URL renewal, and actual user interaction count. Production deployment, enabling POC, real ChatGPT Host QA and use of EE's private files each require separate EE authorization.
+
+## Follow-up gates
+
+1. GitHub checks + code/security review; address findings **without** breaking Owner lanes or production. No merge from this draft.
+2. Synthetic Host preview and the authorized ChatGPT isolated Host QA, one disposable file only. If hidden `_meta` fails to reach component or Host cannot render the app-only call, **do not weaken security or pretend the save succeeded**.
+3. Only then separately decide whether to merge/deploy/enable. V2 is unchanged and serves as rollback. PR #34 remains the design record.
+
+Sources: https://developers.openai.com/plugins/build/chatgpt-ui and https://developers.openai.com/plugins/reference.
+
+
+## Host QA handoff — requires EE's separate approval, NOT automatically executable
+
+Current code-only CI does not establish actual ChatGPT Host behavior. The next gate is one temporary, isolated QA instance with **synthetic data and an empty disposable PocketStore**, never the existing Tokyo data, private MCP path, production credentials, or EE's real original files. Do not expose a new public upload endpoint or turn on the POC flag in production.
+
+1. Before any test deployment: independent limited code review, explicit EE approval of the exact isolated environment/URL, isolated secrets and rollback plan. Production and existing Owner connection remain untouched.
+2. Confirm Host tool scan sees `pocket_file_keep_prepare` (complete four-field `fileParams` schema and `outputSchema`), the `ui://` resource, and that `pocket_file_keep_redeem` / `pocket_file_keep_cancel` appear as app-only. `ui.visibility` is discovery, not proof of human click.
+3. Create and attach a self-authored disposable PDF containing no personal content. Call Prepare once. Verify no DNS requests, no Store item/media, no raw signed URL or opaque file ID in public tool output. Inspect model-visible content versus Widget-only `toolResponseMetadata.mcp_tool_result._meta` separately.
+4. Check **first render** plus both `ui/notifications/tool-result` and ChatGPT `openai:set_globals` update paths. Simulate public output arriving before private metadata; only the matching `scopeId` enables Save.
+5. Press Save on exactly one pinned file. Verify actual Host `callTool` delivery and any platform approval UI (never bypass it), exact source URL/hostname, Store `itemId`, `attachmentId`, `bytes`, original byte SHA-256, and independent attachment re-read.
+6. Repeat Save / lose the first reply: no duplicate item, exact verified receipt. Check expired card, Cancel, late old metadata, changed file source, and existing-host V1 no-extra-click route. Do a separate append-target-visible test on disposable item only.
+7. Record desktop and optional mobile behavior separately; if the Host hides metadata, blocks UI tools, or does not render the card, **fail closed** and report which interface failed. No expanding permanent hostname allowlists, credential exposure or live Storage mutation to compensate.
+8. After QA: shut down disposable instance, revoke isolated credentials, verify no production configuration changed, and bring evidence back to the PR. Merge/release/rollout remain separate owner decisions.
+
+**Do not mark this POC as real-host verified until these steps actually execute.** All GitHub Actions results validate code and synthetic fixtures only.
+
+## PR #35 R1 / R2 constrained review follow-up
+
+- **R1 (P2):** Widget Save/Cancel calls snapshot the clicked capability, scope and view epoch. Every asynchronous response, exception, and cleanup verifies its originating operation is still the active operation for that displayed scope; a delayed A outcome cannot rewrite B's visible receipt/status, erase B's bearer, or alter B's buttons. Same-scope Host hydration preserves the in-flight busy state; after a terminal saved/cancelled result it never resurrects a spent capability. B may be acted on while A is still returning, because the backend pins each capability independently.
+- **R2 (P3):** retain at most one latest private candidate with scope ID to support private-before-public Host updates. It activates only if the current visible file's scope ID exactly matches; mismatched or absent metadata never authorizes a file. No unbounded cache or changes to backend file transfer.
+- Headless simulated Host regressions exercise A Save success/failure and Cancel success/failure arriving after a B append/new view, B saving while A fails, same-scope hydration mid-operation, and both private-first/public-first delivery orders. **No real ChatGPT Host E2E is claimed.**
+
+
+## D1 (P3) constrained review follow-up
+
+The Widget now distinguishes an absent private-metadata delta (preserve a potentially private-first candidate) from an **explicit null or empty private metadata snapshot** (immediately invalidate the candidate and the current Save capability). After a completed Save or Cancel, only that operation's matching private candidate is cleared; a different scope's private-first candidate is preserved. A bounded set of at most **16 retired public scope IDs**, containing no bearer or signed URL, prevents a completed/cancelled scope from being reauthorized by stale Host public/private event replays within the same Widget instance. This is presentation-layer protection; backend authorization, Store, downloader, DNS and deployed configuration are unchanged. Exhausting the local bounded retirement list is not a new server authorization mechanism.
+
+Synthetic controller tests cover explicit `null`, empty metadata, terminal public-only A→B→A and delayed A completion while private B arrives first. They are not a substitute for genuine ChatGPT Host QA.

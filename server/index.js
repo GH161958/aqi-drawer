@@ -15,6 +15,7 @@ import { PocketContentReader } from './content-reader.js'
 import { createPocketMcpServer } from './mcp-server.js'
 import { createMcpFileIntakeService, permittedFileHosts } from './mcp-file-intake.js'
 import { createPinnedFileTransferV2 } from './mcp-file-transfer-v2.js'
+import { createOneClickKeep } from './one-click-keep.js'
 import { normalizeIncomingShare } from './share-normalizer.js'
 import { extractXhsNoteId, XhsAdapter } from './adapters/xhs.js'
 
@@ -54,6 +55,7 @@ export async function createBridgeApp(config = {}) {
     enableMcpFileIntake: config.enableMcpFileIntake ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_INTAKE) === 'true'),
     enableMcpFileTransferV2: config.enableMcpFileTransferV2 ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_TRANSFER_V2) === 'true'),
     enableMcpFileSmartRouteV3: config.enableMcpFileSmartRouteV3 ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_SMART_ROUTE_V3) === 'true'),
+    enableOneClickKeepPoc: config.enableOneClickKeepPoc ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_ONE_CLICK_KEEP_POC) === 'true'),
     enableMcpFileHostProbe: config.enableMcpFileHostProbe ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_MCP_FILE_HOST_PROBE) === 'true'),
     mcpFileHosts: permittedFileHosts(config.mcpFileHosts ?? process.env.C_POCKET_MCP_FILE_HOSTS),
     enableLegacyMcp: config.enableLegacyMcp ?? (cleanEnvironmentValue(process.env.C_POCKET_ENABLE_LEGACY_MCP) !== 'false'),
@@ -77,6 +79,10 @@ export async function createBridgeApp(config = {}) {
   // It cannot authorize a new hostname or enable a dormant transfer capability.
   if (settings.enableMcpFileSmartRouteV3 && (!settings.enableMcpFileIntake || !settings.enableMcpFileTransferV2)) {
     throw new Error('MCP File Smart Route V3 requires File Intake V1 and pinned Transfer V2.')
+  }
+  // The widget POC cannot silently bootstrap dormant Owner/file permissions.
+  if (settings.enableOneClickKeepPoc && (!settings.enableUnifiedOwner || !settings.enableMcpCapture || !settings.enableMcpFileIntake || !settings.enableMcpFileTransferV2)) {
+    throw new Error('One-Click Keep POC requires Owner, Capture, File Intake V1 and pinned Transfer V2.')
   }
   // Two explicit modes: original split-path migration, or independently
   // authorized in-place Owner upgrade of the *existing* private MCP URL.
@@ -131,6 +137,9 @@ export async function createBridgeApp(config = {}) {
       store,
       ...(config.mcpFileDownloader ? { download: config.mcpFileDownloader } : {}),
     }) : null
+  const oneClickKeep = settings.enableOneClickKeepPoc
+    ? createOneClickKeep({ store, reviewedHosts: settings.mcpFileHosts,
+      ...(config.mcpFileDownloader ? { download: config.mcpFileDownloader } : {}) }) : null
   const cmemory = new CMemoryClient({ baseUrl: settings.cmemoryBaseUrl, token: settings.cmemoryToken })
   const vault = config.vault ?? new GitHubVaultClient({
     token: settings.vaultToken,
@@ -918,6 +927,7 @@ export async function createBridgeApp(config = {}) {
             enableMcpCapture: lane !== 'standard' && settings.enableMcpCapture,
             fileIntake: lane === 'owner' ? fileIntake : null,
             pinnedFileTransferV2: lane === 'owner' ? pinnedFileTransferV2 : null,
+            oneClickKeep: lane === 'owner' ? oneClickKeep : null,
             enableMcpFileSmartRouteV3: lane === 'owner' && settings.enableMcpFileSmartRouteV3,
             mcpFileHosts: lane === 'owner' ? settings.mcpFileHosts : [],
             enableMcpFileHostProbe: lane === 'owner' && settings.enableMcpFileHostProbe,
