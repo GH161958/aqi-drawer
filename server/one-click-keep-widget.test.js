@@ -7,7 +7,8 @@ const script = KEEP_WIDGET_HTML.match(/<script type="module">([\s\S]*?)<\/script
 assert.ok(script, 'Self-contained Widget must include its in-iframe controller.')
 
 function mount({ token, scopeId = 'scope-current', output, callTool } = {}) {
-  const elements = Object.fromEntries(['item', 'origin', 'status', 'save', 'cancel'].map(id =>
+  const elements = Object.fromEntries(['item', 'origin', 'status', 'save', 'cancel',
+    'receipt-details', 'receipt-item', 'receipt-sha'].map(id =>
     [id, { textContent: '', disabled: id === 'save', onclick: null }]))
   const calls = []
   const actualTool = callTool ?? (async (name, args) => {
@@ -34,9 +35,9 @@ function mount({ token, scopeId = 'scope-current', output, callTool } = {}) {
   const listeners = {}
   const window = { parent, openai,
     addEventListener: (type, cb) => { listeners[type] = cb } }
-  const document = { getElementById: id => elements[id] }
+  const document = { documentElement: { dataset: {} }, getElementById: id => elements[id] }
   runInNewContext(script, { document, window })
-  return { elements, calls, window, parent, listeners }
+  return { elements, calls, window, parent, listeners, document }
 }
 
 test('ChatGPT snapshot: no auto-call, private metadata gates a real Save click', async () => {
@@ -445,4 +446,35 @@ test('D1: Cancel A completion cannot erase private-first B', async () => {
   assert.equal(widget.elements.save.disabled, false)
   await widget.elements.save.onclick()
   assert.deepEqual(calls, [tokenA, tokenB])
+})
+
+
+test('visual polish: successful card shows a readable receipt and folds technical IDs/hash', async () => {
+  const widget = mount({ token: 'e'.repeat(64) })
+  assert.equal(widget.document.documentElement.dataset.keepState, 'ready')
+  await widget.elements.save.onclick()
+  assert.equal(widget.document.documentElement.dataset.keepState, 'saved')
+  assert.match(widget.elements.status.textContent, /已入柜.*SHA-256 已核对/u)
+  assert.doesNotMatch(widget.elements.status.textContent, /a{64}/u)
+  assert.equal(widget.elements['receipt-details'].hidden, false)
+  assert.match(widget.elements['receipt-item'].textContent, /attachment-from-store/u)
+  assert.match(widget.elements['receipt-sha'].textContent, /a{64}/u)
+  assert.equal(widget.elements.save.disabled, true)
+  assert.equal(widget.elements.cancel.disabled, true)
+  assert.match(KEEP_WIDGET_HTML, /data-keep-state="saved".*\.actions/u)
+})
+test('visual polish: cancelled card hides receipt and keeps controls disabled', async () => {
+  const widget = mount({ token: 'e'.repeat(64) })
+  await widget.elements.cancel.onclick()
+  assert.equal(widget.document.documentElement.dataset.keepState, 'closed')
+  assert.equal(widget.elements['receipt-details'].hidden, true)
+  assert.match(widget.elements.status.textContent, /已取消/u)
+})
+test('visual polish: static CSS is self-contained, responsive, keyboard-visible and dark-safe', () => {
+  assert.match(KEEP_WIDGET_HTML, /--paper: #faf7f1/u)
+  assert.match(KEEP_WIDGET_HTML, /prefers-color-scheme: dark/u)
+  assert.match(KEEP_WIDGET_HTML, /max-width: 390px/u)
+  assert.match(KEEP_WIDGET_HTML, /focus-visible/u)
+  assert.match(KEEP_WIDGET_HTML, /prefers-reduced-motion: reduce/u)
+  assert.ok(!/<script[^>]*src=/u.test(KEEP_WIDGET_HTML))
 })
