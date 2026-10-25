@@ -110,7 +110,7 @@ test('fails closed for mismatched digest, metadata size, unsupported type and in
   const picture = makeStore('image.png', Buffer.from('PNG'), 'image/png')
   await assert.rejects(
     readOriginalAttachment(picture.store, args),
-    /Only PDF/,
+    /Only DOCX, PDF/,
   )
   const binary = makeStore('not-utf8.txt', Buffer.from([0xff, 0xfe]), 'text/plain')
   await assert.rejects(
