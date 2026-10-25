@@ -89,7 +89,7 @@ test('DOCX main body: Unicode, XML entities, paragraphs, table and deleted text'
 })
 
 test('DOCX reader reuses original attachment ownership, sha/size and code-point pagination', async () => {
-  const text = '雪豹🦊 ' + 'Hello 世界 '.repeat(160)
+  const text = '雪豹🦊 ' + 'Hello 世界 '.repeat(160) + '完毕'
   const bytes = makeDocx(wrap('<w:p><w:r><w:t>' + text + '</w:t></w:r></w:p>'))
   const { store, attachment } = mockStore(bytes)
   const first = await readOriginalAttachment(store, { ...args, maxChars: 500 })
