@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import test from 'node:test'
 import { deflateRawSync } from 'node:zlib'
-import { AttachmentReadError, readOriginalAttachment } from './attachment-reader.js'
+import { readOriginalAttachment } from './attachment-reader.js'
 import { DocxTextError, extractDocxMainText } from './docx-text.js'
 
 const mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
