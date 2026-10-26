@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import { DocxTextError, extractDocxMainText } from './docx-text.js'
 
 const execFileAsync = promisify(execFile)
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
@@ -151,9 +152,37 @@ export async function readOriginalAttachment(
     }
   }
 
+  if (extension === '.docx') {
+    const wordMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    if (mimeType && ![wordMime, 'application/octet-stream'].includes(mimeType)) {
+      reject('DOCX MIME type does not match the original attachment.')
+    }
+    if (page !== 1) reject('Use offset, not page, when reading DOCX text.')
+    let decoded
+    try {
+      decoded = extractDocxMainText(bytes)
+    } catch (error) {
+      if (error instanceof DocxTextError) reject(error.message)
+      reject('DOCX text could not be extracted safely.')
+    }
+    return {
+      ...common,
+      format: 'docx',
+      page: null,
+      totalPages: null,
+      ...pageSlice(decoded, offset, maxChars),
+      noExtractableText: decoded.trim().length === 0,
+      nextPage: null,
+    }
+  }
+
+  if (extension === '.doc') {
+    reject('Legacy .doc files are not supported. Convert the file to DOCX before reading.')
+  }
+
   const allowedMime = TEXT_EXTENSIONS.get(extension)
   if (!allowedMime || (mimeType && !allowedMime.includes(mimeType))) {
-    reject('Only PDF, UTF-8 Markdown, TXT, CSV, and JSON are supported in V1.')
+    reject('Only DOCX, PDF, UTF-8 Markdown, TXT, CSV, and JSON are supported.')
   }
   if (page !== 1) reject('Use offset, not page, when reading a UTF-8 document.')
   if (bytes.includes(0)) reject('Text attachment contains binary bytes.')
