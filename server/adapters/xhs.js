@@ -26,6 +26,7 @@ export class XhsAdapter {
     const originalUrl = extractXhsUrl(value)
     if (!originalUrl) throw new Error('No Xiaohongshu URL was found.')
     let response
+    const progress = { stage: 'request', redirectCount: 0, finalUrl: originalUrl }
     try {
       response = await fetchAllowedRedirects(this.fetchImpl, originalUrl, isXhsHostname, {
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(this.timeoutMs)]) : AbortSignal.timeout(this.timeoutMs),
@@ -34,16 +35,22 @@ export class XhsAdapter {
           'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
           accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
         },
+      }, (url, redirects) => {
+        progress.stage = redirects ? 'redirect' : 'request'
+        progress.redirectCount = redirects
+        progress.finalUrl = url.href
       })
       if (!response.ok) {
         await response.body?.cancel?.()
         throw Object.assign(new Error('XHS HTTP response'), { status: response.status })
       }
+      progress.stage = 'body'
       const html = (await readBoundedBody(response, this.maxHtmlBytes)).toString('utf8')
+      progress.stage = 'parse'
       return parseXhsInitialState(html, { originalUrl, finalUrl: response.url || originalUrl })
     } catch (error) {
       const failure = xhsFailure(error)
-      throw Object.assign(new Error(failure.message), { code: failure.code, originalUrl, finalUrl: response?.url })
+      throw Object.assign(new Error(failure.message), { code: failure.code, stage: failure.code === 'XHS_REDIRECT_BLOCKED' ? 'redirect' : progress.stage, redirectCount: progress.redirectCount, originalUrl, finalUrl: response?.url || progress.finalUrl })
     }
   }
 
@@ -234,9 +241,10 @@ function normalizeComment(comment, authorId, depth) {
   }
 }
 
-async function fetchAllowedRedirects(fetchImpl, initialValue, hostnameAllowed, options) {
+async function fetchAllowedRedirects(fetchImpl, initialValue, hostnameAllowed, options, onRequest) {
   let url = allowedUrl(initialValue, hostnameAllowed)
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+    onRequest?.(url, redirect)
     const response = await fetchImpl(url, { ...options, redirect: 'manual' })
     if (response.status < 300 || response.status >= 400) return response
     const location = response.headers.get('location')
