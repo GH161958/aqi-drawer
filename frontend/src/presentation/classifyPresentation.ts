@@ -418,3 +418,7 @@ export function classifyPresentation(
     sourceFlavor,
   }
 }
+
+export function isXhsPending(item: PocketItemSummary): boolean {
+  return item.xhsParseStatus === 'failed' || item.xhsParseStatus === 'partial'
+}

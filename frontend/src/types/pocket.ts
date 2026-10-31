@@ -109,6 +109,7 @@ export interface PocketActivityEntry {
 }
 
 export interface PocketItemSummary {
+  xhsParseStatus?: 'failed' | 'partial' | 'complete'
   id: string
   title: string
   text: string

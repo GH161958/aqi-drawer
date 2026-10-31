@@ -1,3 +1,4 @@
+import { createXhsRecovery } from './xhs-recovery.js'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -17,7 +18,7 @@ import { createMcpFileIntakeService, permittedFileHosts } from './mcp-file-intak
 import { createPinnedFileTransferV2 } from './mcp-file-transfer-v2.js'
 import { createOneClickKeep } from './one-click-keep.js'
 import { normalizeIncomingShare } from './share-normalizer.js'
-import { extractXhsNoteId, XhsAdapter } from './adapters/xhs.js'
+import { extractXhsNoteId, XhsAdapter, xhsFailure } from './adapters/xhs.js'
 
 const SERVICE_VERSION = '2.5.0'
 const DRAWER_SESSION_COOKIE = 'aqi_drawer_session'
@@ -157,6 +158,7 @@ export async function createBridgeApp(config = {}) {
     ffprobePath: config.contentReaderOptions?.ffprobePath ?? (cleanEnvironmentValue(process.env.C_POCKET_FFPROBE_PATH) || 'ffprobe'),
   })
   const xhsAdapter = config.xhsAdapter ?? new XhsAdapter(config.xhsAdapterOptions)
+  const retryXhs = createXhsRecovery({ store, adapter: xhsAdapter })
   const upload = multer({
     storage: multer.diskStorage({
       destination: store.mediaDir,
@@ -585,6 +587,19 @@ export async function createBridgeApp(config = {}) {
     } catch (error) { next(error) }
   })
 
+  app.post('/api/pocket/items/:id/retry-source', async (req, res, next) => {
+    try {
+      if (Object.keys(req.body || {}).length) throw httpError(400, 'Retry accepts no source URL or item payload.')
+      const item = await retryXhs(req.params.id)
+      res.json({ item })
+    } catch (error) {
+      if (error.code === 'XHS_IDENTITY_CONFLICT') return res.status(409).json({ error: error.message, code: error.code, recoverable: true })
+      if (error.status && error.status < 500) return next(error)
+      const failure = xhsFailure(error)
+      res.status(failure.code === 'XHS_TIMEOUT' ? 504 : 502).json({ error: failure.message, code: failure.code, recoverable: true })
+    }
+  })
+
   const handleUpload = ({ defaultText = false } = {}) => async (req, res, next) => {
     const files = normalizeMultipartFiles(req.files)
     let uploadedAttachments
@@ -641,6 +656,8 @@ export async function createBridgeApp(config = {}) {
             loadImage: (url) => xhsAdapter.loadImage(url),
           })
         } catch (error) {
+          if (error.code === 'XHS_IDENTITY_CONFLICT') throw error
+          const failure = xhsFailure(error)
           const resolvedUrl = cleanWebUrl(error?.finalUrl) || payload.sourceUrl
           const noteId = extractXhsNoteId(resolvedUrl)
           const hasCaptureTitle =
@@ -661,11 +678,12 @@ export async function createBridgeApp(config = {}) {
               parseStatus: 'failed',
               originalUrl: payload.sourceUrl,
               canonicalUrl: resolvedUrl,
-              error: String(error?.message || 'XHS parsing failed.').slice(0, 240),
+              error: failure.message,
+              errorCode: failure.code,
               fetchedAt: new Date().toISOString(),
             },
           })
-          console.warn(`XHS adapter fell back to a link item: ${String(error?.message || 'unknown error').slice(0, 160)}`)
+          console.warn(`XHS adapter fallback: ${failure.code}`)
         }
       } else {
         storedItem = await store.upsert({ ...payload, attachments: allAttachments })

@@ -5009,3 +5009,10 @@
       .60rem;
   }
 }
+
+.xhsLinkClipping {
+  background-color: #fff8f3;
+  border-color: #dabdb3;
+}
+.xhsLinkClipping .articleSource { color: #9c514c; }
+.xhsPendingNote { margin: 8px 0; color: #8b6259; font-size: 12px; line-height: 1.6; }

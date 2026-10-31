@@ -152,19 +152,21 @@ try {
     ...parsed,
     noteId: 'manual-title-note-id',
     externalId: 'manual-title-note-id',
+    originalUrl: 'https://www.xiaohongshu.com/explore/manual-title-note-id',
+    canonicalUrl: 'https://www.xiaohongshu.com/explore/manual-title-note-id',
   }
   const manuallyTitled = await store.upsertXhs({
     title: '手动标题',
     titleOrigin: 'capture',
     text: `手动标题测试 ${FINAL_URL}`,
-    sourceUrl: FINAL_URL,
+    sourceUrl: manualTitleXhs.canonicalUrl,
     xhs: manualTitleXhs,
   }, { loadImage })
   assert.equal(manuallyTitled.title, '手动标题')
   assert.equal(manuallyTitled.sourceData.titleOrigin, 'capture')
   const refreshedManualTitle = await store.upsertXhs({
     text: `再次分享 ${FINAL_URL}`,
-    sourceUrl: FINAL_URL,
+    sourceUrl: manualTitleXhs.canonicalUrl,
     xhs: {
       ...manualTitleXhs,
       title: '刷新后的 XHS 标题',
@@ -178,17 +180,17 @@ try {
 
   let failSecondImage = true
   let partialDownloads = 0
-  const partialXhs = { ...parsed, noteId: 'partial-note-id', externalId: 'partial-note-id' }
+  const partialXhs = { ...parsed, noteId: 'partial-note-id', externalId: 'partial-note-id', originalUrl: 'https://www.xiaohongshu.com/explore/partial-note-id', canonicalUrl: 'https://www.xiaohongshu.com/explore/partial-note-id' }
   const partialLoader = async (url) => {
     partialDownloads += 1
     if (url.includes('/two.') && failSecondImage) throw new Error('fixture image failure')
     return { buffer: PIXEL, mimeType: 'image/png', width: 1, height: 1 }
   }
-  const partial = await store.upsertXhs({ text: 'partial', sourceUrl: FINAL_URL, xhs: partialXhs }, { loadImage: partialLoader })
+  const partial = await store.upsertXhs({ text: 'partial', sourceUrl: partialXhs.canonicalUrl, xhs: partialXhs }, { loadImage: partialLoader })
   assert.equal(partial.sourceData.parseStatus, 'partial')
   assert.equal(partial.attachments.length, 1)
   failSecondImage = false
-  const repaired = await store.upsertXhs({ text: 'partial retry', sourceUrl: FINAL_URL, xhs: partialXhs }, { loadImage: partialLoader })
+  const repaired = await store.upsertXhs({ text: 'partial retry', sourceUrl: partialXhs.canonicalUrl, xhs: partialXhs }, { loadImage: partialLoader })
   assert.equal(repaired.sourceData.parseStatus, 'complete')
   assert.equal(repaired.attachments.length, 2)
   assert.equal(partialDownloads, 3, 'the ready image is reused and only the failed image is retried')

@@ -460,6 +460,10 @@ function parsePocketItem(
     sourceTags:
       parseSourceTags(value),
 
+    ...(isRecord(value.sourceData) && value.sourceData.provider === 'xiaohongshu'
+      && ['failed', 'partial', 'complete'].includes(String(value.sourceData.parseStatus))
+      ? { xhsParseStatus: value.sourceData.parseStatus as 'failed' | 'partial' | 'complete' } : {}),
+
     activity:
       parseActivityList(
         value.activity,
@@ -2130,4 +2134,23 @@ export async function capturePocketItem({
       receipt.message,
     ),
   }
+}
+
+export async function retryPocketXhsSource(id: string): Promise<PocketItemSummary> {
+  let response: Response
+  try {
+    response = await drawerFetch(`/api/pocket/items/${encodeURIComponent(id)}/retry-source`, {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: '{}', signal: AbortSignal.timeout(35_000),
+    })
+  } catch {
+    throw new Error('读取来源超时或网络暂不可用；原收藏已保留，可稍后重试。')
+  }
+  const payload: unknown = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(isRecord(payload) && typeof payload.error === 'string'
+    ? payload.error : '来源暂时无法读取；原收藏已保留，请稍后重试。')
+  const item = isRecord(payload) ? parsePocketItem(payload.item) : null
+  if (!item || item.id !== id) throw new Error('来源恢复回执不匹配，请刷新后检查。')
+  return item
 }
