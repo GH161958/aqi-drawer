@@ -170,3 +170,35 @@ test('stored failed XHS reading stays local and explicitly reports incomplete ex
   assert.equal(read.snapshot.sourceData.parseStatus, 'failed'); assert.equal(read.media.length, 0)
   assert.match(JSON.stringify(read), /尚未提取/)
 })
+
+test('two unreadable short aliases remain separate; later resolution recovers one and conflicts on the other', async t => {
+  const { store, item } = await fixture(t)
+  const alias = 'https://xhslink.cn/o/synthetic-other-alias'
+  const second = await store.upsert({ title: item.title, text: item.text, sourceUrl: alias, sourceData: { provider: 'xiaohongshu', parseStatus: 'failed', originalUrl: alias } })
+  assert.notEqual(second.id, item.id); assert.equal((await store.list()).length, 2)
+  const retry = createXhsRecovery({ store, adapter: adapter({ parse: async originalUrl => ({ ...parsed, originalUrl }) }) })
+  await retry(item.id)
+  const before = await store.get(second.id)
+  await assert.rejects(retry(second.id), error => error.status === 409)
+  assert.deepEqual(await store.get(second.id), before)
+  assert.equal((await store.list()).length, 2)
+  assert.equal((await store.get(item.id)).attachments.length, 1)
+})
+
+test('image timeout keeps a partial same-ID item without phantom media and can recover later', async t => {
+  const { store, item, dir } = await fixture(t)
+  let unavailable = true
+  const retry = createXhsRecovery({ store, adapter: adapter({ loadImage: async () => {
+    if (unavailable) throw new DOMException('timeout with private URL', 'TimeoutError')
+    return { buffer, mimeType: 'image/jpeg' }
+  } }) })
+  const partial = await retry(item.id)
+  assert.equal(partial.id, item.id); assert.equal(partial.sourceData.parseStatus, 'partial')
+  assert.equal(partial.attachments.length, 0); assert.equal(partial.sourceData.images[0].errorCode, 'XHS_TIMEOUT')
+  const { readdir } = await import('node:fs/promises')
+  assert.deepEqual(await readdir(path.join(dir, 'media')), [])
+  unavailable = false
+  const repaired = await retry(item.id)
+  assert.equal(repaired.attachments.length, 1); assert.equal(repaired.receivedCount, 1)
+  assert.equal((await readdir(path.join(dir, 'media'))).length, 1)
+})

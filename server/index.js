@@ -596,7 +596,7 @@ export async function createBridgeApp(config = {}) {
       if (error.code === 'XHS_IDENTITY_CONFLICT') return res.status(409).json({ error: error.message, code: error.code, recoverable: true })
       if (error.status && error.status < 500) return next(error)
       const failure = xhsFailure(error)
-      res.status(failure.code === 'XHS_TIMEOUT' ? 504 : 502).json({ error: failure.message, code: failure.code, recoverable: true })
+      res.status(failure.code === 'XHS_TIMEOUT' ? 504 : 502).json({ error: failure.message, code: failure.code, stage: ['request', 'redirect', 'body', 'parse'].includes(error.stage) ? error.stage : 'unknown', recoverable: true })
     }
   })
 
@@ -680,6 +680,7 @@ export async function createBridgeApp(config = {}) {
               canonicalUrl: resolvedUrl,
               error: failure.message,
               errorCode: failure.code,
+              errorStage: ['request', 'redirect', 'body', 'parse'].includes(error.stage) ? error.stage : 'unknown',
               fetchedAt: new Date().toISOString(),
             },
           })
