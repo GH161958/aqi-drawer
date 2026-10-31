@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   classifyPresentation,
   isClipboardTextAttachment,
+  isXhsPending,
 } from '../src/presentation/classifyPresentation.ts'
 
 import type {
@@ -275,4 +276,17 @@ test('accepts only local attachment routes and external HTTP URLs', () => {
   assert.equal(safeAttachmentUrl('blob:https://example.com/id'), undefined)
   assert.equal(safeAttachmentUrl('//example.com/file.pdf'), undefined)
   assert.equal(safeAttachmentUrl('/untrusted/relative/file.pdf'), undefined)
+})
+
+
+test('XHS failed/partial status is explicit; missing images alone do not imply failure', () => {
+  const failed = { ...item([]), xhsParseStatus: 'failed' as const }
+  assert.equal(isXhsPending(failed), true)
+  assert.equal(classifyPresentation(failed).kind, 'article')
+  assert.equal(isXhsPending({ ...failed, xhsParseStatus: 'partial' }), true)
+  assert.equal(isXhsPending(item([])), false)
+  const recovered = { ...failed, xhsParseStatus: 'complete' as const, attachments: [attachment('source.jpg', 'image/jpeg')] }
+  assert.equal(isXhsPending(recovered), false)
+  assert.equal(classifyPresentation(recovered).kind, 'photo')
+  assert.equal(recovered.id, failed.id)
 })

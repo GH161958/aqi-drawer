@@ -54,7 +54,7 @@ export class PocketContentReader {
     const normalizedDetail = detail === 'full' ? 'full' : 'compact'
     const imageLimit = clampNumber(maxImages, 0, 6, 3)
     const frameLimit = clampNumber(videoFrames, 0, 3, 3)
-    if (item.sourceData?.provider === 'xiaohongshu' && item.sourceData?.parseStatus !== 'failed') {
+    if (item.sourceData?.provider === 'xiaohongshu') {
       return this.#readStoredXhs(item, normalizedDetail, imageLimit)
     }
     const warnings = []
@@ -157,6 +157,7 @@ export class PocketContentReader {
     const media = []
     const warnings = []
     await this.#appendAttachmentImages(item, media, imageLimit, warnings)
+    if (source.parseStatus === 'failed') warnings.push('小红书来源尚未提取；仅显示已保存的分享文字，可在 Drawer 中重新读取来源。')
     const failedImages = images.filter((image) => image.status === 'failed').length
     if (failedImages) warnings.push(`${failedImages} Xiaohongshu image(s) are pending a later retry.`)
     snapshot.visuals = {

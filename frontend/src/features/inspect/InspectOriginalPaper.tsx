@@ -1,3 +1,5 @@
+import { XhsRetryPanel } from '../source-reading/XhsRetryPanel'
+import { isXhsPending } from '../../presentation/classifyPresentation'
 import {
   classifyPresentation,
 } from '../../presentation/classifyPresentation'
@@ -153,9 +155,7 @@ export function InspectOriginalPaper({
       )}
 
       {item.sourceUrl && (
-        <SourceReadPanel
-          item={item}
-        />
+        isXhsPending(item) ? <XhsRetryPanel key={item.id} item={item} /> : <SourceReadPanel item={item} />
       )}
 
       <footer className={styles.footer}>

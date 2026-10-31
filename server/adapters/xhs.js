@@ -22,39 +22,44 @@ export class XhsAdapter {
     return Boolean(extractXhsUrl(value))
   }
 
-  async parse(value) {
+  async parse(value, { signal } = {}) {
     const originalUrl = extractXhsUrl(value)
     if (!originalUrl) throw new Error('No Xiaohongshu URL was found.')
     let response
     try {
       response = await fetchAllowedRedirects(this.fetchImpl, originalUrl, isXhsHostname, {
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(this.timeoutMs)]) : AbortSignal.timeout(this.timeoutMs),
         headers: {
           'user-agent': USER_AGENT,
           'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
           accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
         },
       })
-      if (!response.ok) throw new Error(`Xiaohongshu page returned HTTP ${response.status}.`)
+      if (!response.ok) {
+        await response.body?.cancel?.()
+        throw Object.assign(new Error('XHS HTTP response'), { status: response.status })
+      }
       const html = (await readBoundedBody(response, this.maxHtmlBytes)).toString('utf8')
       return parseXhsInitialState(html, { originalUrl, finalUrl: response.url || originalUrl })
     } catch (error) {
-      if (response?.url) error.finalUrl = response.url
-      error.originalUrl = originalUrl
-      throw error
+      const failure = xhsFailure(error)
+      throw Object.assign(new Error(failure.message), { code: failure.code, originalUrl, finalUrl: response?.url })
     }
   }
 
-  async loadImage(value) {
+  async loadImage(value, { signal } = {}) {
     const response = await fetchAllowedRedirects(this.fetchImpl, value, isXhsImageHostname, {
-      signal: AbortSignal.timeout(this.timeoutMs),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(this.timeoutMs)]) : AbortSignal.timeout(this.timeoutMs),
       headers: {
         'user-agent': USER_AGENT,
         referer: 'https://www.xiaohongshu.com/',
         accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.9,*/*;q=0.2',
       },
     })
-    if (!response.ok) throw new Error(`Xiaohongshu image returned HTTP ${response.status}.`)
+    if (!response.ok) {
+      await response.body?.cancel?.()
+      throw Object.assign(new Error('XHS image HTTP response'), { status: response.status })
+    }
     const claimedMime = String(response.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase()
     const buffer = await readBoundedBody(response, this.maxImageBytes)
     const mimeType = verifiedImageType(buffer, claimedMime)
@@ -235,6 +240,7 @@ async function fetchAllowedRedirects(fetchImpl, initialValue, hostnameAllowed, o
     const response = await fetchImpl(url, { ...options, redirect: 'manual' })
     if (response.status < 300 || response.status >= 400) return response
     const location = response.headers.get('location')
+    await response.body?.cancel?.()
     if (!location || redirect === MAX_REDIRECTS) throw new Error('Xiaohongshu redirect limit was exceeded.')
     url = allowedUrl(new URL(location, url).href, hostnameAllowed)
   }
@@ -244,7 +250,8 @@ async function fetchAllowedRedirects(fetchImpl, initialValue, hostnameAllowed, o
 function allowedUrl(value, hostnameAllowed) {
   let url
   try { url = new URL(value) } catch { throw new Error('Xiaohongshu URL was invalid.') }
-  if (!['http:', 'https:'].includes(url.protocol) || !hostnameAllowed(url.hostname)) {
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
+    || (url.port && !['80', '443'].includes(url.port)) || !hostnameAllowed(url.hostname)) {
     throw new Error('Xiaohongshu URL host was not allowed.')
   }
   return url
@@ -270,6 +277,7 @@ async function readBoundedBody(response, maximum) {
       chunks.push(Buffer.from(value))
     }
   } finally {
+    await reader.cancel().catch(() => {})
     reader.releaseLock()
   }
   return Buffer.concat(chunks, total)
@@ -364,4 +372,32 @@ function clean(value) {
 function boundedNumber(value, minimum, maximum, fallback) {
   const number = Number(value)
   return Number.isFinite(number) ? Math.max(minimum, Math.min(maximum, number)) : fallback
+}
+
+// Only bounded, non-sensitive categories cross the adapter boundary. Never echo upstream messages.
+export function xhsFailure(error) {
+  const code = String(error?.cause?.code || error?.code || '')
+  const message = String(error?.message || '')
+  if (Object.hasOwn(XHS_FAILURES, code)) return { code, message: XHS_FAILURES[code] }
+  let category = 'XHS_NETWORK'
+  if (/ENOTFOUND|EAI_AGAIN/.test(code)) category = 'XHS_DNS'
+  else if (/CERT|TLS|SSL/.test(code)) category = 'XHS_TLS'
+  else if (/timeout|abort|expired|cancelled/i.test(message + code + error?.name)) category = 'XHS_TIMEOUT'
+  else if ([401, 403, 429].includes(error?.status)) category = 'XHS_ACCESS_DENIED'
+  else if (error?.status) category = 'XHS_HTTP'
+  else if (/redirect|host was not allowed|URL was invalid/i.test(message)) category = 'XHS_REDIRECT_BLOCKED'
+  else if (/size limit|budget/i.test(message)) category = 'XHS_RESPONSE_LIMIT'
+  else if (/INITIAL_STATE|initial state|note data|noteId/i.test(message)) category = 'XHS_PARSE_CHANGED'
+  return { code: category, message: XHS_FAILURES[category] }
+}
+const XHS_FAILURES = {
+  XHS_NETWORK: '暂时无法连接小红书；原收藏已保留，可稍后重新读取。',
+  XHS_DNS: '小红书来源域名暂时无法解析，可稍后重新读取。',
+  XHS_TLS: '小红书来源安全连接失败，可稍后重新读取。',
+  XHS_TIMEOUT: '读取小红书来源超时；原收藏未改变。',
+  XHS_ACCESS_DENIED: '小红书暂未允许读取此来源；可打开原链接查看。',
+  XHS_HTTP: '小红书来源暂时不可用，可稍后重新读取。',
+  XHS_REDIRECT_BLOCKED: '来源跳转未通过安全检查；未继续读取。',
+  XHS_RESPONSE_LIMIT: '来源响应超过读取限制；原收藏已保留。',
+  XHS_PARSE_CHANGED: '暂时无法提取小红书笔记内容；原链接已保留。',
 }

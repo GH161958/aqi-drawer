@@ -1,3 +1,4 @@
+import { extractXhsUrl, extractXhsNoteId, xhsFailure } from './adapters/xhs.js'
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import path from 'node:path'
@@ -818,6 +819,25 @@ export class PocketStore {
     return this.#mutate((state) => {
       const now = new Date().toISOString()
       const normalized = normalizeItem(input, now)
+      if (normalized.sourceData?.provider === 'xiaohongshu' && normalized.sourceData.parseStatus === 'failed') {
+        const urls = new Set([normalized.sourceUrl, normalized.sourceData.originalUrl, normalized.sourceData.canonicalUrl].filter(url => typeof url === 'string' && url && extractXhsUrl(url) === url))
+        const matches = state.items.filter(item => !item.deletedAt && item.sourceData?.provider === 'xiaohongshu'
+          && ([item.sourceUrl, item.sourceData.originalUrl, item.sourceData.canonicalUrl].some(url => urls.has(url))
+            || (normalized.sourceIdentity?.provider === 'xiaohongshu' && item.sourceIdentity?.provider === 'xiaohongshu' && normalized.sourceIdentity.externalId && item.sourceIdentity.externalId === normalized.sourceIdentity.externalId)))
+        if (matches.length > 1) throw Object.assign(httpError(409, '小红书来源身份冲突，请人工检查。'), { code: 'XHS_IDENTITY_CONFLICT' })
+        if (matches.length) {
+          const existing = matches[0]
+          const preserve = ['complete', 'partial'].includes(existing.sourceData.parseStatus)
+          const incoming = preserve ? { ...normalized, text: existing.text, sourceData: existing.sourceData, sourceIdentity: existing.sourceIdentity }
+            : { ...normalized, sourceData: { ...normalized.sourceData, originalUrl: existing.sourceData.originalUrl || normalized.sourceData.originalUrl } }
+          const merged = mergeDuplicate(existing, incoming, now)
+          state.items[state.items.indexOf(existing)] = merged
+          return publicItem(merged)
+        }
+        appendActivity(normalized, 'received', inferReceivedActor(normalized), { count: normalized.receivedCount }, normalized.lastReceivedAt)
+        state.items.push(normalized)
+        return publicItem(normalized)
+      }
       const hasExplicitId = Boolean(clean(input?.id))
       const identityIndex = findSourceIdentityDuplicate(state.items, normalized)
       const duplicateIndex = identityIndex >= 0 ? identityIndex : hasExplicitId ? -1 : findRecentDuplicate(state.items, normalized, now)
@@ -835,17 +855,31 @@ export class PocketStore {
     })
   }
 
-  async upsertXhs(input, { loadImage } = {}) {
+  async upsertXhs(input, { loadImage, targetItemId, expectedSourceUrl, authorization } = {}) {
     if (typeof loadImage !== 'function') throw httpError(500, 'XHS image loader is not configured.')
     const xhs = normalizeSourceData(input?.xhs)
     if (xhs.provider !== 'xiaohongshu' || !clean(xhs.noteId)) throw httpError(422, 'XHS noteId is required.')
+    const stagedFiles = []
+    const stagedIds = new Map()
     return this.#mutate(async (state) => {
       const now = new Date().toISOString()
       const sourceIdentity = { provider: 'xiaohongshu', externalId: clean(xhs.noteId) }
-      const existingIndex = state.items.findIndex((item) => !item.deletedAt
-        && item.sourceIdentity?.provider === sourceIdentity.provider
-        && item.sourceIdentity?.externalId === sourceIdentity.externalId)
-      const existing = existingIndex >= 0 ? state.items[existingIndex] : null
+      const urls = new Set([input.sourceUrl, xhs.originalUrl, xhs.canonicalUrl].filter(url => typeof url === 'string' && url && extractXhsUrl(url) === url))
+      const candidates = state.items.filter(item => !item.deletedAt && item.sourceData?.provider === 'xiaohongshu'
+        && ((item.sourceIdentity?.provider === 'xiaohongshu' && item.sourceIdentity.externalId === sourceIdentity.externalId)
+          || item.sourceData?.noteId === sourceIdentity.externalId
+          || [item.sourceUrl, item.sourceData?.originalUrl, item.sourceData?.canonicalUrl].some(url => urls.has(url))))
+      const existing = targetItemId ? state.items.find(item => item.id === targetItemId && !item.deletedAt) : candidates[0]
+      const conflict = () => Object.assign(httpError(409, '小红书来源身份冲突，请人工检查；没有合并收藏。'), { code: 'XHS_IDENTITY_CONFLICT' })
+      if (targetItemId && (!existing || existing.sourceData?.provider !== 'xiaohongshu'
+        || (existing.sourceData.originalUrl || existing.sourceUrl) !== expectedSourceUrl)) throw conflict()
+      if (candidates.length > 1 || (existing && candidates.some(item => item.id !== existing.id))) throw conflict()
+      const priorNoteId = (existing?.sourceIdentity?.provider === 'xiaohongshu' && existing.sourceIdentity.externalId) || existing?.sourceData?.noteId
+      if (priorNoteId && priorNoteId !== sourceIdentity.externalId) throw conflict()
+      const resolvedId = extractXhsNoteId(xhs.canonicalUrl)
+      if (resolvedId && resolvedId !== sourceIdentity.externalId) throw conflict()
+      const existingIndex = existing ? state.items.findIndex(item => item.id === existing.id) : -1
+      if (targetItemId && existing.sourceData.parseStatus === 'complete') return publicItem(existing)
       const previousXhsImages = (existing?.attachments || []).filter((attachment) => attachment.sourceImage?.provider === 'xiaohongshu')
       const nonXhsAttachments = mergeAttachments(
         (existing?.attachments || []).filter((attachment) => attachment.sourceImage?.provider !== 'xiaohongshu'),
@@ -880,12 +914,15 @@ export class PocketStore {
           continue
         }
         try {
+          authorization?.check()
           const loaded = await loadImage(remoteUrl)
+          authorization?.check()
           const mimeType = clean(loaded?.mimeType)
           const extension = extensionFromMime(mimeType)
           const storageName = randomUUID()
           const temporary = path.join(this.mediaDir, `${storageName}.tmp`)
           const target = path.join(this.mediaDir, storageName)
+          stagedFiles.push(temporary, target)
           const buffer = Buffer.isBuffer(loaded?.buffer) ? loaded.buffer : Buffer.from(loaded?.buffer || [])
           if (!buffer.length) throw new Error('XHS image was empty.')
           if (downloadedBytes + buffer.length > MAX_XHS_DOWNLOAD_BYTES) throw new Error('XHS image download budget was exceeded.')
@@ -907,6 +944,7 @@ export class PocketStore {
               height: loaded.height ?? image.height ?? null,
             },
           })
+          stagedIds.set(target, attachment.id)
           imageAttachments.push(attachment)
           imageRecords.push(sourceImageRecord(attachment, 'ready'))
           downloadedImages += 1
@@ -917,11 +955,16 @@ export class PocketStore {
             status: 'failed',
             width: finitePositive(image.width),
             height: finitePositive(image.height),
-            error: clean(error?.message).slice(0, 240) || 'XHS image download failed.',
+            error: xhsFailure(error).message,
+            errorCode: xhsFailure(error).code,
           })
         }
       }
 
+      // Never discard previously stored original images just because an upstream refresh is partial.
+      for (const previous of previousXhsImages) {
+        if (!imageAttachments.some(image => image.id === previous.id || image.sourceImage?.index === previous.sourceImage?.index)) imageAttachments.push(previous)
+      }
       const firstExistingXhsIndex =
         existing?.attachments.findIndex(
           (attachment) =>
@@ -955,6 +998,7 @@ export class PocketStore {
           : '')
       const sourceData = normalizeSourceData({
         ...xhs,
+        originalUrl: existing?.sourceData?.originalUrl || xhs.originalUrl || input.sourceUrl,
         ...(manualTitle ? { titleOrigin: 'capture' } : {}),
         parseStatus: failedImages ? 'partial' : xhs.parseStatus === 'failed' ? 'failed' : 'complete',
         images: imageRecords,
@@ -962,7 +1006,7 @@ export class PocketStore {
         downloadedImages,
         downloadedBytes,
         failedImages,
-        sharedText: clean(input.sharedText || input.text),
+        sharedText: clean(existing?.sourceData?.sharedText || (targetItemId && existing?.text) || input.sharedText || input.text),
         refreshedAt: now,
       })
       const normalized = normalizeItem({
@@ -994,16 +1038,24 @@ export class PocketStore {
         sourceIdentity,
         sourceData,
         fingerprint: normalized.fingerprint,
-        receivedCount: Math.max(1, Number(existing.receivedCount) || 1) + 1,
-        lastReceivedAt: now,
-        seenByCAt: null,
+        receivedCount: Math.max(1, Number(existing.receivedCount) || 1) + (targetItemId ? 0 : 1),
+        lastReceivedAt: targetItemId ? existing.lastReceivedAt : now,
+        seenByCAt: targetItemId ? existing.seenByCAt : null,
         updatedAt: now,
         syncState: 'synced',
       }
-      appendActivity(refreshed, 'received', inferReceivedActor(normalized), { count: refreshed.receivedCount }, now)
+      if (!targetItemId) appendActivity(refreshed, 'received', inferReceivedActor(normalized), { count: refreshed.receivedCount }, now)
       appendActivity(refreshed, 'source_refreshed', 'system', {}, now)
+      delete refreshed.contentSnapshot
       state.items[existingIndex] = refreshed
       return publicItem(refreshed)
+    }, authorization).then(async item => {
+      const retained = new Set(item.attachments.map(attachment => attachment.id))
+      await Promise.all(stagedFiles.filter(file => !retained.has(stagedIds.get(file))).map(file => unlink(file).catch(() => {})))
+      return item
+    }, async error => {
+      if (!authorization?.accepted) await Promise.all(stagedFiles.map(file => unlink(file).catch(() => {})))
+      throw error
     })
   }
 

@@ -1,5 +1,6 @@
 import {
   classifyPresentation,
+  isXhsPending,
   presentationKindLabels,
 } from '../../presentation/classifyPresentation'
 
@@ -605,7 +606,7 @@ export function ItemPreview({
 
             <article
               className={
-                styles.articleClipping
+                `${styles.articleClipping} ${isXhsPending(item) ? styles.xhsLinkClipping : ''}`
               }
             >
               <header
@@ -618,7 +619,7 @@ export function ItemPreview({
                     styles.articleSource
                   }
                 >
-                  {item.sourceApp
+                  {isXhsPending(item) ? '小红书 · 待补全' : item.sourceApp
                     || sourceDomain(
                       item.sourceUrl,
                     )
@@ -644,6 +645,8 @@ export function ItemPreview({
                 {item.title
                   || '收进来的一页网页'}
               </h2>
+
+              {isXhsPending(item) && <p className={styles.xhsPendingNote}>原链接已保留，来源内容仍待补全。</p>}
 
               {item.text.trim() && (
                 <p
@@ -740,7 +743,7 @@ export function ItemPreview({
                 }
               >
                 <span>
-                  {item.sourceApp
+                  {isXhsPending(item) ? '小红书 · 待补全' : item.sourceApp
                     || '小红书'}
                 </span>
 
