@@ -4,7 +4,7 @@ import { extractXhsUrl, extractXhsNoteId, xhsFailure } from './adapters/xhs.js'
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { renameSync } from 'node:fs'
+import { renameSync, createReadStream } from 'node:fs'
 import { canonicalizeUrl, inferSourceApp, isGenericSourceApp, normalizeIncomingShare } from './share-normalizer.js'
 
 const EMPTY_STORE = {
@@ -916,7 +916,8 @@ export class PocketStore {
           && attachment.sourceImage?.sourceKey === canonicalImageSource(image.url))
         if (previous && await completeAttachment(this.mediaDir, previous)) skip.add(position)
       }
-      spool = await stageXhsImages({ images, skip, loadImage, mediaDir: this.mediaDir, authorization, imageTimeoutMs, phaseTimeoutMs })
+      const retainedBytes = xhsRetainedBytes(snapshot.attachments)
+      spool = await stageXhsImages({ images, skip, retainedBytes, loadImage, mediaDir: this.mediaDir, authorization, imageTimeoutMs, phaseTimeoutMs })
       loadImage = spool.load
     }
     return this.#mutate(async (state) => {
@@ -926,6 +927,8 @@ export class PocketStore {
       const existingIndex = existing ? state.items.findIndex(item => item.id === existing.id) : -1
       if (targetItemId && existing.sourceData.parseStatus === 'complete') return publicItem(existing)
       const previousXhsImages = (existing?.attachments || []).filter((attachment) => attachment.sourceImage?.provider === 'xiaohongshu')
+      const retainedBytes = xhsRetainedBytes(previousXhsImages)
+      const availableBytes = Math.max(0, MAX_XHS_DOWNLOAD_BYTES - retainedBytes)
       const nonXhsAttachments = mergeAttachments(
         (existing?.attachments || []).filter((attachment) => attachment.sourceImage?.provider !== 'xiaohongshu'),
         Array.isArray(input.attachments) ? input.attachments.map(normalizeAttachment) : [],
@@ -948,7 +951,7 @@ export class PocketStore {
           imageRecords.push(sourceImageRecord(previous, 'ready'))
           continue
         }
-        if (downloadedBytes >= MAX_XHS_DOWNLOAD_BYTES) {
+        if (downloadedBytes >= availableBytes) {
           imageRecords.push({
             index: imageIndex,
             status: 'failed',
@@ -970,7 +973,7 @@ export class PocketStore {
           stagedFiles.push(temporary, target)
           const buffer = Buffer.isBuffer(loaded?.buffer) ? loaded.buffer : Buffer.from(loaded?.buffer || [])
           if (!buffer.length) throw new Error('XHS image was empty.')
-          if (downloadedBytes + buffer.length > MAX_XHS_DOWNLOAD_BYTES) throw new Error('XHS image download budget was exceeded.')
+          if (downloadedBytes + buffer.length > availableBytes) throw new Error('XHS per-note image budget was exceeded.')
           await writeFile(temporary, buffer)
           await rename(temporary, target)
           const attachment = normalizeAttachment({
@@ -1048,7 +1051,7 @@ export class PocketStore {
         originalUrl: existing?.sourceData?.originalUrl || (targetItemId && expectedSourceUrl) || xhs.originalUrl || input.sourceUrl,
         ...(recoveryUrl ? { canonicalUrl: recoveryUrl } : {}),
         ...(manualTitle ? { titleOrigin: 'capture' } : {}),
-        parseStatus: failedImages ? 'partial' : xhs.parseStatus === 'failed' ? 'failed' : 'complete',
+        parseStatus: (failedImages || retainedBytes > MAX_XHS_DOWNLOAD_BYTES) ? 'partial' : xhs.parseStatus === 'failed' ? 'failed' : 'complete',
         images: imageRecords,
         imageCount: remoteImages.length,
         downloadedImages,
@@ -2179,11 +2182,24 @@ function mergeAttachments(existing, incoming) {
   return merged
 }
 
+// Reserve all retained originals, including ones absent from the latest source list.
+// Do not delete old attachments or spend speculative replacement credits to fit new ones.
+function xhsRetainedBytes(attachments) {
+  return attachments.filter(attachment => attachment.sourceImage?.provider === 'xiaohongshu')
+    .reduce((bytes, attachment) => bytes + Math.max(0, Number(attachment.size) || 0), 0)
+}
+
 async function completeAttachment(mediaDir, attachment) {
   if (!clean(attachment?.storageName) || Number(attachment?.size) <= 0) return false
   try {
-    const found = await stat(path.join(mediaDir, path.basename(attachment.storageName)))
-    return found.isFile() && found.size === Number(attachment.size)
+    const file = path.join(mediaDir, path.basename(attachment.storageName))
+    const found = await stat(file)
+    if (!found.isFile() || found.size !== Number(attachment.size)) return false
+    if (!clean(attachment.sha256)) return true // Legacy originals without a recorded digest.
+    const hash = createHash('sha256')
+    let bytes = 0
+    for await (const chunk of createReadStream(file)) { hash.update(chunk); bytes += chunk.length }
+    return bytes === Number(attachment.size) && hash.digest('hex') === clean(attachment.sha256).toLowerCase()
   } catch {
     return false
   }

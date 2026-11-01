@@ -25,7 +25,7 @@ function acquire(signal) {
 }
 
 // Only server-held confirmed operations use this spool. No network runs in Store's queue.
-export async function stageXhsImages({ images, skip, loadImage, mediaDir, authorization, imageTimeoutMs = 6_000, phaseTimeoutMs = 24_000 }) {
+export async function stageXhsImages({ images, skip, retainedBytes = 0, loadImage, mediaDir, authorization, imageTimeoutMs = 6_000, phaseTimeoutMs = 24_000 }) {
   const directory = await mkdtemp(path.join(mediaDir, '.xhs-stage-'))
   const results = new Map()
   const controller = new AbortController()
@@ -34,6 +34,7 @@ export async function stageXhsImages({ images, skip, loadImage, mediaDir, author
   const phaseBudget = remaining > 1000 ? Math.min(phaseTimeoutMs, remaining - 1000) : phaseTimeoutMs
   const phaseTimer = setTimeout(() => controller.abort(new DOMException('Image phase expired', 'TimeoutError')), phaseBudget)
   const signal = AbortSignal.any([controller.signal, ...(authorization?.signal ? [authorization.signal] : [])])
+  const availableBytes = Math.max(0, 80 * 1024 * 1024 - retainedBytes)
   let cursor = 0; let bytes = 0; let stop = false
   const cleanup = () => rm(directory, { recursive: true, force: true })
   try {
@@ -42,6 +43,7 @@ export async function stageXhsImages({ images, skip, loadImage, mediaDir, author
         authorization?.check()
         const position = cursor++; const image = images[position]
         if (skip.has(position)) continue
+        if (bytes >= availableBytes) { results.set(image.url, { error: new Error('XHS per-note image budget exhausted') }); continue }
         const url = image.url
         let timer; let onAbort; let release; let pending; let settled = false
         const local = new AbortController()
@@ -65,7 +67,7 @@ export async function stageXhsImages({ images, skip, loadImage, mediaDir, author
           if (requestSignal.aborted) throw requestSignal.reason
           const buffer = loaded?.buffer
           if (!Buffer.isBuffer(buffer) || !buffer.length || buffer.length > 15 * 1024 * 1024 || !verifiedImageType(buffer, loaded.mimeType)) throw new Error('Invalid image bytes or MIME')
-          if (bytes + buffer.length > 80 * 1024 * 1024) throw new Error('Image aggregate budget exceeded')
+          if (bytes + buffer.length > availableBytes) throw new Error('Image aggregate budget exceeded')
           bytes += buffer.length // Reserve synchronously before the filesystem await.
           const file = path.join(directory, String(position))
           await writeFile(file, buffer)

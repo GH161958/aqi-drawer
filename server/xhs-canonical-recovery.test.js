@@ -413,3 +413,104 @@ test('identity collision introduced during CDN fetch blocks publication and clea
   assert.deepEqual(await f.store.get(f.item.id), f.item)
   assert.deepEqual(await readdir(f.store.mediaDir), [])
 })
+
+function syntheticImages(total) {
+  return Array.from({ length: total }, (_, i) => ({ index: i + 1, url: `https://ci.xhscdn.com/durable-${i + 1}.png` }))
+}
+async function corruptFirstPhoto(f, item) {
+  const state = JSON.parse(await readFile(f.store.filePath, 'utf8'))
+  const stored = state.items.find(entry => entry.id === item.id).attachments.find(attachment => attachment.id === item.attachments[0].id)
+  const file = path.join(f.store.mediaDir, stored.storageName)
+  const bytes = await readFile(file)
+  bytes[bytes.length - 1] ^= 1 // Change bytes without changing the file's length.
+  const { writeFile } = await import('node:fs/promises')
+  await writeFile(file, bytes)
+  assert.equal(bytes.length, stored.size)
+  assert.notEqual(createHash('sha256').update(bytes).digest('hex'), stored.sha256)
+}
+
+test('same-size corruption is fetched again while an intact recorded SHA-256 image is reused', async t => {
+  let initial = true
+  const f = await setup(t, {
+    parse: async () => ({ ...parsed, images: syntheticImages(3) }),
+    loadImage: async source => {
+      if (initial && source.includes('durable-3')) throw new Error('synthetic first-pass failure')
+      return { buffer: image, mimeType: 'image/png' }
+    },
+  })
+  const preview = await f.prepare()
+  const { item: first } = await f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })
+  assert.equal(first.attachments.length, 2)
+  await corruptFirstPhoto(f, first)
+  initial = false; const before = f.counts.images
+  const next = await f.prepare()
+  const { item: restored } = await f.service.confirm({ id: f.item.id, owner, ticket: next.ticket })
+  assert.equal(f.counts.images - before, 2) // Corrupt first + missing third; intact second was reused.
+  assert.equal(restored.sourceData.parseStatus, 'complete')
+  assert.notEqual(restored.attachments[0].id, first.attachments[0].id)
+  assert.equal(restored.attachments[1].id, first.attachments[1].id)
+  assert.deepEqual((await f.store.readAttachment(restored.attachments[0].id)).data, image)
+  assert.equal(restored.sourceData.images.filter(record => record.status === 'ready').length, 3)
+})
+
+test('same-size corrupt original with failed re-fetch is retained but never reported ready', async t => {
+  let fail = false
+  const f = await setup(t, {
+    parse: async () => ({ ...parsed, images: syntheticImages(2) }),
+    loadImage: async source => {
+      if (fail || source.includes('durable-2')) throw new Error('synthetic unavailable image')
+      return { buffer: image, mimeType: 'image/png' }
+    },
+  })
+  const preview = await f.prepare()
+  const { item: first } = await f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })
+  await corruptFirstPhoto(f, first); fail = true
+  const restored = await createXhsRecovery({ store: f.store, adapter: f.adapter })(first.id)
+  assert.equal(restored.sourceData.parseStatus, 'partial')
+  assert.equal(restored.sourceData.images.filter(record => record.status === 'ready').length, 0)
+  assert.equal(restored.sourceData.failedImages, 2)
+  assert.equal(restored.attachments[0].id, first.attachments[0].id)
+})
+
+test('per-note 80 MiB counts retained 75 MiB across passes and blocks new 10 MiB without deleting originals', async t => {
+  let initial = true; let newSize = 10; let omitOldFromSource = false
+  const loaded = async source => {
+    const last = source.includes('durable-6')
+    if (last && initial) throw new Error('synthetic first-pass failure')
+    const buffer = Buffer.alloc((last ? newSize : 15) * 1024 * 1024); image.copy(buffer)
+    return { buffer, mimeType: 'image/png' }
+  }
+  const f = await setup(t, {
+    parse: async () => ({ ...parsed, images: omitOldFromSource ? syntheticImages(6).slice(5) : syntheticImages(6) }),
+    loadImage: loaded,
+  })
+  const preview = await f.prepare()
+  const { item: first } = await f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })
+  assert.equal(first.attachments.reduce((sum, attachment) => sum + attachment.size, 0), 75 * 1024 * 1024)
+  assert.equal(first.sourceData.parseStatus, 'partial')
+  const ids = first.attachments.map(attachment => attachment.id)
+  initial = false
+  const retry = createXhsRecovery({ store: f.store, adapter: f.adapter })
+  for (const omit of [false, true]) {
+    omitOldFromSource = omit
+    const restored = await retry(first.id)
+    assert.equal(restored.id, first.id); assert.equal(restored.sourceData.parseStatus, 'partial')
+    assert.equal(restored.sourceData.failedImages, 1); assert.equal(restored.sourceData.downloadedBytes, 0)
+    assert.deepEqual(restored.attachments.map(attachment => attachment.id), ids)
+    assert.equal(restored.attachments.reduce((sum, attachment) => sum + attachment.size, 0), 75 * 1024 * 1024)
+  }
+  // Independently exercise final Store accounting, without the downloader spool.
+  const rejected = await f.store.upsertXhs({ sourceUrl: short, xhs: { ...parsed, images: syntheticImages(6) } }, {
+    targetItemId: first.id, expectedSourceUrl: short, recoveryUrl: canonicalXhsUrl(url).safeUrl, loadImage: loaded,
+  })
+  assert.equal(rejected.sourceData.parseStatus, 'partial'); assert.equal(rejected.attachments.length, 5)
+  omitOldFromSource = false; newSize = 5
+  const complete = await retry(first.id)
+  assert.equal(complete.sourceData.parseStatus, 'complete'); assert.equal(complete.attachments.length, 6)
+  assert.deepEqual(complete.attachments.slice(0, 5).map(attachment => attachment.id), ids)
+  assert.equal(complete.attachments.reduce((sum, attachment) => sum + attachment.size, 0), 80 * 1024 * 1024)
+  for (const attachment of complete.attachments) {
+    const { data } = await f.store.readAttachment(attachment.id, 15 * 1024 * 1024)
+    assert.equal(createHash('sha256').update(data).digest('hex'), attachment.sha256)
+  }
+})

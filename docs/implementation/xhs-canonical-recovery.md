@@ -82,3 +82,23 @@ Inspect 中仅 XHS failed/partial 物件显示「用正式链接补全这张纸�
 最终本地 `npm run check`：262 PASS / 0 FAIL / 1 SKIP，退出 0；`npm run frontend:check`（含 build）、`--base=/drawer-next/` UI build、375px 点击工具、git diff --check 与脚本 node --check 均退出 0。本机 SKIP 仍是缺 Poppler 的原件 PDF E2E，必须由新 SHA 的 Docker 两端口强制 E2E 补验。合成截图与 receipt 留在仓库外；临时 Store/浏览器/回环服务已清理。
 
 本次仍不证明 Tokyo 的真实 18 图 CDN 全量下载能力；没有对真实 18 图执行生产写入。保持 #42 与 #40 Draft 独立，不 merge/deploy，不碰真实两张收藏。等待 EE 与阿栖验收。
+
+## #42 second-round：复用完整性与单物件累计上限
+
+对应评论 `issuecomment-6559563265`，在 `1458ad4a` 基础上作最小持久化修复：
+
+1. `completeAttachment()` 在存在 recorded SHA-256 时流式读取原件并计算摘要，同时检查实际字节数；只有大小与 SHA-256 均一致才允许 staging skip / Store ready 复用。不把所有图片读进内存。没有历史摘要的 legacy 附件保留原大小检查兼容边界，不宣称可以证明其历史字节真实性。
+2. staging 与最终 Store 两处预算均先扣除该物件**所有保留的 XHS 附件**，包括没有出现在本轮解析列表中的旧图，再决定是否接纳新增原件。80 MiB 现在是单物件跨轮累计上限，不再是每轮新图片额度；30 图和单图 15 MiB 校验未变。
+3. 保守预留旧原件的全部已记录大小，不为计划中的替换预支空间，不删除旧图来腾配额。达到配额时，损坏图片也可能无法补取，会如实标失败/partial。历史已经超过额度的原物件不会被自动删图，且不再假报 complete；本轮没有迁移或修改任何真实收藏。
+
+新增三个实际合成回归：
+
+- 首轮 2 ready / 1 failed，将第一张原件尾字节翻转但长度完全不变；下一轮恰好重新下载损坏第一张与缺失第三张，完整第二张保留原 attachment ID。读回重取原件字节及 SHA-256 一致。
+- 同长度损坏后上游重取失败，旧原件引用保留，但 ready 为 0、failed 为 2、partial，不会通过大小相同而误报 ready。
+- 首轮真实保存 5×15 MiB = 75 MiB；下一轮 10 MiB 新图被拒绝，5 个旧 attachment ID 不变、0 新增字节、partial。即使最新来源列表只出现新图，仍计入全部旧图。另独立绕过 spool 直接验证 Store 最终预算；随后新图改成 5 MiB，最终恰好 80 MiB、complete，全部原件逐一读回核对 SHA-256。
+
+本轮本地命令及退出码：`node --test server/xhs-canonical-recovery.test.js server/xhs-recovery.test.js` = 0（51 PASS）；`npm run check` = 0（265 PASS / 0 FAIL / 1 SKIP，smoke/XHS/Vault 通过）；`npm run frontend:check` = 0（lint/TS/build）；`git diff --check` = 0。本轮没有 UI 变化，未声称新做真实 Host/Tokyo 验收；之前 375px 合成点击证据仍按其当时版本记录。
+
+关于硬重启残留 `.xhs-stage-*` 的建议：已评估，但本轮不新增按路径前缀无差别启动删除。当前目录名称不能可靠证明“来自已死亡进程、没有其他实例活跃任务”；直接清理可能删除其他活动实例的 spool。正常成功/失败/超时的 finally 清理已有覆盖；SIGKILL/断电残留仍是明确未解决的磁盘卫生事项，后续若处理，应增加可验证的作业归属/活跃状态及独立测试，只触及本服务自有 stage，不触及已提交 media。该卫生事项与本轮已修复的两项持久化缺口分开记录，不宣称已完成硬重启清理。
+
+仍保持 Draft #42，#40 独立 Draft；不 merge/deploy、不触碰 Tokyo 或用户真实原件。真实 Tokyo 18 图完整下载仍需独立授权和验收。
