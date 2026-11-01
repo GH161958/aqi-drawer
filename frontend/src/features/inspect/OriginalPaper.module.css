@@ -9,6 +9,11 @@
       var(--font-reading)
     );
 
+  font-size: var(--inspect-type-body-size);
+  font-weight: var(--paper-type-body-weight);
+  line-height: var(--inspect-type-body-line-height);
+  letter-spacing: var(--inspect-type-body-spacing);
+
   padding:
     clamp(
       25px,
@@ -147,17 +152,13 @@
     );
 
   font-size:
-    clamp(
-      11.5px,
-      3vw,
-      11.75px
-    );
+    var(--inspect-type-body-size);
 
   font-weight: 400;
 
-  line-height: 1.75;
+  line-height: var(--inspect-type-body-line-height);
 
-  letter-spacing: .005em;
+  letter-spacing: var(--inspect-type-body-spacing);
 
   line-break: strict;
   overflow-wrap: break-word;
@@ -179,10 +180,10 @@
   margin: 0 0 12px;
   color: var(--drawer-quiet-ink);
   font-family: var(--font-meta);
-  font-size: 10px;
+  font-size: var(--inspect-type-label-size);
   font-weight: 400;
-  line-height: 1.4;
-  letter-spacing: .055em;
+  line-height: var(--inspect-type-action-line-height);
+  letter-spacing: var(--inspect-type-label-spacing);
 }
 
 .body p {
@@ -277,15 +278,11 @@
     );
 
   font-size:
-    clamp(
-      9.5px,
-      2.5vw,
-      10px
-    );
+    var(--inspect-type-action-size);
 
   font-weight: 400;
 
-  line-height: 1.4;
+  line-height: var(--inspect-type-action-line-height);
 
   letter-spacing: 0;
 
@@ -329,17 +326,13 @@
     );
 
   font-size:
-    clamp(
-      11.5px,
-      3vw,
-      11.75px
-    );
+    var(--inspect-type-body-size);
 
   font-weight: 400;
 
-  line-height: 1.75;
+  line-height: var(--inspect-type-body-line-height);
 
-  letter-spacing: .005em;
+  letter-spacing: var(--inspect-type-body-spacing);
 
   line-break: strict;
   overflow-wrap: break-word;
@@ -357,15 +350,11 @@
     );
 
   font-size:
-    clamp(
-      9.5px,
-      2.5vw,
-      10px
-    );
+    var(--inspect-type-action-size);
 
   font-weight: 400;
 
-  line-height: 1.4;
+  line-height: var(--inspect-type-action-line-height);
 }
 
 @media (max-width: 520px) {

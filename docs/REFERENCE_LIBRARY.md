@@ -108,6 +108,17 @@ Last reviewed: 2026-08-16
 - **APPLIES TO**：Typography roles
 - **NOTES**：Serif carries emotion. Mono/typewriter carries order. 当前只做 design candidates
 
+## Typography Inheritance Rule
+
+**New UI must inherit the existing typography of its surrounding context.**
+
+新增 UI 前先识别所在区域的正文、操作、表单、helper/error 与 metadata 层级，再复用既有 Typography Tokens / Classes。不能因为增加组件，就给普通正文、按钮、链接、label 或输入框另定义一套字号、字重和行高；placeholder 同样继承表单规格。字体必须尊重该区域的阅读/UI 字体及 Type Cabinet 选择。
+
+- `frontend/src/styles/tokens.css` 是现有层级的单一值来源。通用小纸张使用 `--paper-type-*`；Inspect 原纸正文与操作使用 `--inspect-type-*`（从既有获准规格提取，不是新增层级）。Inspect 根纸张提供正文继承基线，后续无样式段落也应自然融入。
+- 不把标题、文档专用标题、微型 metadata、注释纸和独立字体衣柜强行统一为正文。输入框复用既有 `--paper-type-input-size`；16px 输入文字是既有移动表单层级，不是把 helper/status 放大为 16px。
+- 需要新增层级时，PR 必须说明现有角色为何不适用，证明没有重复 token，并展示与相邻文字的对照。禁止临时 `!important` 和复制字号规则来掩盖继承问题。
+- 验收需在桌面及 375px 实际浏览器检查展开前、输入、预览、确认中、成功、partial、错误状态；核对 family / size / weight / line-height / spacing，包含 placeholder、长文本与中英文混排。提供前后截图，保留原有层级，不以只读 CSS 代替视觉比较。
+
 ## Maintenance
 
 新增参考时使用固定字段：`REFERENCE`、`SOURCE / LINK`、`ROLE`、`BORROW`、`DO NOT COPY`、`APPLIES TO`、`NOTES`。只记录可复用的语言与边界，不记录临时 CSS 数值。
