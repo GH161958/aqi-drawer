@@ -54,7 +54,7 @@ export function XhsCanonicalPanel({ item, disabled }: { item: PocketItemSummary;
         <p>预览：{preview.note.title}</p>
         <p className={styles.readMeta}>笔记 {preview.note.noteIdHint} · 预计 {preview.note.imageCount} 张图片；尚未下载或保存。</p>
         <div className={styles.actions}>
-          <button type="button" disabled={waiting} onClick={() => void run('confirm')}>{busy === 'confirm' ? '正在保存真实原件…' : '确认是同一篇，补全原收藏'}</button>
+          <button type="button" disabled={waiting} onClick={() => void run('confirm')}>{busy === 'confirm' ? '正在保存原件（最多约 30 秒）…' : '确认是同一篇，补全原收藏'}</button>
           <button type="button" disabled={waiting} onClick={() => void run('cancel')}>取消补全</button>
         </div>
       </>}

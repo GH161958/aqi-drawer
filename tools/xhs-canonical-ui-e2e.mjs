@@ -18,13 +18,13 @@ try {
   const noteId = 'abcdef123456789012345678'; const wrongId = '1234567890abcdef12345678'
   const token = 'synthetic-ui-token-only'
   const canonical = id => `https://www.xiaohongshu.com/explore/${id}?xsec_token=${token}&xsec_source=app_share`
-  let downloads = 0
+  let downloads = 0; let imageCount = 1; let partial = false
   const adapter = new XhsAdapter({ fetchImpl: async url => {
     if (url.hostname === 'xhslink.cn') throw new DOMException('synthetic timeout', 'TimeoutError')
-    if (url.hostname === 'ci.xhscdn.com') { downloads++; return new Response(image, { headers: { 'content-type': 'image/png' } }) }
+    if (url.hostname === 'ci.xhscdn.com') { downloads++; if (partial && /\/(16|17)\.png/.test(url.pathname)) return new Response('', { status: 503 }); return new Response(image, { headers: { 'content-type': 'image/png' } }) }
     if (url.pathname.startsWith('/explore/')) return new Response('', { status: 302, headers: { location: url.href.replace('/explore/', '/discovery/item/') } })
     const id = url.pathname.split('/').at(-1)
-    const html = `<script>window.__INITIAL_STATE__=${JSON.stringify({ noteData: { data: { noteData: { noteId: id, title: id === wrongId ? '另一篇合成笔记 · 请勿确认' : '正式来源 · 合成预览标题', desc: '合成正文已真实提取，不是热链接图片。', imageList: [{ url: `https://ci.xhscdn.com/synthetic.png?xsec_token=${token}` }] } } } })};</script>`
+    const html = `<script>window.__INITIAL_STATE__=${JSON.stringify({ noteData: { data: { noteData: { noteId: id, title: id === wrongId ? '另一篇合成笔记 · 请勿确认' : '正式来源 · 合成预览标题', desc: '合成正文已真实提取，不是热链接图片。', imageList: Array.from({ length: imageCount }, (_, i) => ({ url: `https://ci.xhscdn.com/${i}.png?xsec_token=${token}` })) } } } })};</script>`
     const result = new Response(html); Object.defineProperty(result, 'url', { value: url.href }); return result
   } })
   bridge = await startBridge({ dataDir, host: '127.0.0.1', port: 0, xhsAdapter: adapter })
@@ -74,11 +74,46 @@ try {
   await page.getByRole('alert').filter({ hasText: '另一张纸' }).waitFor()
   await page.screenshot({ path: path.join(output, '04-collision.png'), fullPage: true })
   assert.deepEqual(await bridge.store.get(other.id), other); assert.equal(downloads, 1)
+  imageCount = 18; partial = true
+  const partialId = '0123456789abcdef01234567'
+  const partialItem = await bridge.store.upsert({ title: '合成十八图待补全', text: '合成分享', sourceUrl: 'https://xhslink.cn/o/synthetic-partial', sourceData: { provider: 'xiaohongshu', parseStatus: 'failed' } })
+  await page.goto(`${base}/drawer-next/`)
+  await page.getByText('都在这里', { exact: true }).click()
+  await page.getByText('合成十八图待补全', { exact: true }).first().click()
+  await page.getByRole('button', { name: '用正式链接补全这张纸', exact: true }).click()
+  await field.fill(canonical(partialId)); await page.getByRole('button', { name: '解析并预览', exact: true }).click()
+  await page.getByRole('button', { name: '确认是同一篇，补全原收藏', exact: true }).click()
+  await page.getByText('图片：已保存 16 / 失败 2 / 共 18 张。可重新读取来源，仅补齐缺失原件。', { exact: true }).waitFor()
+  await page.getByText('图片：已保存 16 / 失败 2 / 共 18 张。可重新读取来源，仅补齐缺失原件。', { exact: true }).scrollIntoViewIfNeeded()
+  await page.screenshot({ path: path.join(output, '05-partial-18-images.png') })
+  const partialSaved = await bridge.store.get(partialItem.id)
+  assert.equal(partialSaved.attachments.length, 16); assert.equal(partialSaved.sourceData.failedImages, 2)
+  for (const attachment of partialSaved.attachments) assert.deepEqual((await bridge.store.readAttachment(attachment.id)).data, image)
+  partial = false
+  const beforeRetry = downloads
+  const retried = page.waitForResponse(r => r.url().endsWith('/retry-source'))
+  await page.getByRole('button', { name: '重新读取来源', exact: true }).click()
+  assert.equal((await retried).status(), 200)
+  const final = await bridge.store.get(partialItem.id)
+  assert.equal(final.id, partialItem.id); assert.equal(final.attachments.length, 18); assert.equal(downloads - beforeRetry, 2)
+  await page.getByRole('button', { name: '重新读取来源', exact: true }).waitFor({ state: 'detached' })
+  await page.screenshot({ path: path.join(output, '06-partial-retry-complete.png') })
   const serialized = await readFile(path.join(dataDir, 'pocket-store.json'), 'utf8')
-  assert.ok(!serialized.includes(token)); assert.ok(!serialized.includes('xsec_token'))
-  const receipt = { result: 'PASS', viewport: 375, sameItemId: true, items: 2, untouchedOtherAlias: true, receivedCountUnchanged: true, downloads, sha256: item.attachments[0].sha256, wrongNoteCancelled: true, collisionRejected: true, newCanonicalTokenPersisted: false }
+  const leakedPaths = []
+  const scan = (value, key = '') => { if (typeof value === 'string' && value.includes(token)) leakedPaths.push(key); else if (value && typeof value === 'object') for (const [name, entry] of Object.entries(value)) scan(entry, `${key}.${name}`) }
+  scan(JSON.parse(serialized))
+  assert.deepEqual(leakedPaths, []); assert.ok(!serialized.includes('xsec_token'))
+  const receipt = { result: 'PASS', viewport: 375, partialReady: 16, partialFailed: 2, partialTotal: 18, retryOnlyMissing: true, sameItemId: true, items: 3, untouchedOtherAlias: true, receivedCountUnchanged: true, downloads, sha256: item.attachments[0].sha256, wrongNoteCancelled: true, collisionRejected: true, newCanonicalTokenPersisted: false }
   await writeFile(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2))
   console.log(JSON.stringify({ ...receipt, evidenceDirectory: output }))
+} catch (error) {
+  const pages = browser?.contexts().flatMap(context => context.pages()) || []
+  for (const [index, page] of pages.entries()) {
+    await page.screenshot({ path: path.join(output, `failure-${index}.png`), fullPage: true }).catch(() => {})
+    await writeFile(path.join(output, `failure-${index}.txt`), await page.locator('body').innerText()).catch(() => {})
+  }
+  console.error('Synthetic UI failure evidence:', output)
+  throw error
 } finally {
   await browser?.close(); await bridge?.stop(); await rm(dataDir, { recursive: true, force: true })
 }

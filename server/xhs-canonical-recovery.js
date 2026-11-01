@@ -4,7 +4,7 @@ import { createMcpFileOperation } from './mcp-file-operation.js'
 import { canonicalXhsUrl, storedXhsNoteId, xhsItemVersion } from './xhs-canonical-url.js'
 
 const fail = (status, code, message, extra = {}) => Object.assign(new Error(message), { status, code, ...extra })
-export function createXhsCanonicalRecovery({ store, adapter, ttlMs = 120_000, budgetMs = 30_000, capacity = 32 }) {
+export function createXhsCanonicalRecovery({ store, adapter, ttlMs = 120_000, budgetMs = 30_000, capacity = 32, imageTimeoutMs, phaseTimeoutMs }) {
   const tickets = new Map(); const preparing = new Map(); const committing = new Map(); const operations = new Set()
   const drop = (key, entry) => { clearTimeout(entry.timer); entry.xhs = null; tickets.delete(key) }
   const live = entry => entry && performance.now() < entry.until
@@ -69,15 +69,15 @@ export function createXhsCanonicalRecovery({ store, adapter, ttlMs = 120_000, bu
     const op = operation(remaining)
     const checkIntent = () => { if (!live(entry)) op.cancel(); op.check() }
     const authorization = {
-      check: checkIntent,
+      check: checkIntent, signal: op.signal, deadline: op.deadline,
       publish(write) { checkIntent(); return op.publish(write) },
       get accepted() { return op.accepted },
     }
     const xhs = entry.xhs
     const promise = op.wait(store.upsertXhs({ sourceUrl: entry.originalUrl, xhs }, {
       targetItemId: entry.id, expectedSourceUrl: entry.originalUrl, expectedItemVersion: entry.version,
-      recoveryUrl: entry.recoveryUrl, authorization,
-      loadImage: url => op.wait(adapter.loadImage(url, { signal: op.signal, httpsOnly: true })),
+      recoveryUrl: entry.recoveryUrl, authorization, imageTimeoutMs, phaseTimeoutMs,
+      loadImage: (url, { signal } = {}) => adapter.loadImage(url, { signal: signal || op.signal, httpsOnly: true }),
     })).then(item => { entry.result = true; return { item } }).finally(() => {
       entry.xhs = null; entry.promise = null; committing.delete(entry.id); release(op)
     })

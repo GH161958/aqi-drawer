@@ -462,7 +462,9 @@ function parsePocketItem(
 
     ...(isRecord(value.sourceData) && value.sourceData.provider === 'xiaohongshu'
       && ['failed', 'partial', 'complete'].includes(String(value.sourceData.parseStatus))
-      ? { xhsParseStatus: value.sourceData.parseStatus as 'failed' | 'partial' | 'complete' } : {}),
+      ? { xhsParseStatus: value.sourceData.parseStatus as 'failed' | 'partial' | 'complete',
+          xhsImageCounts: { total: Number(value.sourceData.imageCount) || 0, failed: Number(value.sourceData.failedImages) || 0,
+            ready: Array.isArray(value.sourceData.images) ? value.sourceData.images.filter((image: unknown) => isRecord(image) && image.status === 'ready').length : 0 } } : {}),
 
     activity:
       parseActivityList(
@@ -2169,7 +2171,7 @@ async function canonicalXhsRequest(id: string, action: string, body: Record<stri
       method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body), signal: AbortSignal.timeout(35_000), cache: 'no-store',
     })
-  } catch { throw new Error('读取超时或连接失败；原收藏未改变，请重新预览。') }
+  } catch { throw new Error(action === 'confirm' ? '连接中断，尚未收到保存回执；请重新打开原收藏核对已保存／失败图片数，再重试缺失原件。' : '读取超时或连接失败；请重新预览。') }
   const payload: unknown = await response.json().catch(() => null)
   if (!response.ok) {
     const error: XhsCanonicalError = new Error(isRecord(payload) && typeof payload.error === 'string' ? payload.error : '补全暂不可用；原收藏未改变。')

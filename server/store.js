@@ -1,3 +1,4 @@
+import { stageXhsImages } from './xhs-image-stage.js'
 import { canonicalXhsUrl, storedXhsNoteId, xhsItemVersion, stripXhsTechnicalTokens, sanitizeXhsTechnicalData } from './xhs-canonical-url.js'
 import { extractXhsUrl, extractXhsNoteId, xhsFailure } from './adapters/xhs.js'
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
@@ -863,14 +864,13 @@ export class PocketStore {
     return other ? { id: other.id, title: other.title } : null
   }
 
-  async upsertXhs(input, { loadImage, targetItemId, expectedSourceUrl, expectedItemVersion, recoveryUrl, authorization } = {}) {
+  async upsertXhs(input, { loadImage, targetItemId, expectedSourceUrl, expectedItemVersion, recoveryUrl, authorization, imageTimeoutMs, phaseTimeoutMs } = {}) {
     if (typeof loadImage !== 'function') throw httpError(500, 'XHS image loader is not configured.')
     const xhs = normalizeSourceData(input?.xhs)
     if (xhs.provider !== 'xiaohongshu' || !clean(xhs.noteId)) throw httpError(422, 'XHS noteId is required.')
     const stagedFiles = []
     const stagedIds = new Map()
-    return this.#mutate(async (state) => {
-      const now = new Date().toISOString()
+    const validate = state => {
       const sourceIdentity = { provider: 'xiaohongshu', externalId: clean(xhs.noteId) }
       const urls = new Set([input.sourceUrl, xhs.originalUrl, xhs.canonicalUrl].filter(url => typeof url === 'string' && url && extractXhsUrl(url) === url))
       const candidates = state.items.filter(item => !item.deletedAt
@@ -894,11 +894,35 @@ export class PocketStore {
         if (approved.safeUrl !== recoveryUrl || approved.noteId !== sourceIdentity.externalId
           || canonicalXhsUrl(final.href).noteId !== sourceIdentity.externalId) throw conflict()
       }
-      const redactUrls = Boolean(recoveryUrl || existing?.sourceData?.recoveryUrl)
       const priorNoteId = storedXhsNoteId(existing)
       if (priorNoteId && priorNoteId !== sourceIdentity.externalId) throw conflict()
       const resolvedId = extractXhsNoteId(xhs.canonicalUrl)
       if (resolvedId && resolvedId !== sourceIdentity.externalId) throw conflict()
+      return { existing, sourceIdentity }
+    }
+    let spool
+    if (targetItemId && authorization) {
+      authorization.check()
+      await this.queue.catch(() => {})
+      authorization.check()
+      const snapshot = validate(await this.#read()).existing
+      const version = xhsItemVersion(publicItem(snapshot))
+      if (expectedItemVersion && expectedItemVersion !== version) throw Object.assign(httpError(409, '这张纸已改变，请重新预览。'), { code: 'XHS_STALE_PREVIEW' })
+      expectedItemVersion = version
+      const images = Array.isArray(xhs.images) ? xhs.images.slice(0, MAX_XHS_IMAGES) : []
+      const skip = new Set()
+      for (const [position, image] of images.entries()) {
+        const previous = snapshot.attachments.find(attachment => attachment.sourceImage?.index === (Number(image.index) || position + 1)
+          && attachment.sourceImage?.sourceKey === canonicalImageSource(image.url))
+        if (previous && await completeAttachment(this.mediaDir, previous)) skip.add(position)
+      }
+      spool = await stageXhsImages({ images, skip, loadImage, mediaDir: this.mediaDir, authorization, imageTimeoutMs, phaseTimeoutMs })
+      loadImage = spool.load
+    }
+    return this.#mutate(async (state) => {
+      const now = new Date().toISOString()
+      const { existing, sourceIdentity } = validate(state)
+      const redactUrls = Boolean(recoveryUrl || existing?.sourceData?.recoveryUrl)
       const existingIndex = existing ? state.items.findIndex(item => item.id === existing.id) : -1
       if (targetItemId && existing.sourceData.parseStatus === 'complete') return publicItem(existing)
       const previousXhsImages = (existing?.attachments || []).filter((attachment) => attachment.sourceImage?.provider === 'xiaohongshu')
@@ -1021,7 +1045,7 @@ export class PocketStore {
       const sourceData = normalizeSourceData({
         ...(redactUrls ? sanitizeXhsTechnicalData(xhs) : xhs),
         ...((recoveryUrl || existing?.sourceData?.recoveryUrl) ? { recoveryUrl: recoveryUrl || existing.sourceData.recoveryUrl } : {}),
-        originalUrl: existing?.sourceData?.originalUrl || xhs.originalUrl || input.sourceUrl,
+        originalUrl: existing?.sourceData?.originalUrl || (targetItemId && expectedSourceUrl) || xhs.originalUrl || input.sourceUrl,
         ...(recoveryUrl ? { canonicalUrl: recoveryUrl } : {}),
         ...(manualTitle ? { titleOrigin: 'capture' } : {}),
         parseStatus: failedImages ? 'partial' : xhs.parseStatus === 'failed' ? 'failed' : 'complete',
@@ -1080,7 +1104,7 @@ export class PocketStore {
     }, async error => {
       if (!authorization?.accepted) await Promise.all(stagedFiles.map(file => unlink(file).catch(() => {})))
       throw error
-    })
+    }).finally(() => spool?.cleanup())
   }
 
   async takeUnseen({ limit = 8 } = {}) {

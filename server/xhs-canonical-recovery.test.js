@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { PocketStore } from './store.js'
+import { createMcpFileOperation } from './mcp-file-operation.js'
 import { createXhsCanonicalRecovery } from './xhs-canonical-recovery.js'
 import { createXhsRecovery } from './xhs-recovery.js'
 import { canonicalXhsUrl } from './xhs-canonical-url.js'
@@ -278,4 +279,137 @@ test('intent TTL expiring during image download independently revokes final Stor
   await assert.rejects(f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket }))
   await new Promise(r => setTimeout(r, 280))
   assert.deepEqual(await f.store.get(f.item.id), f.item); assert.deepEqual(await readdir(path.join(f.dir, 'media')), [])
+})
+
+for (const total of [1, 18, 30]) test(`bounded confirmed ${total}-image restore persists exact bytes including last image`, async t => {
+  let active = 0; let maximum = 0
+  const f = await setup(t, {
+    parse: async () => ({ ...parsed, images: Array.from({ length: total }, (_, i) => ({ index: i + 1, url: `https://ci.xhscdn.com/${i}.png` })) }),
+    loadImage: async () => { maximum = Math.max(maximum, ++active); await new Promise(resolve => setTimeout(resolve, 3)); active--; return { buffer: image, mimeType: 'image/png' } },
+  })
+  const start = performance.now(); const preview = await f.prepare()
+  const { item } = await f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })
+  assert.equal(item.id, f.item.id); assert.equal(item.sourceData.parseStatus, 'complete'); assert.equal(item.attachments.length, total)
+  assert.ok(maximum <= 3); assert.equal(item.attachments.at(-1).sourceImage.index, total)
+  for (const attachment of item.attachments) assert.deepEqual((await f.store.readAttachment(attachment.id)).data, image)
+  assert.equal(f.counts.images, total)
+  t.diagnostic(`${total} images: ${Math.round(performance.now() - start)}ms, peak loaders=${maximum}`)
+})
+
+test('slow image does not hold Store queue; timeout persists partial and retry fetches only missing canonical images', async t => {
+  let release; const gate = new Promise(resolve => { release = resolve }); let started
+  const began = new Promise(resolve => { started = resolve }); let fail = true
+  const f = await setup(t, {
+    parse: async source => { assert.ok(source.startsWith('https://www.xiaohongshu.com/')); return { ...parsed, images: Array.from({ length: 18 }, (_, i) => ({ index: i + 1, url: `https://ci.xhscdn.com/${i}.png` })) } },
+    loadImage: async source => {
+      if (fail && source.endsWith('/17.png')) { started(); await gate }
+      if (fail && source.endsWith('/16.png')) throw new Error('synthetic CDN failure')
+      return { buffer: image, mimeType: 'image/png' }
+    },
+  }, { imageTimeoutMs: 200 })
+  const other = await f.store.upsert({ text: 'unrelated synthetic paper' })
+  const preview = await f.prepare(); const pending = f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })
+  await began
+  const start = performance.now(); await f.store.editNote(other.id, 'responsive during CDN wait')
+  assert.ok(performance.now() - start < 150)
+  const { item } = await pending
+  assert.equal(item.sourceData.parseStatus, 'partial'); assert.equal(item.sourceData.failedImages, 2); assert.equal(item.attachments.length, 16)
+  assert.equal(item.sourceData.imageCount, 18); assert.equal((await readdir(path.join(f.dir, 'media'))).some(name => name.startsWith('.xhs-stage-')), false)
+  fail = false; release(); const count = f.counts.images
+  const restored = await createXhsRecovery({ store: f.store, adapter: f.adapter })(item.id)
+  assert.equal(restored.id, item.id); assert.equal(restored.attachments.length, 18); assert.equal(f.counts.images - count, 2)
+  assert.deepEqual(restored.attachments.slice(0, 16).map(a => a.id), item.attachments.map(a => a.id))
+})
+
+test('edit during staged fetch rejects final publication and removes every staged file', async t => {
+  let release; let started
+  const began = new Promise(resolve => { started = resolve })
+  const f = await setup(t, { loadImage: async () => { started(); await new Promise(resolve => { release = resolve }); return { buffer: image, mimeType: 'image/png' } } })
+  const preview = await f.prepare(); const pending = f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })
+  await began; await f.store.editNote(f.item.id, 'EE edit while downloading'); release()
+  await assert.rejects(pending, error => error.code === 'XHS_STALE_PREVIEW')
+  assert.equal((await f.store.get(f.item.id)).note, 'EE edit while downloading')
+  assert.deepEqual(await readdir(path.join(f.dir, 'media')), [])
+})
+
+test('aggregate exact 80 MiB persists, excess and oversized single image fail truthfully', async t => {
+  const sizes = [15, 15, 15, 15, 15, 5, 1, 16]
+  const f = await setup(t, {
+    parse: async () => ({ ...parsed, images: sizes.map((_, i) => ({ index: i + 1, url: `https://ci.xhscdn.com/${i}.png` })) }),
+    loadImage: async source => { const i = Number(new URL(source).pathname.slice(1, -4)); const buffer = Buffer.alloc(sizes[i] * 1024 * 1024); image.copy(buffer); return { buffer, mimeType: 'image/png' } },
+  })
+  const preview = await f.prepare(); const { item } = await f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })
+  assert.equal(item.sourceData.parseStatus, 'partial'); assert.equal(item.sourceData.downloadedBytes, 80 * 1024 * 1024)
+  assert.equal(item.attachments.length, 6); assert.equal(item.sourceData.failedImages, 2)
+  for (const attachment of item.attachments) assert.equal((await f.store.readAttachment(attachment.id, 15 * 1024 * 1024)).data.length, attachment.size)
+})
+
+
+test('failed atomic publication cleans downloaded media and spool without changing canonical Store', async t => {
+  const f = await setup(t)
+  const before = await readFile(f.store.filePath)
+  const op = createMcpFileOperation({ budgetMs: 2000 })
+  try {
+    await assert.rejects(f.store.upsertXhs({ sourceUrl: short, xhs: parsed }, {
+      targetItemId: f.item.id, expectedSourceUrl: short, recoveryUrl: canonicalXhsUrl(url).safeUrl,
+      authorization: { check: op.check, signal: op.signal, accepted: false, publish() { throw new Error('synthetic rename failure') } },
+      loadImage: async () => ({ buffer: image, mimeType: 'image/png' }),
+    }), /synthetic rename failure/)
+    assert.deepEqual(await readFile(f.store.filePath), before)
+    assert.deepEqual(await readdir(f.store.mediaDir), [])
+  } finally { op.dispose() }
+})
+
+test('aggregate phase deadline publishes verified subset while authorization remains valid', async t => {
+  let finish
+  const f = await setup(t, {
+    parse: async () => ({ ...parsed, images: [{ index: 1, url: 'https://ci.xhscdn.com/fast.png' }, { index: 2, url: 'https://ci.xhscdn.com/hung.png' }] }),
+    loadImage: source => source.includes('hung') ? new Promise(resolve => { finish = resolve }) : Promise.resolve({ buffer: image, mimeType: 'image/png' }),
+  }, { phaseTimeoutMs: 35, imageTimeoutMs: 1000 })
+  const preview = await f.prepare()
+  const { item } = await f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })
+  assert.equal(item.sourceData.parseStatus, 'partial'); assert.equal(item.attachments.length, 1); assert.equal(item.sourceData.failedImages, 1)
+  assert.equal(item.sourceData.images[1].errorCode, 'XHS_TIMEOUT')
+  finish({ buffer: image, mimeType: 'image/png' })
+})
+
+
+test('legacy missing originalUrl preserves stored share instead of new token-bearing parse URL', async t => {
+  const f = await setup(t)
+  const state = JSON.parse(await readFile(f.store.filePath, 'utf8'))
+  delete state.items[0].sourceData.originalUrl
+  const { writeFile } = await import('node:fs/promises')
+  await writeFile(f.store.filePath, JSON.stringify(state))
+  const preview = await f.prepare()
+  const { item } = await f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })
+  assert.equal(item.sourceData.originalUrl, short)
+  assert.ok(!(await readFile(f.store.filePath, 'utf8')).includes(token))
+})
+
+test('parallel recoveries share a global maximum of three live image loaders', async t => {
+  let active = 0; let peak = 0
+  const overrides = {
+    parse: async () => ({ ...parsed, images: Array.from({ length: 18 }, (_, i) => ({ index: i + 1, url: `https://ci.xhscdn.com/${i}.png` })) }),
+    loadImage: async () => { peak = Math.max(peak, ++active); await new Promise(resolve => setTimeout(resolve, 2)); active--; return { buffer: image, mimeType: 'image/png' } },
+  }
+  const first = await setup(t, overrides); const second = await setup(t, overrides)
+  await Promise.all([first, second].map(async f => {
+    const preview = await f.prepare()
+    assert.equal((await f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })).item.attachments.length, 18)
+  }))
+  assert.ok(peak <= 3)
+})
+
+
+test('identity collision introduced during CDN fetch blocks publication and cleans stage', async t => {
+  let release; let started
+  const began = new Promise(resolve => { started = resolve })
+  const f = await setup(t, { loadImage: async () => { started(); await new Promise(resolve => { release = resolve }); return { buffer: image, mimeType: 'image/png' } } })
+  const preview = await f.prepare(); const pending = f.service.confirm({ id: f.item.id, owner, ticket: preview.ticket })
+  await began
+  await f.store.upsert({ sourceUrl: canonicalXhsUrl(url).safeUrl, text: 'new owner of stable note identity', sourceIdentity: { provider: 'xiaohongshu', externalId: noteId }, sourceData: { provider: 'xiaohongshu', parseStatus: 'complete', noteId } })
+  release()
+  await assert.rejects(pending, error => error.code === 'XHS_IDENTITY_CONFLICT')
+  assert.deepEqual(await f.store.get(f.item.id), f.item)
+  assert.deepEqual(await readdir(f.store.mediaDir), [])
 })

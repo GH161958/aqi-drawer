@@ -22,7 +22,7 @@ export function createXhsRecovery({ store, adapter, budgetMs = 30_000 }) {
       operation.check()
       return store.upsertXhs({ sourceUrl: originalUrl, xhs }, {
         targetItemId: id, expectedSourceUrl: originalUrl, authorization: operation,
-        loadImage: url => operation.wait(adapter.loadImage(url, { signal: operation.signal, httpsOnly: Boolean(item.sourceData.recoveryUrl) })),
+        loadImage: (url, { signal } = {}) => adapter.loadImage(url, { signal: signal || operation.signal, httpsOnly: Boolean(item.sourceData.recoveryUrl) }),
       })
     })()
     const result = operation.wait(work).finally(() => {
