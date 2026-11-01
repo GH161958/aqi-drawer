@@ -1,3 +1,4 @@
+import { canonicalXhsUrl, storedXhsNoteId, xhsItemVersion, stripXhsTechnicalTokens, sanitizeXhsTechnicalData } from './xhs-canonical-url.js'
 import { extractXhsUrl, extractXhsNoteId, xhsFailure } from './adapters/xhs.js'
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
@@ -855,7 +856,14 @@ export class PocketStore {
     })
   }
 
-  async upsertXhs(input, { loadImage, targetItemId, expectedSourceUrl, authorization } = {}) {
+  async findXhsIdentityConflict(id, noteId) {
+    const state = await this.#read()
+    const other = state.items.find(item => !item.deletedAt && item.id !== id
+      && storedXhsNoteId(item) === noteId)
+    return other ? { id: other.id, title: other.title } : null
+  }
+
+  async upsertXhs(input, { loadImage, targetItemId, expectedSourceUrl, expectedItemVersion, recoveryUrl, authorization } = {}) {
     if (typeof loadImage !== 'function') throw httpError(500, 'XHS image loader is not configured.')
     const xhs = normalizeSourceData(input?.xhs)
     if (xhs.provider !== 'xiaohongshu' || !clean(xhs.noteId)) throw httpError(422, 'XHS noteId is required.')
@@ -865,16 +873,29 @@ export class PocketStore {
       const now = new Date().toISOString()
       const sourceIdentity = { provider: 'xiaohongshu', externalId: clean(xhs.noteId) }
       const urls = new Set([input.sourceUrl, xhs.originalUrl, xhs.canonicalUrl].filter(url => typeof url === 'string' && url && extractXhsUrl(url) === url))
-      const candidates = state.items.filter(item => !item.deletedAt && item.sourceData?.provider === 'xiaohongshu'
-        && ((item.sourceIdentity?.provider === 'xiaohongshu' && item.sourceIdentity.externalId === sourceIdentity.externalId)
-          || item.sourceData?.noteId === sourceIdentity.externalId
-          || [item.sourceUrl, item.sourceData?.originalUrl, item.sourceData?.canonicalUrl].some(url => urls.has(url))))
+      const candidates = state.items.filter(item => !item.deletedAt
+        && (storedXhsNoteId(item) === sourceIdentity.externalId
+          || (item.sourceData?.provider === 'xiaohongshu'
+            && [item.sourceUrl, item.sourceData.originalUrl, item.sourceData.canonicalUrl].some(url => urls.has(url)))))
       const existing = targetItemId ? state.items.find(item => item.id === targetItemId && !item.deletedAt) : candidates[0]
       const conflict = () => Object.assign(httpError(409, '小红书来源身份冲突，请人工检查；没有合并收藏。'), { code: 'XHS_IDENTITY_CONFLICT' })
       if (targetItemId && (!existing || existing.sourceData?.provider !== 'xiaohongshu'
         || (existing.sourceData.originalUrl || existing.sourceUrl) !== expectedSourceUrl)) throw conflict()
-      if (candidates.length > 1 || (existing && candidates.some(item => item.id !== existing.id))) throw conflict()
-      const priorNoteId = (existing?.sourceIdentity?.provider === 'xiaohongshu' && existing.sourceIdentity.externalId) || existing?.sourceData?.noteId
+      if (candidates.length > 1 || (existing && candidates.some(item => item.id !== existing.id))) {
+        const other = candidates.find(item => item.id !== existing?.id)
+        throw Object.assign(conflict(), other ? { candidate: { id: other.id, title: other.title } } : {})
+      }
+      if (expectedItemVersion && xhsItemVersion(publicItem(existing)) !== expectedItemVersion) {
+        throw Object.assign(httpError(409, '这张纸已改变，请重新预览后确认。'), { code: 'XHS_STALE_PREVIEW' })
+      }
+      if (recoveryUrl) {
+        const approved = canonicalXhsUrl(recoveryUrl)
+        const final = new URL(xhs.canonicalUrl); final.search = ''; final.hash = ''
+        if (approved.safeUrl !== recoveryUrl || approved.noteId !== sourceIdentity.externalId
+          || canonicalXhsUrl(final.href).noteId !== sourceIdentity.externalId) throw conflict()
+      }
+      const redactUrls = Boolean(recoveryUrl || existing?.sourceData?.recoveryUrl)
+      const priorNoteId = storedXhsNoteId(existing)
       if (priorNoteId && priorNoteId !== sourceIdentity.externalId) throw conflict()
       const resolvedId = extractXhsNoteId(xhs.canonicalUrl)
       if (resolvedId && resolvedId !== sourceIdentity.externalId) throw conflict()
@@ -938,7 +959,7 @@ export class PocketStore {
             sourceImage: {
               provider: 'xiaohongshu',
               index: imageIndex,
-              remoteUrl,
+              remoteUrl: redactUrls ? stripXhsTechnicalTokens(remoteUrl) : remoteUrl,
               sourceKey,
               width: loaded.width ?? image.width ?? null,
               height: loaded.height ?? image.height ?? null,
@@ -955,8 +976,9 @@ export class PocketStore {
             status: 'failed',
             width: finitePositive(image.width),
             height: finitePositive(image.height),
-            error: xhsFailure(error).message,
+            error: redactUrls ? '这张图片未保存；已成功保存的内容仍保留。' : xhsFailure(error).message,
             errorCode: xhsFailure(error).code,
+            errorStage: 'image',
           })
         }
       }
@@ -997,8 +1019,10 @@ export class PocketStore {
           ? clean(existing?.title)
           : '')
       const sourceData = normalizeSourceData({
-        ...xhs,
+        ...(redactUrls ? sanitizeXhsTechnicalData(xhs) : xhs),
+        ...((recoveryUrl || existing?.sourceData?.recoveryUrl) ? { recoveryUrl: recoveryUrl || existing.sourceData.recoveryUrl } : {}),
         originalUrl: existing?.sourceData?.originalUrl || xhs.originalUrl || input.sourceUrl,
+        ...(recoveryUrl ? { canonicalUrl: recoveryUrl } : {}),
         ...(manualTitle ? { titleOrigin: 'capture' } : {}),
         parseStatus: failedImages ? 'partial' : xhs.parseStatus === 'failed' ? 'failed' : 'complete',
         images: imageRecords,
@@ -1013,7 +1037,7 @@ export class PocketStore {
         ...input,
         title: manualTitle || clean(xhs.title) || input.title,
         text: clean(xhs.desc) || input.text,
-        sourceUrl: clean(xhs.canonicalUrl) || input.sourceUrl,
+        sourceUrl: (redactUrls ? stripXhsTechnicalTokens(clean(xhs.canonicalUrl)) : clean(xhs.canonicalUrl)) || input.sourceUrl,
         sourceApp: '小红书',
         kind: attachments.length ? 'mixed' : 'link',
         attachments,
