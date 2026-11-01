@@ -22,7 +22,7 @@ export class XhsAdapter {
     return Boolean(extractXhsUrl(value))
   }
 
-  async parse(value, { signal } = {}) {
+  async parse(value, { signal, httpsOnly = false } = {}) {
     const originalUrl = extractXhsUrl(value)
     if (!originalUrl) throw new Error('No Xiaohongshu URL was found.')
     let response
@@ -34,7 +34,7 @@ export class XhsAdapter {
           'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
           accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
         },
-      })
+      }, { httpsOnly })
       if (!response.ok) {
         await response.body?.cancel?.()
         throw Object.assign(new Error('XHS HTTP response'), { status: response.status })
@@ -47,7 +47,7 @@ export class XhsAdapter {
     }
   }
 
-  async loadImage(value, { signal } = {}) {
+  async loadImage(value, { signal, httpsOnly = false } = {}) {
     const response = await fetchAllowedRedirects(this.fetchImpl, value, isXhsImageHostname, {
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(this.timeoutMs)]) : AbortSignal.timeout(this.timeoutMs),
       headers: {
@@ -55,7 +55,7 @@ export class XhsAdapter {
         referer: 'https://www.xiaohongshu.com/',
         accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.9,*/*;q=0.2',
       },
-    })
+    }, { httpsOnly })
     if (!response.ok) {
       await response.body?.cancel?.()
       throw Object.assign(new Error('XHS image HTTP response'), { status: response.status })
@@ -234,23 +234,23 @@ function normalizeComment(comment, authorId, depth) {
   }
 }
 
-async function fetchAllowedRedirects(fetchImpl, initialValue, hostnameAllowed, options) {
-  let url = allowedUrl(initialValue, hostnameAllowed)
+async function fetchAllowedRedirects(fetchImpl, initialValue, hostnameAllowed, options, policy) {
+  let url = allowedUrl(initialValue, hostnameAllowed, policy)
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
     const response = await fetchImpl(url, { ...options, redirect: 'manual' })
     if (response.status < 300 || response.status >= 400) return response
     const location = response.headers.get('location')
     await response.body?.cancel?.()
     if (!location || redirect === MAX_REDIRECTS) throw new Error('Xiaohongshu redirect limit was exceeded.')
-    url = allowedUrl(new URL(location, url).href, hostnameAllowed)
+    url = allowedUrl(new URL(location, url).href, hostnameAllowed, policy)
   }
   throw new Error('Xiaohongshu redirect failed.')
 }
 
-function allowedUrl(value, hostnameAllowed) {
+function allowedUrl(value, hostnameAllowed, { httpsOnly = false } = {}) {
   let url
   try { url = new URL(value) } catch { throw new Error('Xiaohongshu URL was invalid.') }
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
+  if ((httpsOnly && url.protocol !== 'https:') || !['http:', 'https:'].includes(url.protocol) || url.username || url.password
     || (url.port && !['80', '443'].includes(url.port)) || !hostnameAllowed(url.hostname)) {
     throw new Error('Xiaohongshu URL host was not allowed.')
   }
@@ -283,7 +283,7 @@ async function readBoundedBody(response, maximum) {
   return Buffer.concat(chunks, total)
 }
 
-function verifiedImageType(buffer, claimedMime) {
+export function verifiedImageType(buffer, claimedMime) {
   let detected = ''
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) detected = 'image/jpeg'
   else if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) detected = 'image/png'

@@ -110,6 +110,7 @@ export interface PocketActivityEntry {
 
 export interface PocketItemSummary {
   xhsParseStatus?: 'failed' | 'partial' | 'complete'
+  xhsImageCounts?: { ready: number; failed: number; total: number }
   id: string
   title: string
   text: string

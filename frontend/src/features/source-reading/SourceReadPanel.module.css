@@ -186,3 +186,20 @@
   color:
     rgba(116, 66, 57, .82);
 }
+
+.canonical { margin-top: 12px; }
+.canonicalLabel { display: grid; gap: 8px; margin-top: 12px; }
+.canonicalInput {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid rgba(117, 94, 72, .24);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  overflow-wrap: anywhere;
+}
+.canonicalIdentity { overflow-wrap: anywhere; font-size: .65rem; }

@@ -1,4 +1,5 @@
 import { createMcpFileOperation } from './mcp-file-operation.js'
+import { canonicalXhsUrl } from './xhs-canonical-url.js'
 import { extractXhsUrl } from './adapters/xhs.js'
 
 // One bounded job per persisted object. No client-supplied source URL is accepted.
@@ -16,11 +17,12 @@ export function createXhsRecovery({ store, adapter, budgetMs = 30_000 }) {
         throw Object.assign(new Error('仅支持已保存的小红书来源。'), { status: 422 })
       }
       if (item.sourceData.parseStatus === 'complete') return item
-      const xhs = await operation.wait(adapter.parse(originalUrl, { signal: operation.signal }))
+      const retryUrl = item.sourceData.recoveryUrl ? canonicalXhsUrl(item.sourceData.recoveryUrl).safeUrl : originalUrl
+      const xhs = await operation.wait(adapter.parse(retryUrl, { signal: operation.signal, httpsOnly: Boolean(item.sourceData.recoveryUrl) }))
       operation.check()
       return store.upsertXhs({ sourceUrl: originalUrl, xhs }, {
         targetItemId: id, expectedSourceUrl: originalUrl, authorization: operation,
-        loadImage: url => operation.wait(adapter.loadImage(url, { signal: operation.signal })),
+        loadImage: (url, { signal } = {}) => adapter.loadImage(url, { signal: signal || operation.signal, httpsOnly: Boolean(item.sourceData.recoveryUrl) }),
       })
     })()
     const result = operation.wait(work).finally(() => {

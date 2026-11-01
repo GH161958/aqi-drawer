@@ -462,7 +462,9 @@ function parsePocketItem(
 
     ...(isRecord(value.sourceData) && value.sourceData.provider === 'xiaohongshu'
       && ['failed', 'partial', 'complete'].includes(String(value.sourceData.parseStatus))
-      ? { xhsParseStatus: value.sourceData.parseStatus as 'failed' | 'partial' | 'complete' } : {}),
+      ? { xhsParseStatus: value.sourceData.parseStatus as 'failed' | 'partial' | 'complete',
+          xhsImageCounts: { total: Number(value.sourceData.imageCount) || 0, failed: Number(value.sourceData.failedImages) || 0,
+            ready: Array.isArray(value.sourceData.images) ? value.sourceData.images.filter((image: unknown) => isRecord(image) && image.status === 'ready').length : 0 } } : {}),
 
     activity:
       parseActivityList(
@@ -2153,4 +2155,46 @@ export async function retryPocketXhsSource(id: string): Promise<PocketItemSummar
   const item = isRecord(payload) ? parsePocketItem(payload.item) : null
   if (!item || item.id !== id) throw new Error('来源恢复回执不匹配，请刷新后检查。')
   return item
+}
+
+export interface XhsCanonicalPreview {
+  ticket: string
+  expiresAt: number
+  item: { id: string; title: string }
+  note: { title: string; noteIdHint: string; imageCount: number }
+}
+export interface XhsCanonicalError extends Error { code?: string; candidate?: { id: string; title: string } }
+async function canonicalXhsRequest(id: string, action: string, body: Record<string, string>): Promise<Record<string, unknown>> {
+  let response: Response
+  try {
+    response = await drawerFetch(`/api/pocket/items/${encodeURIComponent(id)}/xhs-canonical/${action}`, {
+      method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body), signal: AbortSignal.timeout(35_000), cache: 'no-store',
+    })
+  } catch { throw new Error(action === 'confirm' ? '连接中断，尚未收到保存回执；请重新打开原收藏核对已保存／失败图片数，再重试缺失原件。' : '读取超时或连接失败；请重新预览。') }
+  const payload: unknown = await response.json().catch(() => null)
+  if (!response.ok) {
+    const error: XhsCanonicalError = new Error(isRecord(payload) && typeof payload.error === 'string' ? payload.error : '补全暂不可用；原收藏未改变。')
+    if (isRecord(payload) && typeof payload.code === 'string' && /^[A-Z0-9_]{1,64}$/u.test(payload.code)) error.code = payload.code
+    if (isRecord(payload) && isRecord(payload.candidate) && typeof payload.candidate.id === 'string' && typeof payload.candidate.title === 'string') error.candidate = { id: payload.candidate.id, title: payload.candidate.title }
+    throw error
+  }
+  if (!isRecord(payload)) throw new Error('补全回执无效，请重新预览。')
+  return payload
+}
+export async function previewCanonicalXhs(id: string, canonicalUrl: string): Promise<XhsCanonicalPreview> {
+  const result = await canonicalXhsRequest(id, 'preview', { canonicalUrl })
+  if (typeof result.ticket !== 'string' || !/^[A-Za-z0-9_-]{43}$/u.test(result.ticket) || typeof result.expiresAt !== 'number'
+    || !isRecord(result.item) || result.item.id !== id || typeof result.item.title !== 'string'
+    || !isRecord(result.note) || typeof result.note.title !== 'string' || typeof result.note.noteIdHint !== 'string' || typeof result.note.imageCount !== 'number') throw new Error('预览回执无效，请重新预览。')
+  return result as unknown as XhsCanonicalPreview
+}
+export async function confirmCanonicalXhs(id: string, ticket: string): Promise<PocketItemSummary> {
+  const result = await canonicalXhsRequest(id, 'confirm', { ticket })
+  const item = parsePocketItem(result.item)
+  if (!item || item.id !== id) throw new Error('补全回执不匹配，请刷新后检查。')
+  return item
+}
+export async function cancelCanonicalXhs(id: string, ticket: string): Promise<void> {
+  await canonicalXhsRequest(id, 'cancel', { ticket })
 }

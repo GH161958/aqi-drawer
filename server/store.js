@@ -1,8 +1,10 @@
+import { stageXhsImages } from './xhs-image-stage.js'
+import { canonicalXhsUrl, storedXhsNoteId, xhsItemVersion, stripXhsTechnicalTokens, sanitizeXhsTechnicalData } from './xhs-canonical-url.js'
 import { extractXhsUrl, extractXhsNoteId, xhsFailure } from './adapters/xhs.js'
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { renameSync } from 'node:fs'
+import { renameSync, createReadStream } from 'node:fs'
 import { canonicalizeUrl, inferSourceApp, isGenericSourceApp, normalizeIncomingShare } from './share-normalizer.js'
 
 const EMPTY_STORE = {
@@ -855,32 +857,78 @@ export class PocketStore {
     })
   }
 
-  async upsertXhs(input, { loadImage, targetItemId, expectedSourceUrl, authorization } = {}) {
+  async findXhsIdentityConflict(id, noteId) {
+    const state = await this.#read()
+    const other = state.items.find(item => !item.deletedAt && item.id !== id
+      && storedXhsNoteId(item) === noteId)
+    return other ? { id: other.id, title: other.title } : null
+  }
+
+  async upsertXhs(input, { loadImage, targetItemId, expectedSourceUrl, expectedItemVersion, recoveryUrl, authorization, imageTimeoutMs, phaseTimeoutMs } = {}) {
     if (typeof loadImage !== 'function') throw httpError(500, 'XHS image loader is not configured.')
     const xhs = normalizeSourceData(input?.xhs)
     if (xhs.provider !== 'xiaohongshu' || !clean(xhs.noteId)) throw httpError(422, 'XHS noteId is required.')
     const stagedFiles = []
     const stagedIds = new Map()
-    return this.#mutate(async (state) => {
-      const now = new Date().toISOString()
+    const validate = state => {
       const sourceIdentity = { provider: 'xiaohongshu', externalId: clean(xhs.noteId) }
       const urls = new Set([input.sourceUrl, xhs.originalUrl, xhs.canonicalUrl].filter(url => typeof url === 'string' && url && extractXhsUrl(url) === url))
-      const candidates = state.items.filter(item => !item.deletedAt && item.sourceData?.provider === 'xiaohongshu'
-        && ((item.sourceIdentity?.provider === 'xiaohongshu' && item.sourceIdentity.externalId === sourceIdentity.externalId)
-          || item.sourceData?.noteId === sourceIdentity.externalId
-          || [item.sourceUrl, item.sourceData?.originalUrl, item.sourceData?.canonicalUrl].some(url => urls.has(url))))
+      const candidates = state.items.filter(item => !item.deletedAt
+        && (storedXhsNoteId(item) === sourceIdentity.externalId
+          || (item.sourceData?.provider === 'xiaohongshu'
+            && [item.sourceUrl, item.sourceData.originalUrl, item.sourceData.canonicalUrl].some(url => urls.has(url)))))
       const existing = targetItemId ? state.items.find(item => item.id === targetItemId && !item.deletedAt) : candidates[0]
       const conflict = () => Object.assign(httpError(409, '小红书来源身份冲突，请人工检查；没有合并收藏。'), { code: 'XHS_IDENTITY_CONFLICT' })
       if (targetItemId && (!existing || existing.sourceData?.provider !== 'xiaohongshu'
         || (existing.sourceData.originalUrl || existing.sourceUrl) !== expectedSourceUrl)) throw conflict()
-      if (candidates.length > 1 || (existing && candidates.some(item => item.id !== existing.id))) throw conflict()
-      const priorNoteId = (existing?.sourceIdentity?.provider === 'xiaohongshu' && existing.sourceIdentity.externalId) || existing?.sourceData?.noteId
+      if (candidates.length > 1 || (existing && candidates.some(item => item.id !== existing.id))) {
+        const other = candidates.find(item => item.id !== existing?.id)
+        throw Object.assign(conflict(), other ? { candidate: { id: other.id, title: other.title } } : {})
+      }
+      if (expectedItemVersion && xhsItemVersion(publicItem(existing)) !== expectedItemVersion) {
+        throw Object.assign(httpError(409, '这张纸已改变，请重新预览后确认。'), { code: 'XHS_STALE_PREVIEW' })
+      }
+      if (recoveryUrl) {
+        const approved = canonicalXhsUrl(recoveryUrl)
+        const final = new URL(xhs.canonicalUrl); final.search = ''; final.hash = ''
+        if (approved.safeUrl !== recoveryUrl || approved.noteId !== sourceIdentity.externalId
+          || canonicalXhsUrl(final.href).noteId !== sourceIdentity.externalId) throw conflict()
+      }
+      const priorNoteId = storedXhsNoteId(existing)
       if (priorNoteId && priorNoteId !== sourceIdentity.externalId) throw conflict()
       const resolvedId = extractXhsNoteId(xhs.canonicalUrl)
       if (resolvedId && resolvedId !== sourceIdentity.externalId) throw conflict()
+      return { existing, sourceIdentity }
+    }
+    let spool
+    if (targetItemId && authorization) {
+      authorization.check()
+      await this.queue.catch(() => {})
+      authorization.check()
+      const snapshot = validate(await this.#read()).existing
+      const version = xhsItemVersion(publicItem(snapshot))
+      if (expectedItemVersion && expectedItemVersion !== version) throw Object.assign(httpError(409, '这张纸已改变，请重新预览。'), { code: 'XHS_STALE_PREVIEW' })
+      expectedItemVersion = version
+      const images = Array.isArray(xhs.images) ? xhs.images.slice(0, MAX_XHS_IMAGES) : []
+      const skip = new Set()
+      for (const [position, image] of images.entries()) {
+        const previous = snapshot.attachments.find(attachment => attachment.sourceImage?.index === (Number(image.index) || position + 1)
+          && attachment.sourceImage?.sourceKey === canonicalImageSource(image.url))
+        if (previous && await completeAttachment(this.mediaDir, previous)) skip.add(position)
+      }
+      const retainedBytes = xhsRetainedBytes(snapshot.attachments)
+      spool = await stageXhsImages({ images, skip, retainedBytes, loadImage, mediaDir: this.mediaDir, authorization, imageTimeoutMs, phaseTimeoutMs })
+      loadImage = spool.load
+    }
+    return this.#mutate(async (state) => {
+      const now = new Date().toISOString()
+      const { existing, sourceIdentity } = validate(state)
+      const redactUrls = Boolean(recoveryUrl || existing?.sourceData?.recoveryUrl)
       const existingIndex = existing ? state.items.findIndex(item => item.id === existing.id) : -1
       if (targetItemId && existing.sourceData.parseStatus === 'complete') return publicItem(existing)
       const previousXhsImages = (existing?.attachments || []).filter((attachment) => attachment.sourceImage?.provider === 'xiaohongshu')
+      const retainedBytes = xhsRetainedBytes(previousXhsImages)
+      const availableBytes = Math.max(0, MAX_XHS_DOWNLOAD_BYTES - retainedBytes)
       const nonXhsAttachments = mergeAttachments(
         (existing?.attachments || []).filter((attachment) => attachment.sourceImage?.provider !== 'xiaohongshu'),
         Array.isArray(input.attachments) ? input.attachments.map(normalizeAttachment) : [],
@@ -903,7 +951,7 @@ export class PocketStore {
           imageRecords.push(sourceImageRecord(previous, 'ready'))
           continue
         }
-        if (downloadedBytes >= MAX_XHS_DOWNLOAD_BYTES) {
+        if (downloadedBytes >= availableBytes) {
           imageRecords.push({
             index: imageIndex,
             status: 'failed',
@@ -925,7 +973,7 @@ export class PocketStore {
           stagedFiles.push(temporary, target)
           const buffer = Buffer.isBuffer(loaded?.buffer) ? loaded.buffer : Buffer.from(loaded?.buffer || [])
           if (!buffer.length) throw new Error('XHS image was empty.')
-          if (downloadedBytes + buffer.length > MAX_XHS_DOWNLOAD_BYTES) throw new Error('XHS image download budget was exceeded.')
+          if (downloadedBytes + buffer.length > availableBytes) throw new Error('XHS per-note image budget was exceeded.')
           await writeFile(temporary, buffer)
           await rename(temporary, target)
           const attachment = normalizeAttachment({
@@ -938,7 +986,7 @@ export class PocketStore {
             sourceImage: {
               provider: 'xiaohongshu',
               index: imageIndex,
-              remoteUrl,
+              remoteUrl: redactUrls ? stripXhsTechnicalTokens(remoteUrl) : remoteUrl,
               sourceKey,
               width: loaded.width ?? image.width ?? null,
               height: loaded.height ?? image.height ?? null,
@@ -955,8 +1003,9 @@ export class PocketStore {
             status: 'failed',
             width: finitePositive(image.width),
             height: finitePositive(image.height),
-            error: xhsFailure(error).message,
+            error: redactUrls ? '这张图片未保存；已成功保存的内容仍保留。' : xhsFailure(error).message,
             errorCode: xhsFailure(error).code,
+            errorStage: 'image',
           })
         }
       }
@@ -997,10 +1046,12 @@ export class PocketStore {
           ? clean(existing?.title)
           : '')
       const sourceData = normalizeSourceData({
-        ...xhs,
-        originalUrl: existing?.sourceData?.originalUrl || xhs.originalUrl || input.sourceUrl,
+        ...(redactUrls ? sanitizeXhsTechnicalData(xhs) : xhs),
+        ...((recoveryUrl || existing?.sourceData?.recoveryUrl) ? { recoveryUrl: recoveryUrl || existing.sourceData.recoveryUrl } : {}),
+        originalUrl: existing?.sourceData?.originalUrl || (targetItemId && expectedSourceUrl) || xhs.originalUrl || input.sourceUrl,
+        ...(recoveryUrl ? { canonicalUrl: recoveryUrl } : {}),
         ...(manualTitle ? { titleOrigin: 'capture' } : {}),
-        parseStatus: failedImages ? 'partial' : xhs.parseStatus === 'failed' ? 'failed' : 'complete',
+        parseStatus: (failedImages || retainedBytes > MAX_XHS_DOWNLOAD_BYTES) ? 'partial' : xhs.parseStatus === 'failed' ? 'failed' : 'complete',
         images: imageRecords,
         imageCount: remoteImages.length,
         downloadedImages,
@@ -1013,7 +1064,7 @@ export class PocketStore {
         ...input,
         title: manualTitle || clean(xhs.title) || input.title,
         text: clean(xhs.desc) || input.text,
-        sourceUrl: clean(xhs.canonicalUrl) || input.sourceUrl,
+        sourceUrl: (redactUrls ? stripXhsTechnicalTokens(clean(xhs.canonicalUrl)) : clean(xhs.canonicalUrl)) || input.sourceUrl,
         sourceApp: '小红书',
         kind: attachments.length ? 'mixed' : 'link',
         attachments,
@@ -1056,7 +1107,7 @@ export class PocketStore {
     }, async error => {
       if (!authorization?.accepted) await Promise.all(stagedFiles.map(file => unlink(file).catch(() => {})))
       throw error
-    })
+    }).finally(() => spool?.cleanup())
   }
 
   async takeUnseen({ limit = 8 } = {}) {
@@ -2131,11 +2182,24 @@ function mergeAttachments(existing, incoming) {
   return merged
 }
 
+// Reserve all retained originals, including ones absent from the latest source list.
+// Do not delete old attachments or spend speculative replacement credits to fit new ones.
+function xhsRetainedBytes(attachments) {
+  return attachments.filter(attachment => attachment.sourceImage?.provider === 'xiaohongshu')
+    .reduce((bytes, attachment) => bytes + Math.max(0, Number(attachment.size) || 0), 0)
+}
+
 async function completeAttachment(mediaDir, attachment) {
   if (!clean(attachment?.storageName) || Number(attachment?.size) <= 0) return false
   try {
-    const found = await stat(path.join(mediaDir, path.basename(attachment.storageName)))
-    return found.isFile() && found.size === Number(attachment.size)
+    const file = path.join(mediaDir, path.basename(attachment.storageName))
+    const found = await stat(file)
+    if (!found.isFile() || found.size !== Number(attachment.size)) return false
+    if (!clean(attachment.sha256)) return true // Legacy originals without a recorded digest.
+    const hash = createHash('sha256')
+    let bytes = 0
+    for await (const chunk of createReadStream(file)) { hash.update(chunk); bytes += chunk.length }
+    return bytes === Number(attachment.size) && hash.digest('hex') === clean(attachment.sha256).toLowerCase()
   } catch {
     return false
   }

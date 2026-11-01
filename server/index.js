@@ -1,3 +1,4 @@
+import { createXhsCanonicalRecovery } from './xhs-canonical-recovery.js'
 import { createXhsRecovery } from './xhs-recovery.js'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -5,7 +6,7 @@ import os from 'node:os'
 import { stat, unlink } from 'node:fs/promises'
 import express from 'express'
 import multer from 'multer'
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
@@ -159,6 +160,7 @@ export async function createBridgeApp(config = {}) {
   })
   const xhsAdapter = config.xhsAdapter ?? new XhsAdapter(config.xhsAdapterOptions)
   const retryXhs = createXhsRecovery({ store, adapter: xhsAdapter })
+  const canonicalXhs = createXhsCanonicalRecovery({ store, adapter: xhsAdapter })
   const upload = multer({
     storage: multer.diskStorage({
       destination: store.mediaDir,
@@ -587,6 +589,28 @@ export async function createBridgeApp(config = {}) {
     } catch (error) { next(error) }
   })
 
+  for (const [action, method] of [['preview', 'prepare'], ['confirm', 'confirm'], ['cancel', 'cancel']]) {
+    app.post(`/api/pocket/items/:id/xhs-canonical/${action}`, async (req, res) => {
+      try {
+        if (req.get('origin') && !isSameOriginRequest(req)) throw Object.assign(httpError(403, '需要同源的抽屉操作。'), { code: 'XHS_ORIGIN' })
+        const field = action === 'preview' ? 'canonicalUrl' : 'ticket'
+        if (!req.body || Object.keys(req.body).length !== 1 || typeof req.body[field] !== 'string') throw Object.assign(httpError(400, '补全请求无效，请重新预览。'), { code: 'XHS_INVALID_REQUEST' })
+        const credential = settings.bridgeToken && req.get('authorization') === `Bearer ${settings.bridgeToken}`
+          ? `bearer:${req.get('authorization')}`
+          : isDrawerBrowserAuthorized(req, settings.drawerSecret) ? `session:${readCookie(req, DRAWER_SESSION_COOKIE)}` : 'trusted-loopback'
+        const owner = createHash('sha256').update(credential).digest('hex')
+        const result = await canonicalXhs[method]({ id: req.params.id, owner, ...(action === 'preview' ? { url: req.body.canonicalUrl } : { ticket: req.body.ticket }) })
+        res.set('Cache-Control', 'no-store').json(result)
+      } catch (error) {
+        const safe = ['XHS_ORIGIN', 'XHS_INVALID_REQUEST', 'XHS_CANONICAL_URL', 'XHS_OWNER_REQUIRED', 'XHS_ITEM_MISSING', 'XHS_ITEM_STATE', 'XHS_NOTE_MISMATCH', 'XHS_IDENTITY_CONFLICT', 'XHS_STALE_PREVIEW', 'XHS_PREVIEW_BUSY', 'XHS_PREVIEW_EXPIRED', 'XHS_PREVIEW_USED', 'XHS_COMMIT_BUSY'].includes(error.code)
+        const failure = xhsFailure(error)
+        res.set('Cache-Control', 'no-store').status(error.status && error.status < 500 ? error.status : failure.code === 'XHS_TIMEOUT' ? 504 : 502)
+          .json({ error: safe || [400, 403].includes(error.status) ? error.message : failure.message,
+            code: safe ? error.code : failure.code, stage: safe ? 'validation' : failure.code === 'XHS_PARSE_CHANGED' ? 'parse' : failure.code === 'XHS_ACCESS_DENIED' ? 'denied' : 'network', ...(safe && error.candidate ? { candidate: error.candidate } : {}), recoverable: true })
+      }
+    })
+  }
+
   app.post('/api/pocket/items/:id/retry-source', async (req, res, next) => {
     try {
       if (Object.keys(req.body || {}).length) throw httpError(400, 'Retry accepts no source URL or item payload.')
@@ -985,6 +1009,7 @@ export async function createBridgeApp(config = {}) {
 
   app.use((error, _req, res, _next) => {
     void _next
+    if (/^\/api\/pocket\/items\/[^/]+\/xhs-canonical\//u.test(_req.path)) return res.status(Number(error.status) || 400).json({ error: '补全请求无效，请重新预览。', code: 'XHS_INVALID_REQUEST' })
     res.status(Number(error?.status) || 500).json({
       error: error?.message || 'Internal server error.',
       ...(error?.code ? { code: error.code } : {}),
@@ -1002,6 +1027,7 @@ export async function createBridgeApp(config = {}) {
     vault,
     xhsAdapter,
     async close() {
+      canonicalXhs.close()
       await Promise.allSettled([...transports.values()].map(({ transport }) => transport.close()))
       transports.clear()
     },

@@ -9,7 +9,7 @@ import { createXhsRecovery } from './xhs-recovery.js'
 import { extractXhsUrl, xhsFailure } from './adapters/xhs.js'
 const short = 'https://xhslink.cn/o/synthetic-recovery'
 const canonical = 'https://www.xiaohongshu.com/explore/abcdef123456789012345678'
-const buffer = Buffer.from('synthetic image bytes')
+const buffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Buffer.from('synthetic image bytes')])
 const parsed = { provider: 'xiaohongshu', noteId: 'abcdef123456789012345678', originalUrl: short, canonicalUrl: canonical, title: '原文标题', desc: '原文正文', parseStatus: 'complete', images: [{ index: 1, url: 'https://ci.xhscdn.com/synthetic.jpg' }] }
 async function fixture(t) {
   const dir = await mkdtemp(path.join(tmpdir(), 'xhs-recovery-'))
