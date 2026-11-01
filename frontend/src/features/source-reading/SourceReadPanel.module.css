@@ -1,4 +1,5 @@
 .shell {
+  overflow-wrap: anywhere;
   margin:
     18px 0 0;
 
@@ -30,9 +31,12 @@
     rgba(69, 82, 65, .80);
 
   font-family:
-    var(--drawer-font-meta);
+    var(--inspect-original-font-ui, var(--font-ui));
 
-  font-size: .56rem;
+  font-size: var(--inspect-type-action-size);
+  font-weight: var(--paper-type-action-weight);
+  line-height: var(--inspect-type-action-line-height);
+  letter-spacing: var(--paper-type-action-spacing);
 
   text-decoration: none;
 
@@ -67,6 +71,8 @@
 
   font-size: .49rem;
 
+  line-height: normal;
+
   letter-spacing: .055em;
 }
 
@@ -78,7 +84,7 @@
     var(--drawer-ink);
 
   font-family:
-    var(--drawer-font-body);
+    var(--inspect-original-font-reading, var(--drawer-font-body));
 
   font-size: .84rem;
 
@@ -99,7 +105,7 @@
     rgba(57, 50, 43, .72);
 
   font-family:
-    var(--drawer-font-body);
+    var(--inspect-original-font-reading, var(--drawer-font-body));
 
   font-size: .64rem;
 
@@ -113,7 +119,7 @@
     rgba(48, 43, 37, .84);
 
   font-family:
-    var(--drawer-font-body);
+    var(--inspect-original-font-reading, var(--drawer-font-body));
 
   font-size: .66rem;
 
@@ -158,7 +164,7 @@
     rgba(91, 70, 57, .72);
 
   font-family:
-    var(--drawer-font-body);
+    var(--inspect-original-font-reading, var(--drawer-font-body));
 
   font-size: .57rem;
 
@@ -188,7 +194,16 @@
 }
 
 .canonical { margin-top: 12px; }
-.canonicalLabel { display: grid; gap: 8px; margin-top: 12px; }
+.canonicalLabel {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  font-family: var(--font-meta);
+  font-size: var(--inspect-type-label-size);
+  font-weight: var(--paper-type-label-weight);
+  line-height: var(--inspect-type-action-line-height);
+  letter-spacing: var(--inspect-type-label-spacing);
+}
 .canonicalInput {
   box-sizing: border-box;
   width: 100%;
@@ -199,7 +214,12 @@
   border-radius: 3px;
   background: transparent;
   color: inherit;
-  font: inherit;
+  font-family: var(--inspect-original-font-reading, var(--drawer-font-body));
+  font-size: var(--paper-type-input-size);
+  font-weight: var(--paper-type-body-weight);
+  line-height: var(--paper-type-body-line-height);
+  letter-spacing: var(--paper-type-body-spacing);
   overflow-wrap: anywhere;
 }
-.canonicalIdentity { overflow-wrap: anywhere; font-size: .65rem; }
+.canonicalInput::placeholder { font: inherit; letter-spacing: inherit; }
+.canonicalIdentity { overflow-wrap: anywhere; }
